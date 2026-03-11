@@ -8,6 +8,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "three": "/lib/three/build/three.module.js",
+    "three/addons/": "/lib/three/examples/jsm/"
+  }
+}
+</script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -448,6 +456,26 @@
   .nudge-btn:hover {
     background: rgba(210, 153, 34, 0.25);
     border-color: var(--orange);
+  }
+
+  .remove-agent-btn {
+    background: var(--red-dim);
+    color: var(--red);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: all 0.15s;
+    display: block;
+    width: 100%;
+    text-align: center;
+  }
+  .remove-agent-btn:hover {
+    background: rgba(248, 113, 113, 0.25);
+    border-color: var(--red);
   }
 
   /* ===== PROJECT SWITCHER ===== */
@@ -2315,6 +2343,325 @@
   }
   .stats-area.visible { display: block; }
 
+  /* ===== DOCS VIEW ===== */
+  .docs-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: none;
+  }
+  .docs-area.visible { display: block; }
+  .docs-container { max-width: 820px; margin: 0 auto; }
+  .docs-container h2 { font-size: 22px; font-weight: 700; margin: 0 0 4px; color: var(--text); }
+  .docs-container .docs-subtitle { font-size: 13px; color: var(--text-dim); margin-bottom: 24px; }
+  .docs-section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; }
+  .docs-section h3 { font-size: 15px; font-weight: 700; margin: 0 0 10px; color: var(--accent); }
+  .docs-section h4 { font-size: 13px; font-weight: 600; margin: 14px 0 6px; color: var(--text); }
+  .docs-section p, .docs-section li { font-size: 13px; line-height: 1.6; color: var(--text-dim); }
+  .docs-section ul { padding-left: 18px; margin: 6px 0; }
+  .docs-section li { margin: 3px 0; }
+  .docs-section code { background: var(--surface-2); color: var(--green); padding: 1px 6px; border-radius: 4px; font-size: 12px; font-family: var(--mono); }
+  .docs-section pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; overflow-x: auto; margin: 8px 0; }
+  .docs-section pre code { background: none; padding: 0; color: var(--text-dim); font-size: 12px; line-height: 1.5; }
+  .docs-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .docs-badge-beta { background: rgba(210, 153, 34, 0.15); color: #d29922; }
+  .docs-badge-new { background: rgba(63, 185, 80, 0.15); color: #3fb950; }
+  .docs-badge-stable { background: rgba(88, 166, 255, 0.15); color: #58a6ff; }
+  .docs-phase-diagram { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+  .docs-phase-box { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; font-size: 12px; font-weight: 600; color: var(--text); }
+  .docs-phase-arrow { color: var(--text-muted); font-size: 14px; }
+  .docs-tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+  .docs-tool-item { background: var(--surface-2); border-radius: 6px; padding: 8px 12px; }
+  .docs-tool-item code { font-size: 11px; }
+  .docs-tool-item .desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  @media (max-width: 600px) {
+    .docs-tool-grid { grid-template-columns: 1fr; }
+    .docs-section { padding: 14px 16px; }
+  }
+
+  /* ===== VIRTUAL OFFICE ===== */
+  .office-area {
+    flex: 1;
+    overflow: hidden;
+    display: none;
+    position: relative;
+    background: var(--bg);
+  }
+  .office-area.visible { display: flex; flex-direction: column; }
+  .office-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    font-size: 11px;
+  }
+  .office-toolbar select {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+    outline: none;
+    cursor: pointer;
+  }
+  .office-toolbar label {
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .office-canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+  .office-canvas-wrap canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .office-legend {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 10px;
+    color: var(--text-muted);
+    pointer-events: none;
+    opacity: 0.85;
+  }
+  .office-legend span { margin-right: 10px; }
+  .office-legend .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 3px;
+    vertical-align: middle;
+  }
+
+  /* 3D Office mode toggle */
+  .office-mode-toggle {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-right: 12px;
+  }
+  .office-mode-btn {
+    background: var(--surface-2);
+    border: none;
+    color: var(--text-muted);
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .office-mode-btn:hover { color: var(--text-dim); background: var(--surface-3); }
+  .office-mode-btn.active {
+    background: var(--accent);
+    color: #fff;
+  }
+  .office-mode-btn + .office-mode-btn {
+    border-left: 1px solid var(--border);
+  }
+
+  /* 3D container */
+  #office-3d-container {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+  }
+  #office-3d-container canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* 3D speech bubbles */
+  .office3d-bubble {
+    background: rgba(255,255,255,0.95);
+    color: #1a1a2e;
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-family: Inter, sans-serif;
+    max-width: 200px;
+    word-wrap: break-word;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    pointer-events: none;
+    transition: opacity 0.5s;
+    position: relative;
+  }
+  .office3d-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid rgba(255,255,255,0.95);
+  }
+
+  /* 3D name labels */
+  .office3d-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0,0,0,0.7);
+    padding: 2px 8px;
+    border-radius: 10px;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .office3d-label-name {
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: Inter, sans-serif;
+  }
+  .office3d-label-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #4ade80;
+    flex-shrink: 0;
+  }
+
+  [data-theme="light"] .office3d-bubble {
+    background: rgba(255,255,255,0.98);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  }
+  [data-theme="light"] .office3d-bubble::after {
+    border-top-color: rgba(255,255,255,0.98);
+  }
+
+  /* 3D ZZZ sleeping indicators */
+  .office3d-zzz {
+    color: #facc15;
+    font-weight: 800;
+    font-family: Inter, sans-serif;
+    pointer-events: none;
+    text-shadow: 0 0 4px rgba(250, 204, 21, 0.5);
+    opacity: 0;
+    transition: none;
+  }
+
+  /* 3D task indicator */
+  .office3d-task-indicator {
+    pointer-events: none;
+    font-size: 12px;
+    font-family: Inter, sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+  .office3d-task-indicator.working {
+    background: rgba(108, 138, 255, 0.85);
+    color: #fff;
+  }
+  .office3d-task-indicator.done {
+    background: rgba(52, 211, 153, 0.85);
+    color: #fff;
+  }
+  .office3d-task-indicator.blocked {
+    background: rgba(248, 113, 113, 0.85);
+    color: #fff;
+  }
+
+  /* 3D typing dots */
+  .office3d-typing {
+    pointer-events: none;
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    padding: 2px 6px;
+  }
+  .office3d-typing-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent, #6c8aff);
+    animation: office3d-typing-bounce 1.2s ease-in-out infinite;
+  }
+  .office3d-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .office3d-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes office3d-typing-bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  /* Agent command menu (floating above clicked agent) */
+  .office3d-cmd-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    background: rgba(15, 19, 24, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 6px;
+    backdrop-filter: blur(8px);
+    pointer-events: auto;
+    min-width: 140px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    animation: office3d-cmd-pop 0.15s ease-out;
+  }
+  @keyframes office3d-cmd-pop {
+    from { transform: scale(0.85) translateY(6px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  .office3d-cmd-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #e0e4ea;
+    font-size: 11px;
+    font-family: Inter, sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    white-space: nowrap;
+    pointer-events: auto;
+  }
+  .office3d-cmd-btn:hover {
+    background: rgba(108, 138, 255, 0.18);
+    color: #fff;
+  }
+  .office3d-cmd-btn.disabled {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  .office3d-cmd-icon {
+    font-size: 13px;
+    width: 18px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .office3d-cmd-menu .office3d-cmd-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    margin: 2px 4px;
+  }
+
   .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -2588,6 +2935,185 @@
 
   .avatar-option:hover { border-color: var(--accent); transform: scale(1.1); }
   .avatar-option.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+
+  /* ===== CHARACTER DESIGNER PANEL ===== */
+  .char-designer {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: 480px;
+    max-width: 100vw;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    z-index: 410;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.4);
+  }
+  .char-designer.open { transform: translateX(0); }
+  .char-designer-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 409;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .char-designer-backdrop.open { opacity: 1; pointer-events: auto; }
+
+  .cd-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .cd-header h3 { font-size: 15px; font-weight: 700; margin: 0; }
+  .cd-close {
+    background: none; border: none; color: var(--text-dim);
+    font-size: 20px; cursor: pointer; padding: 2px 6px; border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .cd-close:hover { color: var(--text); background: var(--surface-2); }
+
+  .cd-body {
+    flex: 1; overflow-y: auto; padding: 0;
+  }
+
+  .cd-preview {
+    width: 100%;
+    height: 250px;
+    background: #12151c;
+    position: relative;
+    border-bottom: 1px solid var(--border);
+    cursor: grab;
+  }
+  .cd-preview:active { cursor: grabbing; }
+  .cd-preview canvas { display: block; width: 100% !important; height: 100% !important; }
+
+  .cd-info-section {
+    padding: 14px 18px;
+    display: flex; flex-direction: column; gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cd-info-section .cd-avatar-row {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
+  }
+  .cd-info-section .cd-avatar-row .avatar-option { width: 36px; height: 36px; }
+  .cd-avatar-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-bottom: 6px;
+  }
+  .cd-avatar-upload-row {
+    display: flex; gap: 6px; align-items: center;
+  }
+  .cd-avatar-upload-row .btn { font-size: 10px; flex: 0 0 auto; padding: 4px 10px; }
+  .cd-avatar-upload-row input[type="text"] {
+    flex: 1; background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 8px; font-size: 10px; outline: none;
+  }
+
+  .cd-field { display: flex; flex-direction: column; gap: 3px; }
+  .cd-field label {
+    font-size: 10px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .cd-field input[type="text"], .cd-field textarea {
+    width: 100%; background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none;
+    resize: none;
+  }
+  .cd-field input[type="text"]:focus, .cd-field textarea:focus {
+    border-color: var(--accent);
+  }
+
+  .cd-tabs {
+    display: flex;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--border);
+    gap: 0;
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+  .cd-tab {
+    background: none; border: none; border-bottom: 2px solid transparent;
+    color: var(--text-dim); padding: 10px 12px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    font-family: inherit;
+  }
+  .cd-tab:hover { color: var(--text); background: var(--surface-2); }
+  .cd-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .cd-tab-content {
+    padding: 14px 18px;
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .cd-tab-content.active { display: flex; }
+
+  .cd-subsection-label {
+    font-size: 10px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+
+  .cd-item-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+
+  .cd-item-card {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 4px;
+    background: var(--surface-2);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 11px; color: var(--text-dim);
+    text-align: center;
+    min-height: 56px;
+  }
+  .cd-item-card:hover { border-color: var(--border-light); color: var(--text); background: var(--surface-3); }
+  .cd-item-card.active {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+    color: var(--text);
+    box-shadow: 0 0 0 1px var(--accent-glow);
+  }
+  .cd-item-card .cd-card-icon { font-size: 18px; line-height: 1; }
+  .cd-item-card .cd-card-label { font-size: 10px; font-weight: 500; }
+
+  .cd-color-row {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .cd-color-row label {
+    font-size: 11px; color: var(--text-dim); min-width: 70px;
+  }
+  .cd-color-row input[type="color"] {
+    width: 40px; height: 28px; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--surface-2);
+    cursor: pointer; padding: 2px;
+  }
+  .cd-color-row .cd-color-hex {
+    font-size: 11px; color: var(--text-muted); font-family: monospace;
+  }
+
+  .cd-footer {
+    display: flex; gap: 10px; padding: 14px 18px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .cd-footer .btn { flex: 1; padding: 8px; text-align: center; font-size: 13px; }
+
+  @media (max-width: 520px) {
+    .char-designer { width: 100vw; }
+  }
 </style>
 </head>
 <body>
@@ -2608,6 +3134,10 @@
       <div class="h-stat"><span class="h-stat-val" id="stat-sleeping" style="color:var(--orange)">0</span> sleeping</div>
       <div class="h-stat"><span class="h-stat-val" id="stat-threads">0</span> threads</div>
       <div class="h-stat"><span class="h-stat-val" id="stat-clis">0</span> CLIs</div>
+      <div class="h-stat" id="managed-badge" style="display:none;background:rgba(88,166,255,0.15);border-radius:8px;padding:2px 8px">
+        <span class="h-stat-val" style="color:#58a6ff;font-size:11px" id="managed-phase">MANAGED</span>
+        <span style="color:#8b949e;font-size:10px" id="managed-floor-info"></span>
+      </div>
     </div>
   </div>
   <div class="header-actions">
@@ -2742,12 +3272,14 @@
       <button class="replay-exit" onclick="exitReplay()">Exit Replay</button>
     </div>
     <div class="view-tabs" id="view-tabs">
-      <div class="view-tab active" id="tab-messages" onclick="switchView('messages')">Messages</div>
+      <div class="view-tab active" id="tab-office" onclick="switchView('office')">3D Hub</div>
+      <div class="view-tab" id="tab-messages" onclick="switchView('messages')">Messages</div>
       <div class="view-tab" id="tab-tasks" onclick="switchView('tasks')">Tasks</div>
       <div class="view-tab" id="tab-workspaces" onclick="switchView('workspaces')">Workspaces</div>
       <div class="view-tab" id="tab-workflows" onclick="switchView('workflows')">Workflows</div>
       <div class="view-tab" id="tab-launch" onclick="switchView('launch')">Launch</div>
       <div class="view-tab" id="tab-stats" onclick="switchView('stats')">Stats</div>
+      <div class="view-tab" id="tab-docs" onclick="switchView('docs')">Docs</div>
     </div>
     <div class="branch-tabs" id="branch-tabs"></div>
     <div class="search-bar" id="search-bar">
@@ -2764,8 +3296,32 @@
     <div class="tasks-area" id="tasks-area"></div>
     <div class="workspaces-area" id="workspaces-area"></div>
     <div class="workflows-area" id="workflows-area"></div>
+    <div class="office-area" id="office-area">
+      <div class="office-toolbar">
+        <label>Environment:</label>
+        <select id="office-env-select" onchange="officeSetEnvironment(this.value)">
+          <option value="modern">Modern Office</option>
+          <option value="startup">Startup Garage</option>
+        </select>
+        <div style="flex:1"></div>
+        <label style="font-size:10px;color:var(--text-muted)">Speed:</label>
+        <input type="range" id="office-cam-speed" min="1" max="20" value="4" step="1" style="width:80px;accent-color:var(--accent);vertical-align:middle" oninput="officeCamSpeed(this.value)" title="Camera movement speed">
+        <span style="color:var(--text-dim);font-size:9px;min-width:16px" id="office-speed-val">4</span>
+        <span style="color:var(--text-muted);font-size:9px;opacity:0.6;margin-left:8px" title="WASD=Move, Right-Drag=Look, Scroll=Dolly, Shift=Fast, Q/E=Down/Up">WASD + Mouse</span>
+        <span style="color:var(--text-dim);font-size:10px" id="office-fps"></span>
+      </div>
+      <div class="office-canvas-wrap">
+        <div id="office-3d-container"></div>
+        <div class="office-legend">
+          <span><span class="dot" style="background:#4ade80"></span>Active</span>
+          <span><span class="dot" style="background:#facc15"></span>Sleeping</span>
+          <span><span class="dot" style="background:#f87171"></span>Offline</span>
+        </div>
+      </div>
+    </div>
     <div class="launch-area" id="launch-area"></div>
     <div class="stats-area" id="stats-area"></div>
+    <div class="docs-area" id="docs-area"></div>
     <button class="scroll-bottom" id="scroll-bottom" onclick="scrollToBottom()">&#x2193;<span class="new-count" id="new-msg-count" style="display:none">0</span></button>
     <div class="typing-bar" id="typing-bar"></div>
 
@@ -2803,37 +3359,372 @@
   <button class="btn btn-primary" style="width:100%;margin-top:10px" id="pp-edit-btn" onclick="openProfileEditor()">Edit Profile</button>
 </div>
 
-<!-- Profile Editor Modal -->
-<div id="profile-editor-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;display:none;align-items:center;justify-content:center" onclick="closeProfileEditor()">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;width:380px;max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,0.5)" onclick="event.stopPropagation()">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <span style="font-weight:700;font-size:15px">Edit Profile</span>
-      <button style="background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer" onclick="closeProfileEditor()">&times;</button>
-    </div>
-    <div style="margin-bottom:12px">
-      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Avatar</label>
-      <div id="avatar-picker" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:8px"></div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <label class="btn" style="cursor:pointer;font-size:11px;flex:1;text-align:center">
-          Upload Image
-          <input type="file" accept="image/*" style="display:none" onchange="handleAvatarUpload(this)">
-        </label>
-        <input id="pe-avatar-url" placeholder="Or paste image URL..." style="flex:2;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;outline:none">
+<!-- Character Designer Panel -->
+<div class="char-designer-backdrop" id="cd-backdrop" onclick="closeProfileEditor()"></div>
+<div class="char-designer" id="char-designer">
+  <div class="cd-header">
+    <h3>Character Designer</h3>
+    <button class="cd-close" onclick="closeProfileEditor()">&times;</button>
+  </div>
+  <div class="cd-body">
+    <!-- 3D Preview -->
+    <div class="cd-preview" id="cd-preview-container"></div>
+
+    <!-- Info Section: Avatar + Name/Role/Bio -->
+    <div class="cd-info-section">
+      <div class="cd-field">
+        <label>Avatar</label>
+        <div class="cd-avatar-grid" id="avatar-picker"></div>
+        <div class="cd-avatar-upload-row">
+          <label class="btn" style="cursor:pointer">
+            Upload
+            <input type="file" accept="image/*" style="display:none" onchange="handleAvatarUpload(this)">
+          </label>
+          <input type="text" id="pe-avatar-url" placeholder="Or paste image URL...">
+        </div>
+      </div>
+      <div class="cd-field">
+        <label>Display Name</label>
+        <input type="text" id="pe-display-name" maxlength="30">
+      </div>
+      <div style="display:flex;gap:8px">
+        <div class="cd-field" style="flex:1">
+          <label>Role</label>
+          <input type="text" id="pe-role" maxlength="30" placeholder="e.g. Architect, Coder">
+        </div>
+      </div>
+      <div class="cd-field">
+        <label>Bio</label>
+        <textarea id="pe-bio" maxlength="200" rows="2" placeholder="Short description..."></textarea>
       </div>
     </div>
-    <div style="margin-bottom:10px">
-      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">Display Name</label>
-      <input id="pe-display-name" maxlength="30" style="width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;outline:none">
+
+    <!-- Tabs -->
+    <div class="cd-tabs">
+      <button class="cd-tab active" onclick="cdSwitchTab('body', this)">Body</button>
+      <button class="cd-tab" onclick="cdSwitchTab('hair', this)">Hair</button>
+      <button class="cd-tab" onclick="cdSwitchTab('face', this)">Face</button>
+      <button class="cd-tab" onclick="cdSwitchTab('outfit', this)">Outfit</button>
+      <button class="cd-tab" onclick="cdSwitchTab('accessories', this)">Acc.</button>
     </div>
-    <div style="margin-bottom:10px">
-      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">Role</label>
-      <input id="pe-role" maxlength="30" placeholder="e.g. Architect, Reviewer, Coder" style="width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;outline:none">
+
+    <!-- Tab: Body -->
+    <div class="cd-tab-content active" id="cd-tab-body">
+      <div class="cd-color-row">
+        <label>Skin color</label>
+        <input type="color" id="pe-head-color" value="#FFD5B8" onchange="cdOnChange()">
+        <span class="cd-color-hex" id="cd-skin-hex">#FFD5B8</span>
+      </div>
+      <div>
+        <div class="cd-subsection-label">Body Type</div>
+        <div class="cd-item-grid" id="cd-body-types">
+          <div class="cd-item-card" data-value="default" onclick="cdPickBodyType(this)">
+            <span class="cd-card-icon">&#x1f9cd;</span>
+            <span class="cd-card-label">Default</span>
+          </div>
+          <div class="cd-item-card" data-value="stocky" onclick="cdPickBodyType(this)">
+            <span class="cd-card-icon">&#x1f4aa;</span>
+            <span class="cd-card-label">Stocky</span>
+          </div>
+          <div class="cd-item-card" data-value="slim" onclick="cdPickBodyType(this)">
+            <span class="cd-card-icon">&#x1f483;</span>
+            <span class="cd-card-label">Slim</span>
+          </div>
+        </div>
+      </div>
     </div>
-    <div style="margin-bottom:14px">
-      <label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">Bio</label>
-      <textarea id="pe-bio" maxlength="200" rows="2" placeholder="Short description..." style="width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit;outline:none;resize:none"></textarea>
+
+    <!-- Tab: Hair -->
+    <div class="cd-tab-content" id="cd-tab-hair">
+      <div>
+        <div class="cd-subsection-label">Style</div>
+        <div class="cd-item-grid" id="cd-hair-styles">
+          <div class="cd-item-card" data-value="none" onclick="cdPickHairStyle(this)">
+            <span class="cd-card-icon">&#x1f6ab;</span>
+            <span class="cd-card-label">None</span>
+          </div>
+          <div class="cd-item-card" data-value="short" onclick="cdPickHairStyle(this)">
+            <span class="cd-card-icon">&#x2702;</span>
+            <span class="cd-card-label">Short</span>
+          </div>
+          <div class="cd-item-card" data-value="spiky" onclick="cdPickHairStyle(this)">
+            <span class="cd-card-icon">&#x26a1;</span>
+            <span class="cd-card-label">Spiky</span>
+          </div>
+          <div class="cd-item-card" data-value="long" onclick="cdPickHairStyle(this)">
+            <span class="cd-card-icon">&#x1f9d1;</span>
+            <span class="cd-card-label">Long</span>
+          </div>
+          <div class="cd-item-card" data-value="ponytail" onclick="cdPickHairStyle(this)">
+            <span class="cd-card-icon">&#x1f3c3;</span>
+            <span class="cd-card-label">Ponytail</span>
+          </div>
+          <div class="cd-item-card" data-value="bob" onclick="cdPickHairStyle(this)">
+            <span class="cd-card-icon">&#x1f487;</span>
+            <span class="cd-card-label">Bob</span>
+          </div>
+          <div class="cd-item-card" data-value="curly" onclick="cdPickHairStyle(this)">
+            <span class="cd-card-icon">&#x27b0;</span>
+            <span class="cd-card-label">Curly</span>
+          </div>
+          <div class="cd-item-card" data-value="afro" onclick="cdPickHairStyle(this)">
+            <span class="cd-card-icon">&#x2b55;</span>
+            <span class="cd-card-label">Afro</span>
+          </div>
+          <div class="cd-item-card" data-value="bun" onclick="cdPickHairStyle(this)">
+            <span class="cd-card-icon">&#x1f361;</span>
+            <span class="cd-card-label">Bun</span>
+          </div>
+          <div class="cd-item-card" data-value="braids" onclick="cdPickHairStyle(this)">
+            <span class="cd-card-icon">&#x1f380;</span>
+            <span class="cd-card-label">Braids</span>
+          </div>
+          <div class="cd-item-card" data-value="mohawk" onclick="cdPickHairStyle(this)">
+            <span class="cd-card-icon">&#x1f525;</span>
+            <span class="cd-card-label">Mohawk</span>
+          </div>
+          <div class="cd-item-card" data-value="wavy" onclick="cdPickHairStyle(this)">
+            <span class="cd-card-icon">&#x1f30a;</span>
+            <span class="cd-card-label">Wavy</span>
+          </div>
+        </div>
+      </div>
+      <div class="cd-color-row">
+        <label>Hair color</label>
+        <input type="color" id="pe-hair-color" value="#4A3728" onchange="cdOnChange()">
+        <span class="cd-color-hex" id="cd-hair-hex">#4A3728</span>
+      </div>
     </div>
-    <button class="btn btn-primary" style="width:100%;padding:8px" onclick="saveProfile()">Save Profile</button>
+
+    <!-- Tab: Face -->
+    <div class="cd-tab-content" id="cd-tab-face">
+      <div>
+        <div class="cd-subsection-label">Eyes</div>
+        <div class="cd-item-grid" id="cd-eye-styles">
+          <div class="cd-item-card" data-value="dots" onclick="cdPickEyeStyle(this)">
+            <span class="cd-card-icon">&#x1f441;</span>
+            <span class="cd-card-label">Dots</span>
+          </div>
+          <div class="cd-item-card" data-value="anime" onclick="cdPickEyeStyle(this)">
+            <span class="cd-card-icon">&#x2728;</span>
+            <span class="cd-card-label">Anime</span>
+          </div>
+          <div class="cd-item-card" data-value="glasses" onclick="cdPickEyeStyle(this)">
+            <span class="cd-card-icon">&#x1f453;</span>
+            <span class="cd-card-label">Glasses</span>
+          </div>
+          <div class="cd-item-card" data-value="sleepy" onclick="cdPickEyeStyle(this)">
+            <span class="cd-card-icon">&#x1f634;</span>
+            <span class="cd-card-label">Sleepy</span>
+          </div>
+          <div class="cd-item-card" data-value="surprised" onclick="cdPickEyeStyle(this)">
+            <span class="cd-card-icon">&#x1f632;</span>
+            <span class="cd-card-label">Surprised</span>
+          </div>
+          <div class="cd-item-card" data-value="angry" onclick="cdPickEyeStyle(this)">
+            <span class="cd-card-icon">&#x1f620;</span>
+            <span class="cd-card-label">Angry</span>
+          </div>
+          <div class="cd-item-card" data-value="happy" onclick="cdPickEyeStyle(this)">
+            <span class="cd-card-icon">&#x1f604;</span>
+            <span class="cd-card-label">Happy</span>
+          </div>
+          <div class="cd-item-card" data-value="wink" onclick="cdPickEyeStyle(this)">
+            <span class="cd-card-icon">&#x1f609;</span>
+            <span class="cd-card-label">Wink</span>
+          </div>
+          <div class="cd-item-card" data-value="confident" onclick="cdPickEyeStyle(this)">
+            <span class="cd-card-icon">&#x1f60e;</span>
+            <span class="cd-card-label">Confident</span>
+          </div>
+          <div class="cd-item-card" data-value="tired" onclick="cdPickEyeStyle(this)">
+            <span class="cd-card-icon">&#x1f62b;</span>
+            <span class="cd-card-label">Tired</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="cd-subsection-label">Mouth</div>
+        <div class="cd-item-grid" id="cd-mouth-styles">
+          <div class="cd-item-card" data-value="smile" onclick="cdPickMouthStyle(this)">
+            <span class="cd-card-icon">&#x1f642;</span>
+            <span class="cd-card-label">Smile</span>
+          </div>
+          <div class="cd-item-card" data-value="neutral" onclick="cdPickMouthStyle(this)">
+            <span class="cd-card-icon">&#x1f610;</span>
+            <span class="cd-card-label">Neutral</span>
+          </div>
+          <div class="cd-item-card" data-value="open" onclick="cdPickMouthStyle(this)">
+            <span class="cd-card-icon">&#x1f62e;</span>
+            <span class="cd-card-label">Open</span>
+          </div>
+          <div class="cd-item-card" data-value="grin" onclick="cdPickMouthStyle(this)">
+            <span class="cd-card-icon">&#x1f601;</span>
+            <span class="cd-card-label">Grin</span>
+          </div>
+          <div class="cd-item-card" data-value="frown" onclick="cdPickMouthStyle(this)">
+            <span class="cd-card-icon">&#x2639;</span>
+            <span class="cd-card-label">Frown</span>
+          </div>
+          <div class="cd-item-card" data-value="smirk" onclick="cdPickMouthStyle(this)">
+            <span class="cd-card-icon">&#x1f60f;</span>
+            <span class="cd-card-label">Smirk</span>
+          </div>
+          <div class="cd-item-card" data-value="tongue" onclick="cdPickMouthStyle(this)">
+            <span class="cd-card-icon">&#x1f61b;</span>
+            <span class="cd-card-label">Tongue</span>
+          </div>
+          <div class="cd-item-card" data-value="whistle" onclick="cdPickMouthStyle(this)">
+            <span class="cd-card-icon">&#x1f617;</span>
+            <span class="cd-card-label">Whistle</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Outfit -->
+    <div class="cd-tab-content" id="cd-tab-outfit">
+      <div>
+        <div class="cd-subsection-label">Outfit Style</div>
+        <div class="cd-item-grid" id="cd-outfit-styles">
+          <div class="cd-item-card" data-value="" onclick="cdPickOutfit(this)">
+            <span class="cd-card-icon">&#x1f6ab;</span>
+            <span class="cd-card-label">None</span>
+          </div>
+          <div class="cd-item-card" data-value="hoodie" onclick="cdPickOutfit(this)">
+            <span class="cd-card-icon">&#x1f9e5;</span>
+            <span class="cd-card-label">Hoodie</span>
+          </div>
+          <div class="cd-item-card" data-value="suit" onclick="cdPickOutfit(this)">
+            <span class="cd-card-icon">&#x1f454;</span>
+            <span class="cd-card-label">Suit</span>
+          </div>
+          <div class="cd-item-card" data-value="dress" onclick="cdPickOutfit(this)">
+            <span class="cd-card-icon">&#x1f457;</span>
+            <span class="cd-card-label">Dress</span>
+          </div>
+          <div class="cd-item-card" data-value="labcoat" onclick="cdPickOutfit(this)">
+            <span class="cd-card-icon">&#x1f9ea;</span>
+            <span class="cd-card-label">Lab Coat</span>
+          </div>
+          <div class="cd-item-card" data-value="vest" onclick="cdPickOutfit(this)">
+            <span class="cd-card-icon">&#x1f3bd;</span>
+            <span class="cd-card-label">Vest</span>
+          </div>
+          <div class="cd-item-card" data-value="jacket" onclick="cdPickOutfit(this)">
+            <span class="cd-card-icon">&#x1f9e5;</span>
+            <span class="cd-card-label">Jacket</span>
+          </div>
+        </div>
+      </div>
+      <div class="cd-color-row">
+        <label>Shirt color</label>
+        <input type="color" id="pe-shirt-color" value="#58a6ff" onchange="cdOnChange()">
+        <span class="cd-color-hex" id="cd-shirt-hex">#58a6ff</span>
+      </div>
+      <div class="cd-color-row">
+        <label>Pants color</label>
+        <input type="color" id="pe-pants-color" value="#2d3748" onchange="cdOnChange()">
+        <span class="cd-color-hex" id="cd-pants-hex">#2d3748</span>
+      </div>
+      <div class="cd-color-row">
+        <label>Shoe color</label>
+        <input type="color" id="pe-shoe-color" value="#1a1a2e" onchange="cdOnChange()">
+        <span class="cd-color-hex" id="cd-shoe-hex">#1a1a2e</span>
+      </div>
+    </div>
+
+    <!-- Tab: Accessories -->
+    <div class="cd-tab-content" id="cd-tab-accessories">
+      <div>
+        <div class="cd-subsection-label">Glasses</div>
+        <div class="cd-item-grid" id="cd-glasses-styles">
+          <div class="cd-item-card" data-value="" onclick="cdPickGlasses(this)">
+            <span class="cd-card-icon">&#x1f6ab;</span>
+            <span class="cd-card-label">None</span>
+          </div>
+          <div class="cd-item-card" data-value="round" onclick="cdPickGlasses(this)">
+            <span class="cd-card-icon">&#x1f4a0;</span>
+            <span class="cd-card-label">Round</span>
+          </div>
+          <div class="cd-item-card" data-value="square" onclick="cdPickGlasses(this)">
+            <span class="cd-card-icon">&#x25fb;</span>
+            <span class="cd-card-label">Square</span>
+          </div>
+          <div class="cd-item-card" data-value="sunglasses" onclick="cdPickGlasses(this)">
+            <span class="cd-card-icon">&#x1f576;</span>
+            <span class="cd-card-label">Sunglasses</span>
+          </div>
+        </div>
+        <div class="cd-color-row" id="cd-glasses-color-row" style="margin-top:8px;display:none">
+          <label>Frame color</label>
+          <input type="color" id="pe-glasses-color" value="#555555" onchange="cdOnChange()">
+          <span class="cd-color-hex" id="cd-glasses-hex">#555555</span>
+        </div>
+      </div>
+      <div>
+        <div class="cd-subsection-label">Headwear</div>
+        <div class="cd-item-grid" id="cd-headwear-styles">
+          <div class="cd-item-card" data-value="" onclick="cdPickHeadwear(this)">
+            <span class="cd-card-icon">&#x1f6ab;</span>
+            <span class="cd-card-label">None</span>
+          </div>
+          <div class="cd-item-card" data-value="beanie" onclick="cdPickHeadwear(this)">
+            <span class="cd-card-icon">&#x1f9e2;</span>
+            <span class="cd-card-label">Beanie</span>
+          </div>
+          <div class="cd-item-card" data-value="cap" onclick="cdPickHeadwear(this)">
+            <span class="cd-card-icon">&#x1f9e2;</span>
+            <span class="cd-card-label">Cap</span>
+          </div>
+          <div class="cd-item-card" data-value="headphones" onclick="cdPickHeadwear(this)">
+            <span class="cd-card-icon">&#x1f3a7;</span>
+            <span class="cd-card-label">Headphones</span>
+          </div>
+          <div class="cd-item-card" data-value="headband" onclick="cdPickHeadwear(this)">
+            <span class="cd-card-icon">&#x1f3bd;</span>
+            <span class="cd-card-label">Headband</span>
+          </div>
+        </div>
+        <div class="cd-color-row" id="cd-headwear-color-row" style="margin-top:8px;display:none">
+          <label>Color</label>
+          <input type="color" id="pe-headwear-color" value="#333333" onchange="cdOnChange()">
+          <span class="cd-color-hex" id="cd-headwear-hex">#333333</span>
+        </div>
+      </div>
+      <div>
+        <div class="cd-subsection-label">Neckwear</div>
+        <div class="cd-item-grid" id="cd-neckwear-styles">
+          <div class="cd-item-card" data-value="" onclick="cdPickNeckwear(this)">
+            <span class="cd-card-icon">&#x1f6ab;</span>
+            <span class="cd-card-label">None</span>
+          </div>
+          <div class="cd-item-card" data-value="tie" onclick="cdPickNeckwear(this)">
+            <span class="cd-card-icon">&#x1f454;</span>
+            <span class="cd-card-label">Tie</span>
+          </div>
+          <div class="cd-item-card" data-value="bowtie" onclick="cdPickNeckwear(this)">
+            <span class="cd-card-icon">&#x1f380;</span>
+            <span class="cd-card-label">Bowtie</span>
+          </div>
+          <div class="cd-item-card" data-value="lanyard" onclick="cdPickNeckwear(this)">
+            <span class="cd-card-icon">&#x1f4db;</span>
+            <span class="cd-card-label">Lanyard</span>
+          </div>
+        </div>
+        <div class="cd-color-row" id="cd-neckwear-color-row" style="margin-top:8px;display:none">
+          <label>Color</label>
+          <input type="color" id="pe-neckwear-color" value="#c0392b" onchange="cdOnChange()">
+          <span class="cd-color-hex" id="cd-neckwear-hex">#c0392b</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="cd-footer">
+    <button class="btn" onclick="cdRandomize()">Randomize</button>
+    <button class="btn btn-primary" onclick="saveProfile()">Save</button>
   </div>
 </div>
 
@@ -3133,6 +4024,10 @@ function renderAgents(agents) {
     if (state === 'sleeping' || (state === 'active' && !info.is_listening && info.idle_seconds > 30)) {
       nudgeHtml = '<button class="nudge-btn" onclick="sendNudge(\'' + escapeHtml(name) + '\')">Send Nudge</button>';
     }
+    var removeHtml = '';
+    if (state === 'dead') {
+      removeHtml = '<button class="remove-agent-btn" onclick="event.stopPropagation();removeAgent(\'' + escapeHtml(name) + '\')" title="Remove this agent">Remove</button>';
+    }
 
     // Listening status — simplified: skip for dead (already shown via badge)
     var listenHtml = '';
@@ -3173,6 +4068,7 @@ function renderAgents(agents) {
       '</div>' +
       listenHtml +
       nudgeHtml +
+      removeHtml +
     '</div>';
   }
   el.innerHTML = html;
@@ -3201,6 +4097,19 @@ function sendNudge(agentName) {
   }).then(function(r) { return r.json(); }).then(function() {
     poll();
   }).catch(function(e) { console.error('Nudge failed:', e); });
+}
+
+function removeAgent(agentName) {
+  if (!confirm('Remove agent "' + agentName + '"? This deletes their profile and tracking data.')) return;
+  var pq = projectParam();
+  lttFetch('/api/agents' + pq, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: agentName })
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    if (res.success) poll();
+    else console.error('Remove failed:', res.error);
+  }).catch(function(e) { console.error('Remove agent failed:', e); });
 }
 
 // ==================== INJECT TARGETS ====================
@@ -3859,18 +4768,22 @@ document.addEventListener('keydown', function(e) {
     return;
   }
 
-  // 1 — Messages tab
-  if (e.key === '1') { switchView('messages'); return; }
-  // 2 — Tasks tab
-  if (e.key === '2') { switchView('tasks'); return; }
-  // 3 — Workspaces tab
-  if (e.key === '3') { switchView('workspaces'); return; }
-  // 4 — Workflows tab
-  if (e.key === '4') { switchView('workflows'); return; }
-  // 5 — Launch tab
-  if (e.key === '5') { switchView('launch'); return; }
-  // 6 — Stats tab
-  if (e.key === '6') { switchView('stats'); return; }
+  // 1 — 3D Hub tab
+  if (e.key === '1') { switchView('office'); return; }
+  // 2 — Messages tab
+  if (e.key === '2') { switchView('messages'); return; }
+  // 3 — Tasks tab
+  if (e.key === '3') { switchView('tasks'); return; }
+  // 4 — Workspaces tab
+  if (e.key === '4') { switchView('workspaces'); return; }
+  // 5 — Workflows tab
+  if (e.key === '5') { switchView('workflows'); return; }
+  // 6 — Launch tab
+  if (e.key === '6') { switchView('launch'); return; }
+  // 7 — Stats tab
+  if (e.key === '7') { switchView('stats'); return; }
+  // 8 — Docs tab
+  if (e.key === '8') { switchView('docs'); return; }
 });
 
 // ==================== RELATIVE TIMESTAMPS ====================
@@ -4116,7 +5029,7 @@ function exportJSON() {
 
 // ==================== VIEW SWITCHING ====================
 
-var activeView = 'messages';
+var activeView = 'office';
 
 function switchView(view) {
   activeView = view;
@@ -4124,20 +5037,31 @@ function switchView(view) {
   document.getElementById('tab-tasks').classList.toggle('active', view === 'tasks');
   document.getElementById('tab-workspaces').classList.toggle('active', view === 'workspaces');
   document.getElementById('tab-workflows').classList.toggle('active', view === 'workflows');
+  document.getElementById('tab-office').classList.toggle('active', view === 'office');
   document.getElementById('tab-launch').classList.toggle('active', view === 'launch');
   document.getElementById('tab-stats').classList.toggle('active', view === 'stats');
+  document.getElementById('tab-docs').classList.toggle('active', view === 'docs');
   document.getElementById('messages').style.display = view === 'messages' ? 'flex' : 'none';
   document.getElementById('tasks-area').classList.toggle('visible', view === 'tasks');
   document.getElementById('workspaces-area').classList.toggle('visible', view === 'workspaces');
   document.getElementById('workflows-area').classList.toggle('visible', view === 'workflows');
+  document.getElementById('office-area').classList.toggle('visible', view === 'office');
   document.getElementById('launch-area').classList.toggle('visible', view === 'launch');
   document.getElementById('stats-area').classList.toggle('visible', view === 'stats');
+  document.getElementById('docs-area').classList.toggle('visible', view === 'docs');
   document.getElementById('search-bar').style.display = view === 'messages' ? 'flex' : 'none';
   if (view === 'tasks') fetchTasks();
   if (view === 'workspaces') fetchWorkspaces();
   if (view === 'workflows') fetchWorkflows();
+  if (view === 'docs') renderDocs();
+  if (view === 'office') {
+    if (window.office3dStart) window.office3dStart();
+  }
   if (view === 'launch') renderLaunchPanel();
   if (view === 'stats') fetchStats();
+  if (view !== 'office') {
+    if (window.office3dStop) window.office3dStop();
+  }
   // Auto-close sidebar on mobile after view switch
   if (isMobile) closeSidebar();
 }
@@ -4486,18 +5410,220 @@ var BUILT_IN_AVATARS = [
 var editingAgent = '';
 var selectedAvatar = '';
 
+// ---- Character Designer state ----
+var cdCurrentTab = 'body';
+var cdAppearance = {};
+
+function cdGetAppearance() {
+  return {
+    head_color: document.getElementById('pe-head-color').value,
+    shirt_color: document.getElementById('pe-shirt-color').value,
+    pants_color: document.getElementById('pe-pants-color').value,
+    shoe_color: document.getElementById('pe-shoe-color').value,
+    hair_style: cdAppearance.hair_style || 'short',
+    hair_color: document.getElementById('pe-hair-color').value,
+    eye_style: cdAppearance.eye_style || 'dots',
+    mouth_style: cdAppearance.mouth_style || 'smile',
+    glasses: cdAppearance.glasses || null,
+    glasses_color: document.getElementById('pe-glasses-color').value,
+    headwear: cdAppearance.headwear || null,
+    headwear_color: document.getElementById('pe-headwear-color').value,
+    neckwear: cdAppearance.neckwear || null,
+    neckwear_color: document.getElementById('pe-neckwear-color').value,
+    outfit: cdAppearance.outfit || null,
+    body_type: cdAppearance.body_type || 'default'
+  };
+}
+
+function cdOnChange() {
+  // Update hex display labels
+  var colorFields = [
+    ['pe-head-color', 'cd-skin-hex'],
+    ['pe-hair-color', 'cd-hair-hex'],
+    ['pe-shirt-color', 'cd-shirt-hex'],
+    ['pe-pants-color', 'cd-pants-hex'],
+    ['pe-shoe-color', 'cd-shoe-hex'],
+    ['pe-glasses-color', 'cd-glasses-hex'],
+    ['pe-headwear-color', 'cd-headwear-hex'],
+    ['pe-neckwear-color', 'cd-neckwear-hex']
+  ];
+  colorFields.forEach(function(pair) {
+    var input = document.getElementById(pair[0]);
+    var label = document.getElementById(pair[1]);
+    if (input && label) label.textContent = input.value.toUpperCase();
+  });
+  // Signal the 3D module to rebuild
+  if (window._cdRebuildPreview) window._cdRebuildPreview(cdGetAppearance());
+}
+
+function cdSwitchTab(name, btn) {
+  cdCurrentTab = name;
+  document.querySelectorAll('.cd-tab-content').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('.cd-tab').forEach(function(el) { el.classList.remove('active'); });
+  var target = document.getElementById('cd-tab-' + name);
+  if (target) target.classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+function cdActivateCard(container, value) {
+  var cards = document.querySelectorAll('#' + container + ' .cd-item-card');
+  cards.forEach(function(c) {
+    c.classList.toggle('active', c.dataset.value === value);
+  });
+}
+
+function cdPickHairStyle(el) {
+  cdAppearance.hair_style = el.dataset.value;
+  cdActivateCard('cd-hair-styles', el.dataset.value);
+  cdOnChange();
+}
+function cdPickEyeStyle(el) {
+  cdAppearance.eye_style = el.dataset.value;
+  cdActivateCard('cd-eye-styles', el.dataset.value);
+  cdOnChange();
+}
+function cdPickMouthStyle(el) {
+  cdAppearance.mouth_style = el.dataset.value;
+  cdActivateCard('cd-mouth-styles', el.dataset.value);
+  cdOnChange();
+}
+function cdPickGlasses(el) {
+  cdAppearance.glasses = el.dataset.value || null;
+  cdActivateCard('cd-glasses-styles', el.dataset.value);
+  document.getElementById('cd-glasses-color-row').style.display = el.dataset.value ? 'flex' : 'none';
+  cdOnChange();
+}
+function cdPickHeadwear(el) {
+  cdAppearance.headwear = el.dataset.value || null;
+  cdActivateCard('cd-headwear-styles', el.dataset.value);
+  document.getElementById('cd-headwear-color-row').style.display = el.dataset.value ? 'flex' : 'none';
+  cdOnChange();
+}
+function cdPickNeckwear(el) {
+  cdAppearance.neckwear = el.dataset.value || null;
+  cdActivateCard('cd-neckwear-styles', el.dataset.value);
+  document.getElementById('cd-neckwear-color-row').style.display = el.dataset.value ? 'flex' : 'none';
+  cdOnChange();
+}
+function cdPickOutfit(el) {
+  cdAppearance.outfit = el.dataset.value || null;
+  cdActivateCard('cd-outfit-styles', el.dataset.value);
+  cdOnChange();
+}
+function cdPickBodyType(el) {
+  cdAppearance.body_type = el.dataset.value || 'default';
+  cdActivateCard('cd-body-types', el.dataset.value);
+  cdOnChange();
+}
+
+function cdRandomize() {
+  var skinColors = ['#FFD5B8', '#F5D0A9', '#D4A574', '#C68642', '#8D5524', '#6B3E26', '#FFDFC4', '#F0C8A0', '#E0AC69', '#503335'];
+  var hairColors = ['#4A3728', '#1a1a1a', '#8B4513', '#D4A574', '#333', '#8B0000', '#F5DEB3', '#FFD700', '#A52A2A', '#2C1608'];
+  var shirtColors = ['#58a6ff', '#f97316', '#a855f7', '#22c55e', '#ef4444', '#eab308', '#06b6d4', '#ec4899', '#6366f1', '#14b8a6'];
+  var pantsColors = ['#2d3748', '#3d2b1f', '#1e1b2e', '#1a2e1a', '#2e1a1a', '#2e2a1a', '#1a2e2e', '#2e1a28', '#1a1a3e', '#1e2e2e'];
+  var shoeColors = ['#1a1a2e', '#2a1a0a', '#0a0a0a', '#3a2a1a', '#1a0a0a'];
+  var hairStyles = ['none', 'short', 'spiky', 'long', 'ponytail', 'bob', 'curly', 'afro', 'bun', 'braids', 'mohawk', 'wavy'];
+  var eyeStyles = ['dots', 'anime', 'glasses', 'sleepy', 'surprised', 'angry', 'happy', 'wink', 'confident', 'tired'];
+  var mouthStyles = ['smile', 'neutral', 'open', 'grin', 'frown', 'smirk', 'tongue', 'whistle'];
+  var glassesOpts = [null, 'round', 'square', 'sunglasses'];
+  var headwearOpts = [null, 'beanie', 'cap', 'headphones', 'headband'];
+  var neckwearOpts = [null, 'tie', 'bowtie', 'lanyard'];
+  var outfitOpts = [null, 'hoodie', 'suit', 'dress', 'labcoat', 'vest', 'jacket'];
+  var bodyTypes = ['default', 'stocky', 'slim'];
+  var accColors = ['#555555', '#8B4513', '#333333', '#c0392b', '#1a5276', '#7d3c98', '#2e4053'];
+
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  document.getElementById('pe-head-color').value = pick(skinColors);
+  document.getElementById('pe-hair-color').value = pick(hairColors);
+  document.getElementById('pe-shirt-color').value = pick(shirtColors);
+  document.getElementById('pe-pants-color').value = pick(pantsColors);
+  document.getElementById('pe-shoe-color').value = pick(shoeColors);
+
+  cdAppearance.hair_style = pick(hairStyles);
+  cdAppearance.eye_style = pick(eyeStyles);
+  cdAppearance.mouth_style = pick(mouthStyles);
+  cdAppearance.glasses = pick(glassesOpts);
+  cdAppearance.headwear = pick(headwearOpts);
+  cdAppearance.neckwear = pick(neckwearOpts);
+  cdAppearance.outfit = pick(outfitOpts);
+  cdAppearance.body_type = pick(bodyTypes);
+
+  document.getElementById('pe-glasses-color').value = pick(accColors);
+  document.getElementById('pe-headwear-color').value = pick(accColors);
+  document.getElementById('pe-neckwear-color').value = pick(accColors);
+
+  // Update card selections
+  cdActivateCard('cd-hair-styles', cdAppearance.hair_style);
+  cdActivateCard('cd-eye-styles', cdAppearance.eye_style);
+  cdActivateCard('cd-mouth-styles', cdAppearance.mouth_style);
+  cdActivateCard('cd-glasses-styles', cdAppearance.glasses || '');
+  cdActivateCard('cd-headwear-styles', cdAppearance.headwear || '');
+  cdActivateCard('cd-neckwear-styles', cdAppearance.neckwear || '');
+  cdActivateCard('cd-outfit-styles', cdAppearance.outfit || '');
+  cdActivateCard('cd-body-types', cdAppearance.body_type);
+
+  // Show/hide accessory color rows
+  document.getElementById('cd-glasses-color-row').style.display = cdAppearance.glasses ? 'flex' : 'none';
+  document.getElementById('cd-headwear-color-row').style.display = cdAppearance.headwear ? 'flex' : 'none';
+  document.getElementById('cd-neckwear-color-row').style.display = cdAppearance.neckwear ? 'flex' : 'none';
+
+  cdOnChange();
+}
+
 function openProfileEditor() {
   var agent = cachedAgents[editingAgent];
   if (!editingAgent || !agent) return;
 
   document.getElementById('profile-popup').classList.remove('open');
 
-  // Populate fields
+  // Populate basic fields
   document.getElementById('pe-display-name').value = agent.display_name || editingAgent;
   document.getElementById('pe-role').value = agent.role || '';
   document.getElementById('pe-bio').value = agent.bio || '';
   document.getElementById('pe-avatar-url').value = '';
   selectedAvatar = agent.avatar || '';
+
+  // Resolve full appearance (with deterministic defaults)
+  var app = agent.appearance || {};
+  var defApp = typeof officeGetAppearance === 'function'
+    ? officeGetAppearance({ displayName: editingAgent, appearance: app })
+    : app;
+
+  // Set color pickers
+  document.getElementById('pe-head-color').value = defApp.head_color || '#FFD5B8';
+  document.getElementById('pe-shirt-color').value = defApp.shirt_color || '#58a6ff';
+  document.getElementById('pe-hair-color').value = defApp.hair_color || '#4A3728';
+  document.getElementById('pe-pants-color').value = defApp.pants_color || '#2d3748';
+  document.getElementById('pe-shoe-color').value = defApp.shoe_color || '#1a1a2e';
+  document.getElementById('pe-glasses-color').value = defApp.glasses_color || '#555555';
+  document.getElementById('pe-headwear-color').value = defApp.headwear_color || '#333333';
+  document.getElementById('pe-neckwear-color').value = defApp.neckwear_color || '#c0392b';
+
+  // Set appearance state
+  cdAppearance.hair_style = defApp.hair_style || 'short';
+  cdAppearance.eye_style = defApp.eye_style || 'dots';
+  cdAppearance.mouth_style = defApp.mouth_style || 'smile';
+  cdAppearance.glasses = defApp.glasses || null;
+  cdAppearance.headwear = defApp.headwear || null;
+  cdAppearance.neckwear = defApp.neckwear || null;
+  cdAppearance.outfit = defApp.outfit || null;
+  cdAppearance.body_type = defApp.body_type || 'default';
+
+  // Activate correct cards
+  cdActivateCard('cd-hair-styles', cdAppearance.hair_style);
+  cdActivateCard('cd-eye-styles', cdAppearance.eye_style);
+  cdActivateCard('cd-mouth-styles', cdAppearance.mouth_style);
+  cdActivateCard('cd-glasses-styles', cdAppearance.glasses || '');
+  cdActivateCard('cd-headwear-styles', cdAppearance.headwear || '');
+  cdActivateCard('cd-neckwear-styles', cdAppearance.neckwear || '');
+  cdActivateCard('cd-outfit-styles', cdAppearance.outfit || '');
+  cdActivateCard('cd-body-types', cdAppearance.body_type);
+
+  // Show/hide accessory color rows
+  document.getElementById('cd-glasses-color-row').style.display = cdAppearance.glasses ? 'flex' : 'none';
+  document.getElementById('cd-headwear-color-row').style.display = cdAppearance.headwear ? 'flex' : 'none';
+  document.getElementById('cd-neckwear-color-row').style.display = cdAppearance.neckwear ? 'flex' : 'none';
 
   // Build avatar picker grid
   var picker = document.getElementById('avatar-picker');
@@ -4508,13 +5634,22 @@ function openProfileEditor() {
   }
   picker.innerHTML = html;
 
-  // Show modal
-  var overlay = document.getElementById('profile-editor-overlay');
-  overlay.style.display = 'flex';
+  // Reset to Body tab
+  cdSwitchTab('body', document.querySelector('.cd-tab'));
+
+  // Open the panel
+  document.getElementById('char-designer').classList.add('open');
+  document.getElementById('cd-backdrop').classList.add('open');
+
+  // Update hex displays and init 3D preview
+  cdOnChange();
+  if (window._cdInitPreview) window._cdInitPreview();
 }
 
 function closeProfileEditor() {
-  document.getElementById('profile-editor-overlay').style.display = 'none';
+  document.getElementById('char-designer').classList.remove('open');
+  document.getElementById('cd-backdrop').classList.remove('open');
+  if (window._cdDisposePreview) window._cdDisposePreview();
 }
 
 function selectAvatar(idx) {
@@ -4533,7 +5668,6 @@ function handleAvatarUpload(input) {
   var reader = new FileReader();
   reader.onload = function(e) {
     selectedAvatar = e.target.result;
-    // Deselect built-in options
     document.querySelectorAll('#avatar-picker .avatar-option').forEach(function(el) { el.classList.remove('selected'); });
     document.getElementById('pe-avatar-url').value = '';
   };
@@ -4543,11 +5677,30 @@ function handleAvatarUpload(input) {
 function saveProfile() {
   var avatarUrl = document.getElementById('pe-avatar-url').value.trim();
   var avatar = avatarUrl || selectedAvatar;
+  var app = cdGetAppearance();
   var body = {
     agent: editingAgent,
     display_name: document.getElementById('pe-display-name').value.trim() || editingAgent,
     role: document.getElementById('pe-role').value.trim(),
     bio: document.getElementById('pe-bio').value.trim(),
+    appearance: {
+      head_color: app.head_color,
+      shirt_color: app.shirt_color,
+      hair_style: app.hair_style,
+      hair_color: app.hair_color,
+      eye_style: app.eye_style,
+      mouth_style: app.mouth_style,
+      pants_color: app.pants_color,
+      shoe_color: app.shoe_color,
+      glasses: app.glasses,
+      glasses_color: app.glasses_color,
+      headwear: app.headwear,
+      headwear_color: app.headwear_color,
+      neckwear: app.neckwear,
+      neckwear_color: app.neckwear_color,
+      outfit: app.outfit,
+      body_type: app.body_type
+    }
   };
   if (avatar) body.avatar = avatar;
 
@@ -4558,7 +5711,7 @@ function saveProfile() {
   }).then(function(r) { return r.json(); }).then(function(res) {
     if (res.success) {
       closeProfileEditor();
-      poll(); // refresh to show new avatar/name
+      poll();
     }
   }).catch(function(e) { console.error('Save profile failed:', e); });
 }
@@ -4895,6 +6048,21 @@ function poll() {
     document.getElementById('stat-agents').textContent = status.agentCount;
     document.getElementById('stat-sleeping').textContent = status.sleepingCount || 0;
     document.getElementById('stat-threads').textContent = status.threadCount;
+
+    // Managed mode badge
+    var managedBadge = document.getElementById('managed-badge');
+    if (status.conversation_mode === 'managed' && status.managed) {
+      managedBadge.style.display = '';
+      var phaseLabel = String(status.managed.phase || 'discussion').toUpperCase();
+      var floorInfo = status.managed.floor === 'closed' ? 'floor closed' :
+        status.managed.floor === 'directed' ? (status.managed.turn_current || '?') + ' speaking' :
+        status.managed.floor === 'open' ? 'round-robin' :
+        status.managed.floor === 'execution' ? 'working' : '';
+      document.getElementById('managed-phase').textContent = phaseLabel;
+      document.getElementById('managed-floor-info').textContent = floorInfo ? ' | ' + floorInfo : '';
+    } else {
+      managedBadge.style.display = 'none';
+    }
 
     // Count unique providers from online agents
     var providers = {};
@@ -5552,6 +6720,308 @@ function renderLaunchPanel() {
 function renderConversationTemplates(p){lttFetch('/api/conversation-templates').then(function(r){return r.json()}).then(function(t){if(!t.length)return;var s=document.createElement('div');s.className='launch-panel';s.style.marginTop='20px';var h='<h3 style="margin-bottom:4px">Conversation Templates</h3><p style="font-size:12px;color:var(--text-dim);margin-bottom:16px">Pre-built multi-agent workflows. Click to see agent prompts.</p><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">';for(var i=0;i<t.length;i++){var c=t[i];var n=c.agents.map(function(a){return a.name}).join(', ');h+='<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:14px;cursor:pointer;transition:all 0.15s" onclick="showConvTemplate(\''+escapeHtml(c.id)+'\')" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'"><div style="font-weight:600;font-size:13px;margin-bottom:4px">'+escapeHtml(c.name)+'</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">'+escapeHtml(c.description)+'</div><div style="font-size:10px;color:var(--text-muted)">Agents: '+escapeHtml(n)+'</div>'+(c.workflow?'<div style="font-size:10px;color:var(--purple);margin-top:4px">Workflow: '+escapeHtml(c.workflow.steps.join(' \u2192 '))+'</div>':'')+'</div>'}h+='</div><div id="conv-template-detail" style="margin-top:16px"></div>';s.innerHTML=h;p.appendChild(s)}).catch(function(){})}
 function showConvTemplate(tid){var pq=activeProject?'?project='+encodeURIComponent(activeProject):'';lttFetch('/api/conversation-templates/launch'+pq,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({template_id:tid})}).then(function(r){return r.json()}).then(function(d){if(d.error){alert(d.error);return}var el=document.getElementById('conv-template-detail');var h='<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px"><div style="font-weight:700;font-size:15px;margin-bottom:4px">'+escapeHtml(d.template.name)+'</div><div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">'+escapeHtml(d.template.description)+'</div>';if(d.template.workflow){h+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:14px;flex-wrap:wrap">';var st=d.template.workflow.steps;for(var s=0;s<st.length;s++){if(s>0)h+='<span style="color:var(--text-muted);font-size:12px">\u2192</span>';h+='<span style="background:var(--purple-dim);color:var(--purple);padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600">'+escapeHtml(st[s])+'</span>'}h+='</div>'}h+='<div style="font-weight:600;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Agent Prompts (copy each into a separate terminal)</div>';for(var i=0;i<d.instructions.length;i++){var inst=d.instructions[i];h+='<div style="margin-bottom:10px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="font-weight:600;font-size:13px">'+escapeHtml(inst.agent_name)+'</span><span class="role-badge">'+escapeHtml(inst.role)+'</span></div><div class="copy-block" onclick="copyText(this)" data-text="'+inst.prompt.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'"><span class="copy-hint">click to copy</span><span style="font-size:11px;color:var(--text-dim)">'+escapeHtml(inst.prompt.substring(0,200))+(inst.prompt.length>200?'...':'')+'</span></div></div>'}h+='</div>';el.innerHTML=h;el.scrollIntoView({behavior:'smooth',block:'nearest'})})}
 
+// ==================== v3.6: DOCS VIEW ====================
+
+function renderDocs() {
+  var el = document.getElementById('docs-area');
+  if (el.dataset.rendered) return; // already rendered
+  el.dataset.rendered = '1';
+
+  el.innerHTML =
+    '<div class="docs-container">' +
+
+    // Header
+    '<h2>Let Them Talk <span class="docs-badge docs-badge-new">v3.6.0</span></h2>' +
+    '<p class="docs-subtitle">Multi-AI agent communication — MCP server + web dashboard. Let Claude, Gemini, and Codex CLI agents talk to each other.</p>' +
+
+    // What's New
+    '<div class="docs-section">' +
+      '<h3>What\'s New in v3.6 <span class="docs-badge docs-badge-beta">In Testing</span></h3>' +
+      '<p>Version 3.6 introduces <strong>Managed Conversation Mode</strong> — a structured turn-taking protocol for multi-agent teams. This feature is currently in testing and may have rough edges.</p>' +
+      '<h4>The Problem</h4>' +
+      '<p>When you launch 4-5 AI agents and tell them to collaborate, every agent sees every message and responds simultaneously. This creates an exponential broadcast storm — each response triggers more responses. The result: chaos, duplicate work, and context window overflow.</p>' +
+      '<h4>The Solution</h4>' +
+      '<p>Managed mode adds a <strong>Manager agent</strong> who controls who speaks and when, just like a real team lead. The manager gives agents the floor one at a time, and the server enforces it — agents who try to speak out of turn get blocked with an error message.</p>' +
+    '</div>' +
+
+    // Managed Mode Section
+    '<div class="docs-section">' +
+      '<h3>Managed Conversation Mode</h3>' +
+      '<h4>Three Conversation Modes</h4>' +
+      '<ul>' +
+        '<li><code>direct</code> — Default. Point-to-point messaging. Each agent sends to a specific recipient.</li>' +
+        '<li><code>group</code> — Free chat. All messages auto-broadcast to everyone. Has a 3s cooldown to slow things down.</li>' +
+        '<li><code>managed</code> — <strong>New.</strong> A manager controls floor access. Agents can only speak when given permission. No auto-broadcast.</li>' +
+      '</ul>' +
+      '<h4>How It Works</h4>' +
+      '<div class="docs-phase-diagram">' +
+        '<div class="docs-phase-box">Manager sets managed mode</div>' +
+        '<div class="docs-phase-arrow">&rarr;</div>' +
+        '<div class="docs-phase-box">Manager claims role</div>' +
+        '<div class="docs-phase-arrow">&rarr;</div>' +
+        '<div class="docs-phase-box">Manager yields floor to agents</div>' +
+        '<div class="docs-phase-arrow">&rarr;</div>' +
+        '<div class="docs-phase-box">Agent responds</div>' +
+        '<div class="docs-phase-arrow">&rarr;</div>' +
+        '<div class="docs-phase-box">Floor returns to Manager</div>' +
+      '</div>' +
+      '<h4>Phases</h4>' +
+      '<p>The manager moves the team through structured phases. Each phase sends behavioral instructions to all agents:</p>' +
+      '<div class="docs-phase-diagram">' +
+        '<div class="docs-phase-box" style="border-color:var(--accent)">Discussion</div>' +
+        '<div class="docs-phase-arrow">&rarr;</div>' +
+        '<div class="docs-phase-box" style="border-color:var(--purple)">Planning</div>' +
+        '<div class="docs-phase-arrow">&rarr;</div>' +
+        '<div class="docs-phase-box" style="border-color:var(--green)">Execution</div>' +
+        '<div class="docs-phase-arrow">&rarr;</div>' +
+        '<div class="docs-phase-box" style="border-color:var(--orange)">Review</div>' +
+      '</div>' +
+      '<ul>' +
+        '<li><strong>Discussion</strong> — Manager calls on agents to share ideas. Others wait silently.</li>' +
+        '<li><strong>Planning</strong> — Manager assigns tasks. Agents wait for assignments.</li>' +
+        '<li><strong>Execution</strong> — Agents work independently. Can only message the manager for help or to report completion.</li>' +
+        '<li><strong>Review</strong> — Manager calls on each agent to present results.</li>' +
+      '</ul>' +
+      '<h4>Floor Control</h4>' +
+      '<ul>' +
+        '<li><code>yield_floor(to="AgentName")</code> — Give one agent permission to speak. Floor returns to manager after they respond.</li>' +
+        '<li><code>yield_floor(to="__open__")</code> — Round-robin: each agent speaks in order, one at a time.</li>' +
+        '<li><code>yield_floor(to="__close__")</code> — Close the floor. Only manager can speak.</li>' +
+      '</ul>' +
+      '<h4>Enforcement</h4>' +
+      '<p>The server blocks messages from agents who don\'t have the floor. They receive an error message telling them to wait. This is not a suggestion — it\'s enforced at the protocol level. Broadcast is also restricted to the manager only in managed mode.</p>' +
+    '</div>' +
+
+    // New Tools
+    '<div class="docs-section">' +
+      '<h3>New MCP Tools (v3.6)</h3>' +
+      '<div class="docs-tool-grid">' +
+        '<div class="docs-tool-item"><code>claim_manager()</code><div class="desc">Claim the manager role. First to call wins. If manager disconnects, anyone can re-claim.</div></div>' +
+        '<div class="docs-tool-item"><code>yield_floor(to, prompt?)</code><div class="desc">Manager-only. Give an agent permission to speak. Supports directed, round-robin, and close.</div></div>' +
+        '<div class="docs-tool-item"><code>set_phase(phase)</code><div class="desc">Manager-only. Move the team through discussion → planning → execution → review.</div></div>' +
+        '<div class="docs-tool-item"><code>set_conversation_mode("managed")</code><div class="desc">Activate managed mode. Now accepts "managed" in addition to "direct" and "group".</div></div>' +
+      '</div>' +
+    '</div>' +
+
+    // Quick Start
+    '<div class="docs-section">' +
+      '<h3>Quick Start</h3>' +
+      '<h4>Install</h4>' +
+      '<pre><code>npx let-them-talk init          # Auto-detect your CLI\n' +
+      'npx let-them-talk init --all    # Configure all CLIs\n' +
+      'npx let-them-talk dashboard     # Launch this web dashboard</code></pre>' +
+      '<h4>Basic 2-Agent Chat</h4>' +
+      '<pre><code># Terminal 1 (Claude Code)\n' +
+      'Register as "A". Send a message to B saying hello.\n\n' +
+      '# Terminal 2 (Gemini CLI, Claude, or Codex)\n' +
+      'Register as "B". Call listen() to wait for messages.</code></pre>' +
+      '<h4>Managed Mode (3+ Agents)</h4>' +
+      '<pre><code># Terminal 1 — Manager\n' +
+      'Register as "Manager"\n' +
+      'set_conversation_mode("managed")\n' +
+      'claim_manager()\n' +
+      'yield_floor(to="Designer", prompt="What should we build?")\n' +
+      'listen()  # wait for Designer\'s response\n\n' +
+      '# Terminal 2 — Designer\n' +
+      'Register as "Designer"\n' +
+      'listen()  # waits until Manager gives you the floor\n' +
+      '# Respond when you get [FLOOR] message, then listen() again\n\n' +
+      '# Terminal 3 — Coder\n' +
+      'Register as "Coder"\n' +
+      'listen()  # waits silently until addressed</code></pre>' +
+      '<h4>Using Templates</h4>' +
+      '<pre><code>npx let-them-talk templates     # List available templates\n' +
+      'npx let-them-talk init --template managed  # Init with managed team template</code></pre>' +
+      '<p>Or use the <strong>Launch</strong> tab to pick a template and get copy-paste prompts for each agent.</p>' +
+    '</div>' +
+
+    // All Commands
+    '<div class="docs-section">' +
+      '<h3>CLI Commands</h3>' +
+      '<div class="docs-tool-grid">' +
+        '<div class="docs-tool-item"><code>npx let-them-talk init</code><div class="desc">Install MCP server config for your CLI (auto-detects Claude/Gemini/Codex)</div></div>' +
+        '<div class="docs-tool-item"><code>npx let-them-talk init --all</code><div class="desc">Configure for all detected CLIs at once</div></div>' +
+        '<div class="docs-tool-item"><code>npx let-them-talk init --template &lt;name&gt;</code><div class="desc">Initialize with a team template (pair, team, review, debate, managed)</div></div>' +
+        '<div class="docs-tool-item"><code>npx let-them-talk dashboard</code><div class="desc">Launch the web dashboard on port 3777</div></div>' +
+        '<div class="docs-tool-item"><code>npx let-them-talk templates</code><div class="desc">List all available agent templates</div></div>' +
+        '<div class="docs-tool-item"><code>npx let-them-talk reset</code><div class="desc">Clear all conversation data (auto-archives first)</div></div>' +
+      '</div>' +
+    '</div>' +
+
+    // All 32 Tools
+    '<div class="docs-section">' +
+      '<h3>All 32 MCP Tools</h3>' +
+      '<h4>Core Messaging</h4>' +
+      '<div class="docs-tool-grid">' +
+        '<div class="docs-tool-item"><code>register(name, provider?)</code><div class="desc">Register your agent identity. Must be called first.</div></div>' +
+        '<div class="docs-tool-item"><code>list_agents()</code><div class="desc">See all agents and their status (alive/dead/sleeping).</div></div>' +
+        '<div class="docs-tool-item"><code>send_message(content, to?, reply_to?)</code><div class="desc">Send a message. Auto-routes with 2 agents.</div></div>' +
+        '<div class="docs-tool-item"><code>broadcast(content)</code><div class="desc">Send to all agents. Manager-only in managed mode.</div></div>' +
+        '<div class="docs-tool-item"><code>listen(from?)</code><div class="desc">Block until a message arrives. Never times out.</div></div>' +
+        '<div class="docs-tool-item"><code>listen_codex(from?)</code><div class="desc">Same as listen but returns after 90s for Codex compatibility.</div></div>' +
+        '<div class="docs-tool-item"><code>listen_group(timeout?)</code><div class="desc">Batched listen for group/managed mode. Returns all pending messages.</div></div>' +
+        '<div class="docs-tool-item"><code>wait_for_reply(timeout?, from?)</code><div class="desc">Block until a reply arrives or timeout. For request-response patterns.</div></div>' +
+        '<div class="docs-tool-item"><code>check_messages(from?)</code><div class="desc">Non-blocking peek at pending messages.</div></div>' +
+        '<div class="docs-tool-item"><code>ack_message(message_id)</code><div class="desc">Acknowledge a message so the sender can verify delivery.</div></div>' +
+        '<div class="docs-tool-item"><code>get_history(limit?, thread_id?)</code><div class="desc">Get conversation history, optionally filtered by thread.</div></div>' +
+        '<div class="docs-tool-item"><code>get_summary(last_n?)</code><div class="desc">Condensed conversation summary for context recovery.</div></div>' +
+        '<div class="docs-tool-item"><code>handoff(to, context)</code><div class="desc">Hand off work to another agent with context.</div></div>' +
+        '<div class="docs-tool-item"><code>share_file(file_path, to?, summary?)</code><div class="desc">Share a file\'s content with another agent (max 100KB).</div></div>' +
+        '<div class="docs-tool-item"><code>reset()</code><div class="desc">Clear all data (auto-archives first).</div></div>' +
+      '</div>' +
+      '<h4>Managed Mode</h4>' +
+      '<div class="docs-tool-grid">' +
+        '<div class="docs-tool-item"><code>set_conversation_mode(mode)</code><div class="desc">"direct", "group", or "managed".</div></div>' +
+        '<div class="docs-tool-item"><code>claim_manager()</code><div class="desc">Claim the manager role in managed mode.</div></div>' +
+        '<div class="docs-tool-item"><code>yield_floor(to, prompt?)</code><div class="desc">Manager-only: give an agent permission to speak.</div></div>' +
+        '<div class="docs-tool-item"><code>set_phase(phase)</code><div class="desc">Manager-only: discussion/planning/execution/review.</div></div>' +
+      '</div>' +
+      '<h4>Tasks &amp; Workflows</h4>' +
+      '<div class="docs-tool-grid">' +
+        '<div class="docs-tool-item"><code>create_task(title, desc?, assignee?)</code><div class="desc">Create and assign a task.</div></div>' +
+        '<div class="docs-tool-item"><code>update_task(task_id, status, notes?)</code><div class="desc">Update task status: pending/in_progress/done/blocked.</div></div>' +
+        '<div class="docs-tool-item"><code>list_tasks(status?, assignee?)</code><div class="desc">List tasks with optional filters.</div></div>' +
+        '<div class="docs-tool-item"><code>create_workflow(name, steps)</code><div class="desc">Multi-step pipeline with auto-handoff.</div></div>' +
+        '<div class="docs-tool-item"><code>advance_workflow(workflow_id, notes?)</code><div class="desc">Complete current step, start next.</div></div>' +
+        '<div class="docs-tool-item"><code>workflow_status(workflow_id?)</code><div class="desc">Check workflow progress.</div></div>' +
+      '</div>' +
+      '<h4>Profiles &amp; Workspaces</h4>' +
+      '<div class="docs-tool-grid">' +
+        '<div class="docs-tool-item"><code>update_profile(...)</code><div class="desc">Set display name, avatar, bio, role, character appearance.</div></div>' +
+        '<div class="docs-tool-item"><code>workspace_write(key, content)</code><div class="desc">Store data in your workspace (others can read).</div></div>' +
+        '<div class="docs-tool-item"><code>workspace_read(key?, agent?)</code><div class="desc">Read your or another agent\'s workspace.</div></div>' +
+        '<div class="docs-tool-item"><code>workspace_list(agent?)</code><div class="desc">List workspace keys.</div></div>' +
+      '</div>' +
+      '<h4>Branching</h4>' +
+      '<div class="docs-tool-grid">' +
+        '<div class="docs-tool-item"><code>fork_conversation(msg_id?, branch)</code><div class="desc">Fork the conversation at a message into a new branch.</div></div>' +
+        '<div class="docs-tool-item"><code>switch_branch(branch)</code><div class="desc">Switch to a different branch.</div></div>' +
+        '<div class="docs-tool-item"><code>list_branches()</code><div class="desc">List all branches with message counts.</div></div>' +
+      '</div>' +
+    '</div>' +
+
+    // How the System Works
+    '<div class="docs-section">' +
+      '<h3>How It Works Under the Hood</h3>' +
+      '<h4>Architecture</h4>' +
+      '<p>Each CLI terminal (Claude Code, Gemini CLI, Codex CLI) spawns its own MCP server process via stdio. All processes read/write to a shared <code>.agent-bridge/</code> directory on disk — no centralized server, no network calls between agents.</p>' +
+      '<pre><code>┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐\n' +
+      '│ Claude Code      │   │ Gemini CLI       │   │ Codex CLI        │\n' +
+      '│ (Terminal 1)     │   │ (Terminal 2)     │   │ (Terminal 3)     │\n' +
+      '│   └─ server.js   │   │   └─ server.js   │   │   └─ server.js   │\n' +
+      '└────────┬─────────┘   └────────┬─────────┘   └────────┬─────────┘\n' +
+      '         │                      │                      │\n' +
+      '         └──────────────────────┼──────────────────────┘\n' +
+      '                                │\n' +
+      '                    ┌───────────┴───────────┐\n' +
+      '                    │   .agent-bridge/       │\n' +
+      '                    │   ├─ messages.jsonl    │\n' +
+      '                    │   ├─ history.jsonl     │\n' +
+      '                    │   ├─ agents.json       │\n' +
+      '                    │   ├─ config.json       │\n' +
+      '                    │   ├─ tasks.json        │\n' +
+      '                    │   └─ ...               │\n' +
+      '                    └───────────────────────┘</code></pre>' +
+      '<h4>Key Design Decisions</h4>' +
+      '<ul>' +
+        '<li><strong>Append-only writes</strong> — Messages are appended to JSONL files (no file locking needed for writes).</li>' +
+        '<li><strong>Per-agent consumed tracking</strong> — Each agent writes only its own consumed file, avoiding write conflicts.</li>' +
+        '<li><strong>PID-based stale detection</strong> + heartbeat (10s interval) for instant alive/dead status.</li>' +
+        '<li><strong>Auto-compact</strong> — messages.jsonl is compacted when exceeding 500 lines.</li>' +
+        '<li><strong>Auto-archive</strong> — Conversations are archived before reset.</li>' +
+        '<li><strong>Managed mode enforcement</strong> — Floor control is enforced at the <code>send_message</code> / <code>broadcast</code> level, not just suggested. Agents get hard errors when speaking out of turn.</li>' +
+      '</ul>' +
+    '</div>' +
+
+    // Manager Auto-Features
+    '<div class="docs-section">' +
+      '<h3>Managed Mode Smart Features</h3>' +
+      '<h4>Auto-Election</h4>' +
+      '<p>If no agent calls <code>claim_manager()</code> and an agent sends the first message, that agent automatically becomes the manager.</p>' +
+      '<h4>Auto-Advance Turns</h4>' +
+      '<p>When an agent with the floor sends a message:</p>' +
+      '<ul>' +
+        '<li><strong>Directed floor</strong> — Floor automatically returns to the manager. Manager gets a system message: "Agent has responded."</li>' +
+        '<li><strong>Round-robin</strong> — Floor automatically advances to the next agent. When all have spoken, manager is notified.</li>' +
+      '</ul>' +
+      '<h4>Manager Disconnect Recovery</h4>' +
+      '<p>If the manager process dies (terminal closed, crash, etc.), the heartbeat system detects it within 10-30 seconds and broadcasts a system message: "Manager disconnected. Call <code>claim_manager()</code> to take over." Any agent can then claim the manager role.</p>' +
+      '<h4>Execution Phase Isolation</h4>' +
+      '<p>During <code>execution</code> phase, agents can only message the manager — not each other. This prevents cross-talk while agents are heads-down working on their tasks.</p>' +
+    '</div>' +
+
+    // Dashboard Features
+    '<div class="docs-section">' +
+      '<h3>Dashboard Features</h3>' +
+      '<ul>' +
+        '<li><strong>Messages</strong> — Real-time message feed with markdown rendering, search, and message injection.</li>' +
+        '<li><strong>Tasks</strong> — View and manage tasks created by agents.</li>' +
+        '<li><strong>Workspaces</strong> — Browse agent key-value storage.</li>' +
+        '<li><strong>Workflows</strong> — Track multi-step workflow pipelines.</li>' +
+        '<li><strong>3D Hub</strong> — 3D virtual office with chibi characters for each agent.</li>' +
+        '<li><strong>Launch</strong> — Launch new agent terminals with templates and prompts.</li>' +
+        '<li><strong>Stats</strong> — Message counts, velocity, per-agent activity bars.</li>' +
+        '<li><strong>Docs</strong> — This page.</li>' +
+      '</ul>' +
+      '<h4>Managed Mode Indicator</h4>' +
+      '<p>When managed mode is active, a blue badge appears in the header showing the current phase (DISCUSSION, PLANNING, EXECUTION, REVIEW) and floor status (who is speaking, floor closed, round-robin, etc.).</p>' +
+    '</div>' +
+
+    // Templates
+    '<div class="docs-section">' +
+      '<h3>Templates</h3>' +
+      '<p>Templates are pre-built multi-agent configurations with role-specific prompts. Available templates:</p>' +
+      '<div class="docs-tool-grid">' +
+        '<div class="docs-tool-item"><code>pair</code><div class="desc">2 agents — simple pair programming/review.</div></div>' +
+        '<div class="docs-tool-item"><code>team</code><div class="desc">3 agents — Coordinator, Researcher, Coder.</div></div>' +
+        '<div class="docs-tool-item"><code>review</code><div class="desc">2 agents — Author and Reviewer for code review.</div></div>' +
+        '<div class="docs-tool-item"><code>debate</code><div class="desc">2 agents — Advocate and Critic for decision-making.</div></div>' +
+        '<div class="docs-tool-item" style="border:1px solid var(--accent)"><code>managed</code> <span class="docs-badge docs-badge-new">NEW</span><div class="desc">4 agents — Manager, Designer, Coder, Tester with structured turn-taking.</div></div>' +
+      '</div>' +
+      '<p style="margin-top:8px">Conversation templates (in the Launch tab) also include: Feature Build, Code Review, Debug Squad, Research &amp; Write, and Managed Team.</p>' +
+    '</div>' +
+
+    // Known Issues / Testing
+    '<div class="docs-section">' +
+      '<h3>Testing Status <span class="docs-badge docs-badge-beta">Beta</span></h3>' +
+      '<p>Managed mode (v3.6) is in active testing. Things we\'re validating:</p>' +
+      '<ul>' +
+        '<li>Floor enforcement with 5+ simultaneous agents</li>' +
+        '<li>Manager disconnect and re-election under load</li>' +
+        '<li>Round-robin with agents that are slow to respond or crash mid-turn</li>' +
+        '<li>Phase transitions while messages are in-flight</li>' +
+        '<li>Interaction between managed mode and branching</li>' +
+        '<li>Dashboard SSE updates for phase/floor changes</li>' +
+      '</ul>' +
+      '<h4>What We\'re Aiming For</h4>' +
+      '<p>The goal is to make multi-agent collaboration actually useful — not a novelty demo. Managed mode should feel like a real team standup: the manager runs the meeting, calls on people, assigns work, and collects results. No crosstalk, no chaos, no wasted context window.</p>' +
+      '<p>Future plans:</p>' +
+      '<ul>' +
+        '<li>Sub-teams — managers can delegate floor control to team leads</li>' +
+        '<li>Voting — agents vote on decisions, manager counts results</li>' +
+        '<li>Time boxing — auto-advance turns after X seconds</li>' +
+        '<li>Dashboard controls — inject phase changes and floor commands from the UI</li>' +
+        '<li>Smart routing — auto-detect which agents are relevant to a topic</li>' +
+      '</ul>' +
+    '</div>' +
+
+    // Version History
+    '<div class="docs-section">' +
+      '<h3>Version History</h3>' +
+      '<ul>' +
+        '<li><strong>v3.6.0</strong> <span class="docs-badge docs-badge-beta">Current</span> — Managed conversation mode, floor control, phase management, 3 new tools, dashboard docs tab</li>' +
+        '<li><strong>v3.5.1</strong> — 3D virtual office, character designer, agent profiles with appearance</li>' +
+        '<li><strong>v3.4</strong> — Conversation templates, launch panel, auto-compact, context hints</li>' +
+        '<li><strong>v3.3</strong> — Workflows, branching, workspaces, multi-project dashboard</li>' +
+        '<li><strong>v3.2</strong> — Group conversation mode, listen_group, cooldown, stagger</li>' +
+        '<li><strong>v3.1</strong> — Tasks, profiles, SSE real-time updates</li>' +
+        '<li><strong>v3.0</strong> — Rewrite: MCP server, dashboard, 27 tools</li>' +
+      '</ul>' +
+    '</div>' +
+
+    '</div>'; // end docs-container
+}
+
 function selectCli(cli) {
   selectedCli = cli;
   var btns = document.querySelectorAll('.cli-btn');
@@ -5624,6 +7094,32 @@ function copyLaunchPrompt() {
     setTimeout(function() { resultEl.className = 'launch-result'; resultEl.innerHTML = ''; }, 2000);
   });
 }
+
+// ==================== VIRTUAL OFFICE ====================
+// 3D engine extracted to office/ modules (loaded as ES module below).
+// Minimal compat shim for legacy callers:
+
+var officeMode = '3d';
+window.officeMode = '3d';
+
+function officeSetMode(mode) {
+  // 3D only — no-op
+}
+
+var officeEnvironment = 'modern';
+
+// officeSetEnvironment bridges to 3D module
+function officeSetEnvironment(env) {
+  officeEnvironment = env;
+  if (window.office3dSetEnvironment) window.office3dSetEnvironment(env);
+}
+function officeCamSpeed(val) {
+  document.getElementById('office-speed-val').textContent = val;
+  if (window.office3dSetCamSpeed) window.office3dSetCamSpeed(Number(val));
+}
+
+// Hook into poll() to sync office state (3D module handles its own sync interval)
+// Visibility change for 3D mode is handled by the 3D module
 
 // ==================== SSE + POLLING ====================
 
@@ -5707,13 +7203,186 @@ loadProjects().then(function() {
   console.log('[LTT] init: projects loaded, starting poll + SSE');
   poll();
   initSSE();
+  switchView('office');
 }).catch(function(e) {
   console.error('[LTT] init: loadProjects failed, polling anyway:', e);
   poll();
   initSSE();
+  switchView('office');
 });
 // Safety-net poll at 10s (SSE handles real-time, this catches any missed updates)
 setInterval(poll, 10000);
+</script>
+
+<script type="module" src="/office/index.js"></script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { createCharacter } from '/office/index.js';
+
+var renderer = null;
+var scene = null;
+var camera = null;
+var controls = null;
+var animId = null;
+var charObj = null;
+var container = null;
+var autoRotateSpeed = 0.8;
+
+function initPreview() {
+  container = document.getElementById('cd-preview-container');
+  if (!container) return;
+
+  // Clean up if already exists
+  disposePreview();
+
+  var w = container.clientWidth || 440;
+  var h = 250;
+
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(w, h);
+  renderer.setClearColor(0x12151c);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+
+  // Scene
+  scene = new THREE.Scene();
+
+  // Camera
+  camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 50);
+  camera.position.set(0, 1.2, 3.2);
+  camera.lookAt(0, 0.6, 0);
+
+  // Controls
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0.6, 0);
+  controls.enablePan = false;
+  controls.enableZoom = false;
+  controls.minPolarAngle = Math.PI * 0.2;
+  controls.maxPolarAngle = Math.PI * 0.65;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = autoRotateSpeed;
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.update();
+
+  // Lights
+  var ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  scene.add(ambientLight);
+  var dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+  dirLight.position.set(3, 5, 4);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(512, 512);
+  dirLight.shadow.camera.near = 0.5;
+  dirLight.shadow.camera.far = 15;
+  dirLight.shadow.camera.left = -2;
+  dirLight.shadow.camera.right = 2;
+  dirLight.shadow.camera.top = 2;
+  dirLight.shadow.camera.bottom = -1;
+  scene.add(dirLight);
+  var fillLight = new THREE.DirectionalLight(0x8899cc, 0.3);
+  fillLight.position.set(-2, 2, -1);
+  scene.add(fillLight);
+
+  // Floor disc
+  var floorGeo = new THREE.CircleGeometry(0.6, 32);
+  var floorMat = new THREE.MeshStandardMaterial({ color: 0x1e2530, roughness: 0.9 });
+  var floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = 0.01;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // Build character with current appearance
+  rebuildCharacter(window.cdGetAppearance ? window.cdGetAppearance() : {});
+
+  // Start render loop
+  function animate() {
+    animId = requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // Handle resize
+  var ro = new ResizeObserver(function() {
+    if (!container || !renderer) return;
+    var nw = container.clientWidth;
+    var nh = 250;
+    camera.aspect = nw / nh;
+    camera.updateProjectionMatrix();
+    renderer.setSize(nw, nh);
+  });
+  ro.observe(container);
+  container._ro = ro;
+}
+
+function rebuildCharacter(appearance) {
+  if (!scene) return;
+
+  // Remove old character
+  if (charObj) {
+    scene.remove(charObj.group);
+    charObj.group.traverse(function(child) {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (child.material.map) child.material.map.dispose();
+        child.material.dispose();
+      }
+    });
+    // Remove CSS2D label/bubble divs
+    if (charObj.labelDiv && charObj.labelDiv.parentNode) charObj.labelDiv.parentNode.removeChild(charObj.labelDiv);
+    if (charObj.bubbleDiv && charObj.bubbleDiv.parentNode) charObj.bubbleDiv.parentNode.removeChild(charObj.bubbleDiv);
+    charObj = null;
+  }
+
+  try {
+    charObj = createCharacter(window.editingAgent || 'agent', appearance);
+    // Hide labels and bubbles in preview
+    if (charObj.label) charObj.label.visible = false;
+    if (charObj.bubble) charObj.bubble.visible = false;
+    if (charObj.taskLabel) charObj.taskLabel.visible = false;
+    if (charObj.typingLabel) charObj.typingLabel.visible = false;
+    if (charObj.zzzObjects) charObj.zzzObjects.forEach(function(z) { z.obj.visible = false; });
+    scene.add(charObj.group);
+  } catch (e) {
+    console.warn('[CD] Failed to create preview character:', e);
+  }
+}
+
+function disposePreview() {
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+  if (container && container._ro) { container._ro.disconnect(); container._ro = null; }
+  if (charObj) {
+    charObj.group.traverse(function(child) {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (child.material.map) child.material.map.dispose();
+        child.material.dispose();
+      }
+    });
+    if (charObj.labelDiv && charObj.labelDiv.parentNode) charObj.labelDiv.parentNode.removeChild(charObj.labelDiv);
+    if (charObj.bubbleDiv && charObj.bubbleDiv.parentNode) charObj.bubbleDiv.parentNode.removeChild(charObj.bubbleDiv);
+    charObj = null;
+  }
+  if (controls) { controls.dispose(); controls = null; }
+  if (renderer) {
+    if (container && container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
+    renderer.dispose();
+    renderer = null;
+  }
+  scene = null;
+  camera = null;
+}
+
+// Expose to the main (non-module) script via window globals
+window._cdInitPreview = initPreview;
+window._cdDisposePreview = disposePreview;
+window._cdRebuildPreview = rebuildCharacter;
 </script>
 
 </body>
