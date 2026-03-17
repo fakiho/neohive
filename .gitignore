@@ -1,5 +1,6 @@
 node_modules/
 .neohive/
+.agent-bridge/
 neohive/data/
 neohive/projects.json
 *.log
