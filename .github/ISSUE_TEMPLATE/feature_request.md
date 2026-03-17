@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a new feature for Let Them Talk
+about: Suggest a new feature for Neohive
 title: '[Feature] '
 labels: enhancement
 ---

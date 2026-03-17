@@ -1,15 +1,15 @@
-# Let Them Talk — Usage Guide v5.1.0
+# Neohive — Usage Guide v5.1.0
 
 ## Installation
 
 ```bash
-npx let-them-talk init              # Auto-detects your CLI
-npx let-them-talk init --all        # Configure for all CLIs
-npx let-them-talk init --claude     # Claude Code only
-npx let-them-talk init --gemini     # Gemini CLI only
-npx let-them-talk init --codex      # Codex CLI only
-npx let-them-talk init --ollama     # Ollama agent bridge (local LLM)
-npx let-them-talk init --template team  # Use a team template
+npx neohive init              # Auto-detects your CLI
+npx neohive init --all        # Configure for all CLIs
+npx neohive init --claude     # Claude Code only
+npx neohive init --gemini     # Gemini CLI only
+npx neohive init --codex      # Codex CLI only
+npx neohive init --ollama     # Ollama agent bridge (local LLM)
+npx neohive init --template team  # Use a team template
 ```
 
 Works on **Windows, macOS, and Linux**. Cross-platform path handling built in.
@@ -17,16 +17,16 @@ Works on **Windows, macOS, and Linux**. Cross-platform path handling built in.
 ## CLI Commands
 
 ```bash
-npx let-them-talk init              # Configure MCP for your CLI(s)
-npx let-them-talk dashboard         # Launch web dashboard (http://localhost:3000)
-npx let-them-talk dashboard --lan   # Dashboard accessible on LAN (phone/tablet)
-npx let-them-talk templates         # List available agent templates
-npx let-them-talk status            # Show active agents and message count
-npx let-them-talk msg <agent> <text>  # Send a message from the CLI
-npx let-them-talk doctor            # Diagnose setup issues
-npx let-them-talk plugin            # Plugin management (list/add/remove/enable/disable)
-npx let-them-talk reset             # Clear data (auto-archives first)
-npx let-them-talk uninstall         # Remove agent-bridge from all CLI configs
+npx neohive init              # Configure MCP for your CLI(s)
+npx neohive dashboard         # Launch web dashboard (http://localhost:3000)
+npx neohive dashboard --lan   # Dashboard accessible on LAN (phone/tablet)
+npx neohive templates         # List available agent templates
+npx neohive status            # Show active agents and message count
+npx neohive msg <agent> <text>  # Send a message from the CLI
+npx neohive doctor            # Diagnose setup issues
+npx neohive plugin            # Plugin management (list/add/remove/enable/disable)
+npx neohive reset             # Clear data (auto-archives first)
+npx neohive uninstall         # Remove neohive from all CLI configs
 ```
 
 ## Quick Start: Two-Agent Conversation
@@ -45,7 +45,7 @@ When you get a message, respond, then call listen() again.
 ## Web Dashboard
 
 ```bash
-npx let-them-talk dashboard
+npx neohive dashboard
 ```
 
 Opens at **http://localhost:3000** with:
@@ -190,7 +190,7 @@ Opens at **http://localhost:3000** with:
 ## Agent Templates
 
 ```bash
-npx let-them-talk templates
+npx neohive templates
 ```
 
 | Template | Agents | Best For |
@@ -228,8 +228,8 @@ get_work → do work → verify_and_advance → get_work (repeat)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AGENT_BRIDGE_DATA_DIR` | `{cwd}/.agent-bridge/` | Data directory |
-| `AGENT_BRIDGE_PORT` | `3000` | Dashboard port |
+| `NEOHIVE_DATA_DIR` | `{cwd}/.neohive/` | Data directory |
+| `NEOHIVE_PORT` | `3000` | Dashboard port |
 | `NODE_ENV` | — | Set to `development` for hot-reload |
 
 ## Tips

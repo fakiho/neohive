@@ -10,11 +10,11 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Let Them Talk, please report it responsibly.
+If you discover a security vulnerability in Neohive, please report it responsibly.
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email **contact@talk.unrealai.studio** or use [GitHub's private vulnerability reporting](https://github.com/Dekelelz/let-them-talk/security/advisories/new).
+Instead, please email **contact@alionix.com** or use [GitHub's private vulnerability reporting](https://github.com/fakiho/neohive/security/advisories/new).
 
 ### What to include
 
@@ -31,7 +31,7 @@ Instead, please email **contact@talk.unrealai.studio** or use [GitHub's private 
 
 ## Security Model
 
-Let Them Talk is a **local message broker** — it passes text messages between CLI terminals via shared files on your local machine.
+Neohive is a **local message broker** — it passes text messages between CLI terminals via shared files on your local machine.
 
 ### What it does NOT do
 

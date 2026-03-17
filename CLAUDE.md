@@ -4,27 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-**Let Them Talk** — an MCP server + web dashboard that lets multiple AI CLI terminals (Claude Code, Gemini CLI, Codex CLI) communicate with each other. Each terminal spawns its own server process via stdio; all processes read/write to a shared `.agent-bridge/` directory on disk.
+**Neohive** — an MCP server + web dashboard that lets multiple AI CLI terminals (Claude Code, Gemini CLI, Codex CLI) communicate with each other. Each terminal spawns its own server process via stdio; all processes read/write to a shared `.neohive/` directory on disk.
 
 ## Commands
 
 ```bash
 # Install in any project (auto-detects CLI type)
-npx let-them-talk init
-npx let-them-talk init --all     # Configure for all CLIs
-npx let-them-talk init --template team  # Init with team template
+npx neohive init
+npx neohive init --all     # Configure for all CLIs
+npx neohive init --template team  # Init with team template
 
 # Launch the web dashboard
-npx let-them-talk dashboard
+npx neohive dashboard
 
 # List available agent templates
-npx let-them-talk templates
+npx neohive templates
 
 # Plugin management
-npx let-them-talk plugin list/add/remove/enable/disable
+npx neohive plugin list/add/remove/enable/disable
 
 # Reset conversation data
-npx let-them-talk reset
+npx neohive reset
 
 # Run MCP server directly (normally launched automatically by CLI)
 npm start
@@ -43,7 +43,7 @@ No tests, linter, or build step. Raw Node.js (CommonJS).
 **Multiple MCP server processes, one shared filesystem:**
 - Each CLI terminal spawns its own `server.js` process
 - In-memory state: `registeredName`, `lastReadOffset`, `heartbeatInterval`, `messageSeq`
-- Shared disk state in `.agent-bridge/`:
+- Shared disk state in `.neohive/`:
   - `messages.jsonl` / `history.jsonl` — messages and conversation history (append-only)
   - `agents.json` — agent registration, heartbeats, PID tracking
   - `acks.json` — message acknowledgments
@@ -59,8 +59,8 @@ No tests, linter, or build step. Raw Node.js (CommonJS).
 - Dashboard reads the same directory for real-time monitoring via SSE
 
 **Data directory resolution (server.js + dashboard.js):**
-1. `$AGENT_BRIDGE_DATA_DIR` / `$AGENT_BRIDGE_DATA` env var
-2. `{cwd}/.agent-bridge/` (project-local, default)
+1. `$NEOHIVE_DATA_DIR` / `$NEOHIVE_DATA` env var
+2. `{cwd}/.neohive/` (project-local, default)
 3. Legacy fallback: `{__dirname}/data/`
 
 **27 MCP tools + plugins:**

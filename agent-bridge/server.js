@@ -7,8 +7,30 @@ const {
 const fs = require('fs');
 const path = require('path');
 
+// --- Modular infrastructure (lib/) ---
+// These modules are the canonical implementations. The inline code below
+// is kept for backward compatibility during the migration period.
+// New code should import from lib/ instead of using inline functions.
+const _log = require('./lib/logger');
+const _state = require('./lib/state');
+const _config = require('./lib/config');
+const _fileIo = require('./lib/file-io');
+const _agents = require('./lib/agents');
+const _messaging = require('./lib/messaging');
+const _compact = require('./lib/compact');
+
+// --- Structured logging ---
+const LOG_LEVEL = (process.env.NEOHIVE_LOG_LEVEL || 'warn').toLowerCase();
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+const log = {
+  error: (...args) => { if (LOG_LEVELS[LOG_LEVEL] >= 0) process.stderr.write('[NEOHIVE:ERROR] ' + args.map(String).join(' ') + '\n'); },
+  warn:  (...args) => { if (LOG_LEVELS[LOG_LEVEL] >= 1) process.stderr.write('[NEOHIVE:WARN] ' + args.map(String).join(' ') + '\n'); },
+  info:  (...args) => { if (LOG_LEVELS[LOG_LEVEL] >= 2) process.stderr.write('[NEOHIVE:INFO] ' + args.map(String).join(' ') + '\n'); },
+  debug: (...args) => { if (LOG_LEVELS[LOG_LEVEL] >= 3) process.stderr.write('[NEOHIVE:DEBUG] ' + args.map(String).join(' ') + '\n'); },
+};
+
 // Data dir lives in the project where Claude Code runs, not where the package is installed
-const DATA_DIR = process.env.AGENT_BRIDGE_DATA_DIR || path.join(process.cwd(), '.agent-bridge');
+const DATA_DIR = process.env.NEOHIVE_DATA_DIR || path.join(process.cwd(), '.neohive');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.jsonl');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.jsonl');
 const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
@@ -550,7 +572,7 @@ function buildMessageResponse(msg, consumedIds) {
       const { messages: tail } = readNewMessages(lastReadOffset);
       pendingCount = tail.filter(m => m.to === registeredName && m.id !== msg.id && !consumedIds.has(m.id)).length;
     }
-  } catch {}
+  } catch (e) { log.debug('pending count failed:', e.message); }
 
   // Count online agents
   const agents = getAgents();
@@ -564,7 +586,7 @@ function buildMessageResponse(msg, consumedIds) {
       const size = fs.statSync(histFile).size;
       totalMessages = Math.round(size / 300); // ~300 bytes per message average
     }
-  } catch {}
+  } catch (e) { log.debug('total message estimate failed:', e.message); }
 
   return {
     success: true,
@@ -631,7 +653,7 @@ function autoCompact() {
       const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
       const archiveFile = path.join(DATA_DIR, `archive-${dateStr}.jsonl`);
       const archiveContent = archived.map(m => JSON.stringify(m)).join('\n') + '\n';
-      try { fs.appendFileSync(archiveFile, archiveContent); } catch {}
+      try { fs.appendFileSync(archiveFile, archiveContent); } catch (e) { log.error('autoCompact archive write failed:', e.message); }
     }
 
     // Rewrite messages.jsonl atomically — write to temp file then rename
@@ -656,10 +678,10 @@ function autoCompact() {
           const ids = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
           const trimmed = ids.filter(id => activeIds.has(id));
           fs.writeFileSync(path.join(DATA_DIR, f), JSON.stringify(trimmed));
-        } catch {}
+        } catch (e) { log.debug('consumed trim failed:', e.message); }
       }
     }
-  } catch {}
+  } catch (e) { log.warn('autoCompact failed:', e.message); }
 }
 
 // --- Permissions helpers ---
@@ -697,10 +719,12 @@ function getReadReceipts() {
 
 function markAsRead(agentName, messageId) {
   ensureDataDir();
-  const receipts = getReadReceipts();
-  if (!receipts[messageId]) receipts[messageId] = {};
-  receipts[messageId][agentName] = new Date().toISOString();
-  fs.writeFileSync(READ_RECEIPTS_FILE, JSON.stringify(receipts));
+  withFileLock(READ_RECEIPTS_FILE, () => {
+    const receipts = getReadReceipts();
+    if (!receipts[messageId]) receipts[messageId] = {};
+    receipts[messageId][agentName] = new Date().toISOString();
+    fs.writeFileSync(READ_RECEIPTS_FILE, JSON.stringify(receipts));
+  });
 }
 
 // Get unconsumed messages for an agent (full scan — used by check_messages and initial load)
@@ -777,34 +801,10 @@ function getProfiles() {
 }
 
 function saveProfiles(profiles) {
-  invalidateCache('profiles');
-  fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles));
-}
-
-// Built-in avatar SVGs — hash-based assignment
-const BUILT_IN_AVATARS = [
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%2358a6ff'/%3E%3Ccircle cx='22' cy='26' r='4' fill='%23fff'/%3E%3Ccircle cx='42' cy='26' r='4' fill='%23fff'/%3E%3Crect x='20' y='38' width='24' height='4' rx='2' fill='%23fff'/%3E%3Crect x='14' y='12' width='6' height='10' rx='3' fill='%2358a6ff' stroke='%23fff' stroke-width='1.5'/%3E%3Crect x='44' y='12' width='6' height='10' rx='3' fill='%2358a6ff' stroke='%23fff' stroke-width='1.5'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%233fb950'/%3E%3Ccircle cx='22' cy='26' r='5' fill='%23fff'/%3E%3Ccircle cx='42' cy='26' r='5' fill='%23fff'/%3E%3Ccircle cx='22' cy='26' r='2' fill='%23333'/%3E%3Ccircle cx='42' cy='26' r='2' fill='%23333'/%3E%3Cpath d='M20 38 Q32 46 44 38' stroke='%23fff' fill='none' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23d29922'/%3E%3Crect x='16' y='22' width='12' height='8' rx='2' fill='%23fff'/%3E%3Crect x='36' y='22' width='12' height='8' rx='2' fill='%23fff'/%3E%3Ccircle cx='22' cy='26' r='2' fill='%23333'/%3E%3Ccircle cx='42' cy='26' r='2' fill='%23333'/%3E%3Cpath d='M24 40 H40' stroke='%23fff' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23f85149'/%3E%3Ccircle cx='22' cy='26' r='4' fill='%23fff'/%3E%3Ccircle cx='42' cy='26' r='4' fill='%23fff'/%3E%3Ccircle cx='22' cy='26' r='2' fill='%23333'/%3E%3Ccircle cx='42' cy='26' r='2' fill='%23333'/%3E%3Cpath d='M22 40 Q32 34 42 40' stroke='%23fff' fill='none' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23bc8cff'/%3E%3Ccircle cx='22' cy='28' r='4' fill='%23fff'/%3E%3Ccircle cx='42' cy='28' r='4' fill='%23fff'/%3E%3Cpath d='M16 18 L22 24' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M48 18 L42 24' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='32' cy='42' rx='8' ry='4' fill='%23fff'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23f778ba'/%3E%3Ccircle cx='24' cy='26' r='6' fill='%23fff'/%3E%3Ccircle cx='40' cy='26' r='6' fill='%23fff'/%3E%3Ccircle cx='24' cy='26' r='3' fill='%23333'/%3E%3Ccircle cx='40' cy='26' r='3' fill='%23333'/%3E%3Cpath d='M26 40 Q32 46 38 40' stroke='%23fff' fill='none' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%2379c0ff'/%3E%3Crect x='17' y='23' width='10' height='6' rx='3' fill='%23fff'/%3E%3Crect x='37' y='23' width='10' height='6' rx='3' fill='%23fff'/%3E%3Cpath d='M22 38 L32 44 L42 38' stroke='%23fff' fill='none' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%237ee787'/%3E%3Ccircle cx='22' cy='26' r='4' fill='%23fff'/%3E%3Ccircle cx='42' cy='26' r='4' fill='%23fff'/%3E%3Ccircle cx='23' cy='25' r='2' fill='%23333'/%3E%3Ccircle cx='43' cy='25' r='2' fill='%23333'/%3E%3Cpath d='M20 38 Q32 48 44 38' stroke='%23fff' fill='none' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23e3b341'/%3E%3Cpath d='M18 22 L26 30 L18 30Z' fill='%23fff'/%3E%3Cpath d='M46 22 L38 30 L46 30Z' fill='%23fff'/%3E%3Crect x='24' y='38' width='16' height='6' rx='3' fill='%23fff'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23ffa198'/%3E%3Ccircle cx='22' cy='26' r='5' fill='%23fff'/%3E%3Ccircle cx='42' cy='26' r='5' fill='%23fff'/%3E%3Ccircle cx='22' cy='27' r='2.5' fill='%23333'/%3E%3Ccircle cx='42' cy='27' r='2.5' fill='%23333'/%3E%3Cellipse cx='32' cy='42' rx='6' ry='3' fill='%23fff'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%230969da'/%3E%3Crect x='16' y='20' width='14' height='10' rx='2' fill='%23fff'/%3E%3Crect x='34' y='20' width='14' height='10' rx='2' fill='%23fff'/%3E%3Ccircle cx='23' cy='25' r='2' fill='%230969da'/%3E%3Ccircle cx='41' cy='25' r='2' fill='%230969da'/%3E%3Crect x='26' y='38' width='12' height='4' rx='2' fill='%23fff'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%238250df'/%3E%3Ccircle cx='24' cy='24' r='5' fill='%23fff'/%3E%3Ccircle cx='40' cy='24' r='5' fill='%23fff'/%3E%3Ccircle cx='24' cy='24' r='2' fill='%238250df'/%3E%3Ccircle cx='40' cy='24' r='2' fill='%238250df'/%3E%3Cpath d='M20 38 Q32 50 44 38' stroke='%23fff' fill='none' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='10' r='4' fill='%23fff'/%3E%3C/svg%3E",
-];
-
-function hashName(name) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
-function getDefaultAvatar(name) {
-  return BUILT_IN_AVATARS[hashName(name) % BUILT_IN_AVATARS.length];
+  withFileLock(PROFILES_FILE, () => {
+    invalidateCache('profiles');
+    fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles));
+  });
 }
 
 // --- Workspace helpers ---
@@ -1032,7 +1032,9 @@ function getBranches() {
 }
 
 function saveBranches(branches) {
-  fs.writeFileSync(BRANCHES_FILE, JSON.stringify(branches));
+  withFileLock(BRANCHES_FILE, () => {
+    fs.writeFileSync(BRANCHES_FILE, JSON.stringify(branches));
+  });
 }
 
 function getMessagesFile(branch) {
@@ -1238,7 +1240,7 @@ function buildGuide(level = 'standard') {
     rules.push('Use channels to split into sub-teams. Do not discuss everything in #general.');
   }
 
-  // User-customizable project-specific rules from .agent-bridge/guide.md
+  // User-customizable project-specific rules from .neohive/guide.md
   const guideFile = path.join(DATA_DIR, 'guide.md');
   let projectRules = [];
   if (fs.existsSync(guideFile)) {
@@ -1333,7 +1335,7 @@ function toolRegister(name, provider = null) {
   // Auto-create profile if not exists
   const profiles = getProfiles();
   if (!profiles[name]) {
-    profiles[name] = { display_name: name, avatar: getDefaultAvatar(name), bio: '', role: '', created_at: now };
+    profiles[name] = { display_name: name, avatar: '', bio: '', role: '', created_at: now };
     saveProfiles(profiles);
   }
 
@@ -1524,7 +1526,7 @@ function toolListAgents() {
       provider: info.provider || 'unknown',
       branch: info.branch || 'main',
       display_name: profile.display_name || name,
-      avatar: profile.avatar || getDefaultAvatar(name),
+      avatar: profile.avatar || '',
       role: profile.role || '',
       bio: profile.bio || '',
     };
@@ -2077,12 +2079,14 @@ function toolAckMessage(messageId) {
     return { error: 'Can only acknowledge messages addressed to you' };
   }
 
-  const acks = getAcks();
-  acks[messageId] = {
-    acked_by: registeredName,
-    acked_at: new Date().toISOString(),
-  };
-  fs.writeFileSync(ACKS_FILE, JSON.stringify(acks));
+  withFileLock(ACKS_FILE, () => {
+    const acks = getAcks();
+    acks[messageId] = {
+      acked_by: registeredName,
+      acked_at: new Date().toISOString(),
+    };
+    fs.writeFileSync(ACKS_FILE, JSON.stringify(acks));
+  });
   touchActivity();
 
   return { success: true, message: `Message ${messageId} acknowledged` };
@@ -3096,12 +3100,6 @@ function toolUpdateTask(taskId, status, notes = null) {
   // Event hooks: task completion
   if (status === 'done') {
     fireEvent('task_complete', { title: task.title, created_by: task.created_by });
-    // Economy: award credits for task completion
-    try {
-      const economyFile = path.join(DATA_DIR, 'economy.jsonl');
-      const creditEntry = JSON.stringify({ agent: registeredName, amount: 10, reason: 'task_completed', type: 'earn', task: task.title, timestamp: new Date().toISOString() }) + '\n';
-      fs.appendFileSync(economyFile, creditEntry);
-    } catch {}
     // Check if this resolves any dependencies
     const deps = getDeps();
     for (const dep of deps) {
@@ -3311,12 +3309,12 @@ function toolReset() {
 
 // --- Phase 1: Profile tool ---
 
-function toolUpdateProfile(displayName, avatar, bio, role, appearance) {
+function toolUpdateProfile(displayName, avatar, bio, role) {
   if (!registeredName) return { error: 'You must call register() first' };
 
   const profiles = getProfiles();
   if (!profiles[registeredName]) {
-    profiles[registeredName] = { display_name: registeredName, avatar: getDefaultAvatar(registeredName), bio: '', role: '', created_at: new Date().toISOString() };
+    profiles[registeredName] = { display_name: registeredName, avatar: '', bio: '', role: '', created_at: new Date().toISOString() };
   }
   const p = profiles[registeredName];
   if (displayName !== undefined && displayName !== null) {
@@ -3334,29 +3332,6 @@ function toolUpdateProfile(displayName, avatar, bio, role, appearance) {
   if (role !== undefined && role !== null) {
     if (typeof role !== 'string' || role.length > 30) return { error: 'role must be <= 30 chars' };
     p.role = role;
-  }
-  if (appearance !== undefined && appearance !== null) {
-    if (typeof appearance !== 'object') return { error: 'appearance must be an object' };
-    const validKeys = ['head_color', 'hair_style', 'hair_color', 'eye_style', 'mouth_style', 'shirt_color', 'pants_color', 'shoe_color', 'glasses', 'glasses_color', 'headwear', 'headwear_color', 'neckwear', 'neckwear_color'];
-    const validHairStyles = ['none', 'short', 'spiky', 'long', 'ponytail', 'bob'];
-    const validEyeStyles = ['dots', 'anime', 'glasses', 'sleepy'];
-    const validMouthStyles = ['smile', 'neutral', 'open'];
-    const validGlasses = ['none', 'round', 'square', 'sunglasses'];
-    const validHeadwear = ['none', 'beanie', 'cap', 'headphones', 'headband'];
-    const validNeckwear = ['none', 'tie', 'bowtie', 'lanyard'];
-    const cleaned = {};
-    for (const [k, v] of Object.entries(appearance)) {
-      if (!validKeys.includes(k)) continue;
-      if (typeof v !== 'string' || v.length > 20) continue;
-      if (k === 'hair_style' && !validHairStyles.includes(v)) continue;
-      if (k === 'eye_style' && !validEyeStyles.includes(v)) continue;
-      if (k === 'mouth_style' && !validMouthStyles.includes(v)) continue;
-      if (k === 'glasses' && !validGlasses.includes(v)) continue;
-      if (k === 'headwear' && !validHeadwear.includes(v)) continue;
-      if (k === 'neckwear' && !validNeckwear.includes(v)) continue;
-      cleaned[k] = v;
-    }
-    p.appearance = Object.assign(p.appearance || {}, cleaned);
   }
   p.updated_at = new Date().toISOString();
   saveProfiles(profiles);
@@ -3792,7 +3767,7 @@ async function toolGetWork(params = {}) {
   }
 
   // 7. Short listen (30s max, NOT infinite) — configurable via env for testing
-  const listenTimeout = parseInt(process.env.AGENT_BRIDGE_LISTEN_TIMEOUT) || 30000;
+  const listenTimeout = parseInt(process.env.NEOHIVE_LISTEN_TIMEOUT) || 30000;
   const newMsgs = await listenWithTimeout(listenTimeout);
   if (newMsgs.length > 0) {
     return {
@@ -4513,7 +4488,7 @@ function autoAssignRoles() {
     // Only assign roles to agents that don't have one yet
     const unassigned = aliveNames.filter(n => !currentProfiles[n] || !currentProfiles[n].role);
     for (const name of unassigned) {
-      if (!currentProfiles[name]) currentProfiles[name] = { display_name: name, avatar: getDefaultAvatar(name), bio: '', role: '', created_at: new Date().toISOString() };
+      if (!currentProfiles[name]) currentProfiles[name] = { display_name: name, avatar: '', bio: '', role: '', created_at: new Date().toISOString() };
       currentProfiles[name].role = 'implementer';
       currentProfiles[name].role_description = 'You implement features and tasks assigned by the Lead. Report completed work to Quality Lead.';
       assignments[name] = { role: 'implementer', description: currentProfiles[name].role_description };
@@ -4563,7 +4538,7 @@ function autoAssignRoles() {
 
     // Update profile with role
     if (!profiles[agentName]) {
-      profiles[agentName] = { display_name: agentName, avatar: getDefaultAvatar(agentName), bio: '', role: '', created_at: new Date().toISOString() };
+      profiles[agentName] = { display_name: agentName, avatar: '', bio: '', role: '', created_at: new Date().toISOString() };
     }
     profiles[agentName].role = roleConfig.role;
     profiles[agentName].role_description = roleConfig.description;
@@ -5030,7 +5005,15 @@ function writeJsonFile(file, data) {
   ensureDataDir();
   const str = JSON.stringify(data);
   if (str && str.length > 0) {
-    fs.writeFileSync(file, str);
+    // Use file lock to prevent concurrent write corruption
+    const lockPath = file + '.lock';
+    let locked = false;
+    try { fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' }); locked = true; } catch {}
+    try {
+      fs.writeFileSync(file, str);
+    } finally {
+      if (locked) try { fs.unlinkSync(lockPath); } catch {}
+    }
     // Auto-invalidate cache for this file
     const cacheKey = _fileCacheKeys[file];
     if (cacheKey) invalidateCache(cacheKey);
@@ -6114,7 +6097,7 @@ function toolToggleRule(ruleId) {
 // --- MCP Server setup ---
 
 const server = new Server(
-  { name: 'agent-bridge', version: '5.3.0' },
+  { name: 'neohive', version: '5.3.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -6388,7 +6371,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       // --- Phase 1: Profiles ---
       {
         name: 'update_profile',
-        description: 'Update your agent profile (display name, avatar, bio, role, appearance). Profile data is shown in the dashboard and virtual office.',
+        description: 'Update your agent profile (display name, avatar, bio, role). Profile data is shown in the dashboard.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -6396,26 +6379,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             avatar: { type: 'string', description: 'Avatar URL or data URI (max 64KB)' },
             bio: { type: 'string', description: 'Short bio (max 200 chars)' },
             role: { type: 'string', description: 'Role/title (max 30 chars, e.g. "Architect", "Reviewer")' },
-            appearance: {
-              type: 'object',
-              description: 'Character appearance for virtual office visualization',
-              properties: {
-                head_color: { type: 'string', description: 'Skin/head color hex (e.g. "#FFD5B8")' },
-                hair_style: { type: 'string', enum: ['none', 'short', 'spiky', 'long', 'ponytail', 'bob'], description: 'Hair style' },
-                hair_color: { type: 'string', description: 'Hair color hex (e.g. "#4A3728")' },
-                eye_style: { type: 'string', enum: ['dots', 'anime', 'glasses', 'sleepy'], description: 'Eye style' },
-                mouth_style: { type: 'string', enum: ['smile', 'neutral', 'open'], description: 'Mouth style' },
-                shirt_color: { type: 'string', description: 'Shirt color hex' },
-                pants_color: { type: 'string', description: 'Pants color hex' },
-                shoe_color: { type: 'string', description: 'Shoe color hex' },
-                glasses: { type: 'string', enum: ['none', 'round', 'square', 'sunglasses'], description: 'Glasses style' },
-                glasses_color: { type: 'string', description: 'Glasses frame color hex' },
-                headwear: { type: 'string', enum: ['none', 'beanie', 'cap', 'headphones', 'headband'], description: 'Headwear style' },
-                headwear_color: { type: 'string', description: 'Headwear color hex' },
-                neckwear: { type: 'string', enum: ['none', 'tie', 'bowtie', 'lanyard'], description: 'Neckwear style' },
-                neckwear_color: { type: 'string', description: 'Neckwear color hex' },
-              },
-            },
           },
         },
       },
@@ -6895,7 +6858,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolReset();
         break;
       case 'update_profile':
-        result = toolUpdateProfile(args?.display_name, args?.avatar, args?.bio, args?.role, args?.appearance);
+        result = toolUpdateProfile(args?.display_name, args?.avatar, args?.bio, args?.role);
         break;
       case 'workspace_write':
         result = toolWorkspaceWrite(args.key, args.content);
@@ -7123,12 +7086,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const taskTimeSec = doneTask ? Math.round((Date.now() - new Date(doneTask.created_at).getTime()) / 1000) : 0;
           trackReputation(registeredName, 'task_complete', taskTimeSec);
         }
-      } catch {}
+      } catch (e) { log.debug('reputation tracking failed:', e.message); }
     }
 
     // Global hook: auto-compress conversation periodically
     if (name === 'send_message' || name === 'broadcast') {
-      try { autoCompress(); } catch {}
+      try { autoCompress(); } catch (e) { log.debug('auto-compress failed:', e.message); }
     }
 
     return {
@@ -7153,7 +7116,7 @@ process.on('exit', () => {
       ws._status = 'Offline (graceful exit)';
       ws._status_since = new Date().toISOString();
       saveWorkspace(registeredName, ws);
-    } catch {}
+    } catch (e) { log.debug('workspace status save failed:', e.message); }
     try {
       // Agent memory: save recovery snapshot with decisions/tasks/KB on graceful exit
       const recoveryFile = path.join(DATA_DIR, `recovery-${registeredName}.json`);
@@ -7177,14 +7140,14 @@ process.on('exit', () => {
         tasks_completed: completedTasks,
         kb_entries_written: kbKeysWritten,
       }));
-    } catch {}
+    } catch (e) { log.error('recovery snapshot failed:', e.message); }
     try {
       const agents = getAgents();
       if (agents[registeredName]) {
         delete agents[registeredName];
         saveAgents(agents);
       }
-    } catch {}
+    } catch (e) { log.error('agent cleanup on exit failed:', e.message); }
   }
 });
 process.on('SIGTERM', () => process.exit(0));
@@ -7194,23 +7157,23 @@ async function main() {
   try {
     ensureDataDir();
   } catch (e) {
-    console.error('ERROR: Cannot create .agent-bridge/ directory: ' + e.message);
-    console.error('Fix: Run "npx let-them-talk doctor" to diagnose the issue.');
+    console.error('ERROR: Cannot create .neohive/ directory: ' + e.message);
+    console.error('Fix: Run "npx neohive doctor" to diagnose the issue.');
     process.exit(1);
   }
   try {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error('Agent Bridge MCP server v5.3.0 running (66 tools)');
+    console.error('Neohive MCP server v5.3.0 running (66 tools)');
   } catch (e) {
     console.error('ERROR: MCP server failed to start: ' + e.message);
-    console.error('Fix: Run "npx let-them-talk doctor" to check your setup.');
+    console.error('Fix: Run "npx neohive doctor" to check your setup.');
     process.exit(1);
   }
 }
 
 main().catch((e) => {
   console.error('FATAL: ' + e.message);
-  console.error('Run "npx let-them-talk doctor" for diagnostics.');
+  console.error('Run "npx neohive doctor" for diagnostics.');
   process.exit(1);
 });

@@ -9,26 +9,26 @@ const command = process.argv[2];
 
 function printUsage() {
   console.log(`
-  Let Them Talk — Agent Bridge v5.3.0
+  Neohive — Neohive v5.3.0
   MCP message broker for inter-agent communication
   Supports: Claude Code, Gemini CLI, Codex CLI, Ollama
 
   Usage:
-    npx let-them-talk init              Auto-detect CLI and configure MCP
-    npx let-them-talk init --claude     Configure for Claude Code
-    npx let-them-talk init --gemini     Configure for Gemini CLI
-    npx let-them-talk init --codex      Configure for Codex CLI
-    npx let-them-talk init --all        Configure for all supported CLIs
-    npx let-them-talk init --ollama    Setup Ollama agent bridge (local LLM)
-    npx let-them-talk init --template T  Initialize with a team template (pair, team, review, debate, ollama)
-    npx let-them-talk templates         List available agent templates
-    npx let-them-talk dashboard         Launch the web dashboard (http://localhost:3000)
-    npx let-them-talk dashboard --lan   Launch dashboard accessible on LAN (phone/tablet)
-    npx let-them-talk reset             Clear all conversation data
-    npx let-them-talk msg <agent> <text> Send a message to an agent
-    npx let-them-talk status             Show active agents and message count
-    npx let-them-talk uninstall          Remove agent-bridge from all CLI configs
-    npx let-them-talk help               Show this help message
+    npx neohive init              Auto-detect CLI and configure MCP
+    npx neohive init --claude     Configure for Claude Code
+    npx neohive init --gemini     Configure for Gemini CLI
+    npx neohive init --codex      Configure for Codex CLI
+    npx neohive init --all        Configure for all supported CLIs
+    npx neohive init --ollama    Setup Ollama agent bridge (local LLM)
+    npx neohive init --template T  Initialize with a team template (pair, team, review, debate, ollama)
+    npx neohive templates         List available agent templates
+    npx neohive dashboard         Launch the web dashboard (http://localhost:3000)
+    npx neohive dashboard --lan   Launch dashboard accessible on LAN (phone/tablet)
+    npx neohive reset             Clear all conversation data
+    npx neohive msg <agent> <text> Send a message to an agent
+    npx neohive status             Show active agents and message count
+    npx neohive uninstall          Remove neohive from all CLI configs
+    npx neohive help               Show this help message
 
   v5.0 — True Autonomy Engine (61 tools):
     New tools: get_work, verify_and_advance, start_plan, retry_with_improvement
@@ -76,7 +76,7 @@ function detectOllama() {
 
 // The data directory where all agents read/write — must be the same for server + dashboard
 function dataDir(cwd) {
-  return path.join(cwd, '.agent-bridge');
+  return path.join(cwd, '.neohive');
 }
 
 // Configure for Claude Code (.mcp.json in project root)
@@ -95,7 +95,7 @@ function setupClaude(serverPath, cwd) {
     }
   }
 
-  mcpConfig.mcpServers['agent-bridge'] = {
+  mcpConfig.mcpServers['neohive'] = {
     command: 'node',
     args: [serverPath],
     timeout: 300,
@@ -127,7 +127,7 @@ function setupGemini(serverPath, cwd) {
     }
   }
 
-  settings.mcpServers['agent-bridge'] = {
+  settings.mcpServers['neohive'] = {
     command: 'node',
     args: [serverPath],
     timeout: 300,
@@ -159,9 +159,9 @@ function setupCodex(serverPath, cwd) {
   }
 
   // Only add if not already present
-  if (!config.includes('[mcp_servers.agent-bridge]')) {
+  if (!config.includes('[mcp_servers.neohive]')) {
     const tomlBlock = `
-[mcp_servers.agent-bridge]
+[mcp_servers.neohive]
 command = "node"
 args = [${JSON.stringify(serverPath)}]
 timeout = 300
@@ -176,15 +176,15 @@ timeout = 300
 // Setup Ollama agent bridge script
 function setupOllama(serverPath, cwd) {
   const dir = dataDir(cwd);
-  const scriptPath = path.join(cwd, '.agent-bridge', 'ollama-agent.js');
+  const scriptPath = path.join(cwd, '.neohive', 'ollama-agent.js');
 
-  if (!fs.existsSync(path.join(cwd, '.agent-bridge'))) {
-    fs.mkdirSync(path.join(cwd, '.agent-bridge'), { recursive: true });
+  if (!fs.existsSync(path.join(cwd, '.neohive'))) {
+    fs.mkdirSync(path.join(cwd, '.neohive'), { recursive: true });
   }
 
   const script = `#!/usr/bin/env node
-// ollama-agent.js - bridges Ollama to Let Them Talk
-// Usage: node .agent-bridge/ollama-agent.js [agent-name] [model]
+// ollama-agent.js - bridges Ollama to Neohive
+// Usage: node .neohive/ollama-agent.js [agent-name] [model]
 const fs = require('fs'), path = require('path'), http = require('http');
 const DATA_DIR = path.join(__dirname);
 const name = process.argv[2] || 'Ollama';
@@ -290,15 +290,15 @@ process.on('SIGINT', function() { console.log('\\n[' + name + '] Shutting down.'
   const tmpPath = scriptPath + '.tmp.' + process.pid;
   fs.writeFileSync(tmpPath, script);
   fs.renameSync(tmpPath, scriptPath);
-  console.log('  [ok] Ollama agent script created: .agent-bridge/ollama-agent.js');
+  console.log('  [ok] Ollama agent script created: .neohive/ollama-agent.js');
   console.log('');
   console.log('  Launch an Ollama agent with:');
-  console.log('    node .agent-bridge/ollama-agent.js <name> <model>');
+  console.log('    node .neohive/ollama-agent.js <name> <model>');
   console.log('');
   console.log('  Examples:');
-  console.log('    node .agent-bridge/ollama-agent.js Ollama llama3');
-  console.log('    node .agent-bridge/ollama-agent.js Coder codellama');
-  console.log('    node .agent-bridge/ollama-agent.js Writer mistral');
+  console.log('    node .neohive/ollama-agent.js Ollama llama3');
+  console.log('    node .neohive/ollama-agent.js Coder codellama');
+  console.log('    node .neohive/ollama-agent.js Writer mistral');
 }
 
 function init() {
@@ -308,7 +308,7 @@ function init() {
   const flag = process.argv[3];
 
   console.log('');
-  console.log('  Let Them Talk — Initializing Agent Bridge');
+  console.log('  Neohive — Initializing Neohive');
   console.log('  ==========================================');
   console.log('');
 
@@ -356,25 +356,25 @@ function init() {
     }
   }
 
-  // Add .agent-bridge/ and MCP config files to .gitignore
-  const gitignoreEntries = ['.agent-bridge/', '.mcp.json', '.codex/', '.gemini/'];
+  // Add .neohive/ and MCP config files to .gitignore
+  const gitignoreEntries = ['.neohive/', '.mcp.json', '.codex/', '.gemini/'];
   if (fs.existsSync(gitignorePath)) {
     let content = fs.readFileSync(gitignorePath, 'utf8');
     const missing = gitignoreEntries.filter(e => !content.includes(e));
     if (missing.length) {
-      content += '\n# Agent Bridge (auto-added by let-them-talk init)\n' + missing.join('\n') + '\n';
+      content += '\n# Neohive (auto-added by neohive init)\n' + missing.join('\n') + '\n';
       fs.writeFileSync(gitignorePath, content);
       console.log('  [ok] Added to .gitignore: ' + missing.join(', '));
     } else {
       console.log('  [ok] .gitignore already configured');
     }
   } else {
-    fs.writeFileSync(gitignorePath, '# Agent Bridge (auto-added by let-them-talk init)\n' + gitignoreEntries.join('\n') + '\n');
+    fs.writeFileSync(gitignorePath, '# Neohive (auto-added by neohive init)\n' + gitignoreEntries.join('\n') + '\n');
     console.log('  [ok] .gitignore created');
   }
 
   console.log('');
-  console.log('  Agent Bridge is ready! Restart your CLI to pick up the MCP tools.');
+  console.log('  Neohive is ready! Restart your CLI to pick up the MCP tools.');
   console.log('');
 
   // Show template if --template was provided
@@ -390,21 +390,21 @@ function init() {
     showTemplate(templateFlag);
   } else {
     console.log('  Open two terminals and start a conversation between agents.');
-    console.log('  Tip: Use "npx let-them-talk init --template pair" for ready-made prompts.');
+    console.log('  Tip: Use "npx neohive init --template pair" for ready-made prompts.');
     console.log('');
     console.log('  \x1b[1m  Monitor:\x1b[0m');
-    console.log('    npx let-them-talk dashboard');
-    console.log('    npx let-them-talk status');
-    console.log('    npx let-them-talk doctor');
+    console.log('    npx neohive dashboard');
+    console.log('    npx neohive status');
+    console.log('    npx neohive doctor');
     console.log('');
   }
 }
 
 function reset() {
-  const targetDir = process.env.AGENT_BRIDGE_DATA_DIR || path.join(process.cwd(), '.agent-bridge');
+  const targetDir = process.env.NEOHIVE_DATA_DIR || path.join(process.cwd(), '.neohive');
 
   if (!fs.existsSync(targetDir)) {
-    console.log('  No .agent-bridge/ directory found. Nothing to reset.');
+    console.log('  No .neohive/ directory found. Nothing to reset.');
     return;
   }
 
@@ -422,13 +422,13 @@ function reset() {
     console.log('     ' + targetDir);
     if (msgCount > 0) console.log('     (' + msgCount + ' messages in history)');
     console.log('');
-    console.log('  To confirm, run:  npx let-them-talk reset --force');
+    console.log('  To confirm, run:  npx neohive reset --force');
     console.log('');
     return;
   }
 
   // Auto-archive before deleting
-  const archiveDir = path.join(targetDir, '..', '.agent-bridge-archive');
+  const archiveDir = path.join(targetDir, '..', '.neohive-archive');
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const archivePath = path.join(archiveDir, timestamp);
   try {
@@ -443,7 +443,7 @@ function reset() {
       }
     }
     if (archived > 0) {
-      console.log('  [ok] Archived ' + archived + ' files to .agent-bridge-archive/' + timestamp + '/');
+      console.log('  [ok] Archived ' + archived + ' files to .neohive-archive/' + timestamp + '/');
     }
   } catch (e) {
     console.log('  [warn] Could not archive: ' + e.message + ' — proceeding with reset anyway.');
@@ -478,7 +478,7 @@ function listTemplates() {
     console.log('  ' + ''.padEnd(12) + ' Agents: ' + agentNames);
     console.log('');
   }
-  console.log('  Usage: npx let-them-talk init --template <name>');
+  console.log('  Usage: npx neohive init --template <name>');
   console.log('');
 }
 
@@ -510,13 +510,13 @@ function showTemplate(templateName) {
 
 function dashboard() {
   if (process.argv.includes('--lan')) {
-    process.env.AGENT_BRIDGE_LAN = 'true';
+    process.env.NEOHIVE_LAN = 'true';
   }
   require('./dashboard.js');
 }
 
 function resolveDataDirCli() {
-  return process.env.AGENT_BRIDGE_DATA_DIR || path.join(process.cwd(), '.agent-bridge');
+  return process.env.NEOHIVE_DATA_DIR || path.join(process.cwd(), '.neohive');
 }
 
 function readJsonl(filePath) {
@@ -542,7 +542,7 @@ function cliMsg() {
   const recipient = process.argv[3];
   const textParts = process.argv.slice(4);
   if (!recipient || !textParts.length) {
-    console.error('  Usage: npx let-them-talk msg <agent> <text>');
+    console.error('  Usage: npx neohive msg <agent> <text>');
     process.exit(1);
   }
   if (!/^[a-zA-Z0-9_-]{1,20}$/.test(recipient)) {
@@ -552,7 +552,7 @@ function cliMsg() {
   const text = textParts.join(' ');
   const dir = resolveDataDirCli();
   if (!fs.existsSync(dir)) {
-    console.error('  No .agent-bridge/ directory found. Run "npx let-them-talk init" first.');
+    console.error('  No .neohive/ directory found. Run "npx neohive init" first.');
     process.exit(1);
   }
 
@@ -576,7 +576,7 @@ function cliMsg() {
 function cliStatus() {
   const dir = resolveDataDirCli();
   if (!fs.existsSync(dir)) {
-    console.error('  No .agent-bridge/ directory found. Run "npx let-them-talk init" first.');
+    console.error('  No .neohive/ directory found. Run "npx neohive init" first.');
     process.exit(1);
   }
 
@@ -604,7 +604,7 @@ function cliStatus() {
   const onlineCount = Object.values(agents).filter(a => isPidAlive(a.pid)).length;
 
   console.log('');
-  console.log('  Let Them Talk — Status');
+  console.log('  Neohive — Status');
   console.log('  =======================');
   console.log('  Messages: ' + history.length + '  |  Agents: ' + onlineCount + '/' + Object.keys(agents).length + ' online');
   console.log('');
@@ -657,18 +657,18 @@ function cliStatus() {
 // v5.0: Diagnostic health check
 function cliDoctor() {
   console.log('');
-  console.log('  \x1b[1mLet Them Talk — Doctor\x1b[0m');
+  console.log('  \x1b[1mNeohive — Doctor\x1b[0m');
   console.log('  ======================');
   let issues = 0;
 
   // Check data directory
-  const dir = path.join(process.cwd(), '.agent-bridge');
+  const dir = path.join(process.cwd(), '.neohive');
   if (fs.existsSync(dir)) {
-    console.log('  \x1b[32m✓\x1b[0m .agent-bridge/ directory exists');
-    try { fs.accessSync(dir, fs.constants.W_OK); console.log('  \x1b[32m✓\x1b[0m .agent-bridge/ is writable'); }
-    catch { console.log('  \x1b[31m✗\x1b[0m .agent-bridge/ is NOT writable'); issues++; }
+    console.log('  \x1b[32m✓\x1b[0m .neohive/ directory exists');
+    try { fs.accessSync(dir, fs.constants.W_OK); console.log('  \x1b[32m✓\x1b[0m .neohive/ is writable'); }
+    catch { console.log('  \x1b[31m✗\x1b[0m .neohive/ is NOT writable'); issues++; }
   } else {
-    console.log('  \x1b[33m!\x1b[0m .agent-bridge/ not found. Run "npx let-them-talk init" first.');
+    console.log('  \x1b[33m!\x1b[0m .neohive/ not found. Run "npx neohive init" first.');
     issues++;
   }
 
@@ -728,7 +728,7 @@ function cliDoctor() {
   console.log('');
 }
 
-// Uninstall agent-bridge from all CLI configs
+// Uninstall neohive from all CLI configs
 function uninstall() {
   const cwd = process.cwd();
   const home = os.homedir();
@@ -736,7 +736,7 @@ function uninstall() {
   const notFound = [];
 
   console.log('');
-  console.log('  Let Them Talk — Uninstall');
+  console.log('  Neohive — Uninstall');
   console.log('  =========================');
   console.log('');
 
@@ -745,12 +745,12 @@ function uninstall() {
   if (fs.existsSync(mcpLocalPath)) {
     try {
       const mcpConfig = JSON.parse(fs.readFileSync(mcpLocalPath, 'utf8'));
-      if (mcpConfig.mcpServers && mcpConfig.mcpServers['agent-bridge']) {
-        delete mcpConfig.mcpServers['agent-bridge'];
+      if (mcpConfig.mcpServers && mcpConfig.mcpServers['neohive']) {
+        delete mcpConfig.mcpServers['neohive'];
         fs.writeFileSync(mcpLocalPath, JSON.stringify(mcpConfig, null, 2) + '\n');
         removed.push('Claude Code (project): ' + mcpLocalPath);
       } else {
-        notFound.push('Claude Code (project): no agent-bridge entry in .mcp.json');
+        notFound.push('Claude Code (project): no neohive entry in .mcp.json');
       }
     } catch (e) {
       console.log('  [warn] Could not parse ' + mcpLocalPath + ': ' + e.message);
@@ -764,12 +764,12 @@ function uninstall() {
   if (fs.existsSync(mcpGlobalPath)) {
     try {
       const mcpConfig = JSON.parse(fs.readFileSync(mcpGlobalPath, 'utf8'));
-      if (mcpConfig.mcpServers && mcpConfig.mcpServers['agent-bridge']) {
-        delete mcpConfig.mcpServers['agent-bridge'];
+      if (mcpConfig.mcpServers && mcpConfig.mcpServers['neohive']) {
+        delete mcpConfig.mcpServers['neohive'];
         fs.writeFileSync(mcpGlobalPath, JSON.stringify(mcpConfig, null, 2) + '\n');
         removed.push('Claude Code (global): ' + mcpGlobalPath);
       } else {
-        notFound.push('Claude Code (global): no agent-bridge entry');
+        notFound.push('Claude Code (global): no neohive entry');
       }
     } catch (e) {
       console.log('  [warn] Could not parse ' + mcpGlobalPath + ': ' + e.message);
@@ -783,12 +783,12 @@ function uninstall() {
   if (fs.existsSync(geminiSettingsPath)) {
     try {
       const settings = JSON.parse(fs.readFileSync(geminiSettingsPath, 'utf8'));
-      if (settings.mcpServers && settings.mcpServers['agent-bridge']) {
-        delete settings.mcpServers['agent-bridge'];
+      if (settings.mcpServers && settings.mcpServers['neohive']) {
+        delete settings.mcpServers['neohive'];
         fs.writeFileSync(geminiSettingsPath, JSON.stringify(settings, null, 2) + '\n');
         removed.push('Gemini CLI: ' + geminiSettingsPath);
       } else {
-        notFound.push('Gemini CLI: no agent-bridge entry');
+        notFound.push('Gemini CLI: no neohive entry');
       }
     } catch (e) {
       console.log('  [warn] Could not parse ' + geminiSettingsPath + ': ' + e.message);
@@ -802,12 +802,12 @@ function uninstall() {
   if (fs.existsSync(geminiLocalPath)) {
     try {
       const settings = JSON.parse(fs.readFileSync(geminiLocalPath, 'utf8'));
-      if (settings.mcpServers && settings.mcpServers['agent-bridge']) {
-        delete settings.mcpServers['agent-bridge'];
+      if (settings.mcpServers && settings.mcpServers['neohive']) {
+        delete settings.mcpServers['neohive'];
         fs.writeFileSync(geminiLocalPath, JSON.stringify(settings, null, 2) + '\n');
         removed.push('Gemini CLI (project): ' + geminiLocalPath);
       } else {
-        notFound.push('Gemini CLI (project): no agent-bridge entry');
+        notFound.push('Gemini CLI (project): no neohive entry');
       }
     } catch (e) {
       console.log('  [warn] Could not parse ' + geminiLocalPath + ': ' + e.message);
@@ -819,16 +819,16 @@ function uninstall() {
   if (fs.existsSync(codexConfigPath)) {
     try {
       let config = fs.readFileSync(codexConfigPath, 'utf8');
-      if (config.includes('[mcp_servers.agent-bridge]')) {
-        // Remove from [mcp_servers.agent-bridge] to the next [section] or end of file
-        // This covers both [mcp_servers.agent-bridge] and [mcp_servers.agent-bridge.env]
-        config = config.replace(/\n?\[mcp_servers\.agent-bridge[^\]]*\][^\[]*(?=\[|$)/g, '');
+      if (config.includes('[mcp_servers.neohive]')) {
+        // Remove from [mcp_servers.neohive] to the next [section] or end of file
+        // This covers both [mcp_servers.neohive] and [mcp_servers.neohive.env]
+        config = config.replace(/\n?\[mcp_servers\.neohive[^\]]*\][^\[]*(?=\[|$)/g, '');
         // Clean up multiple blank lines left behind
         config = config.replace(/\n{3,}/g, '\n\n');
         fs.writeFileSync(codexConfigPath, config);
         removed.push('Codex CLI: ' + codexConfigPath);
       } else {
-        notFound.push('Codex CLI: no agent-bridge section in config.toml');
+        notFound.push('Codex CLI: no neohive section in config.toml');
       }
     } catch (e) {
       console.log('  [warn] Could not process ' + codexConfigPath + ': ' + e.message);
@@ -842,8 +842,8 @@ function uninstall() {
   if (fs.existsSync(codexLocalPath)) {
     try {
       let config = fs.readFileSync(codexLocalPath, 'utf8');
-      if (config.includes('[mcp_servers.agent-bridge]')) {
-        config = config.replace(/\n?\[mcp_servers\.agent-bridge[^\]]*\][^\[]*(?=\[|$)/g, '');
+      if (config.includes('[mcp_servers.neohive]')) {
+        config = config.replace(/\n?\[mcp_servers\.neohive[^\]]*\][^\[]*(?=\[|$)/g, '');
         config = config.replace(/\n{3,}/g, '\n\n');
         fs.writeFileSync(codexLocalPath, config);
         removed.push('Codex CLI (project): ' + codexLocalPath);
@@ -855,12 +855,12 @@ function uninstall() {
 
   // Print summary
   if (removed.length > 0) {
-    console.log('  Removed agent-bridge from:');
+    console.log('  Removed neohive from:');
     for (const r of removed) {
       console.log('    [ok] ' + r);
     }
   } else {
-    console.log('  No agent-bridge configurations found to remove.');
+    console.log('  No neohive configurations found to remove.');
   }
 
   if (notFound.length > 0) {
@@ -872,10 +872,10 @@ function uninstall() {
   }
 
   // 7. Check for data directory
-  const dataPath = path.join(cwd, '.agent-bridge');
+  const dataPath = path.join(cwd, '.neohive');
   if (fs.existsSync(dataPath)) {
     console.log('');
-    console.log('  Found .agent-bridge/ directory with conversation data.');
+    console.log('  Found .neohive/ directory with conversation data.');
     console.log('  To remove it, manually delete: ' + dataPath);
   }
 

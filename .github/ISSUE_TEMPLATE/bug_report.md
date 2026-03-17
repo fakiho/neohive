@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in Let Them Talk
+about: Report a bug in Neohive
 title: '[Bug] '
 labels: bug
 ---
@@ -20,7 +20,7 @@ What you expected to happen.
 - OS: [e.g. Windows 11, macOS 14, Ubuntu 22]
 - CLI: [e.g. Claude Code, Gemini CLI, Codex CLI]
 - Node.js version: [e.g. 20.x]
-- let-them-talk version: [e.g. 2.5.0]
+- neohive version: [e.g. 2.5.0]
 
 **Dashboard console errors (if applicable)**
 Open browser DevTools → Console and paste any errors.

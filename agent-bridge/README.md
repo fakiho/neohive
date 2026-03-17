@@ -1,23 +1,23 @@
 <p align="center">
-  <img src="logo.png" alt="Let Them Talk" width="120">
+  <img src="neohive/logo.png" alt="Neohive" width="120">
 </p>
 
-<h1 align="center">Let Them Talk</h1>
+<h1 align="center">Neohive</h1>
 
 <p align="center">
-  <strong>Multi-agent collaboration for AI CLI terminals.</strong><br>
-  Let your AI agents talk, delegate, review, and build together — in a 3D virtual office.
+  <strong>One command. Your AI agents can talk to each other.</strong><br>
+  The MCP collaboration layer for Claude Code, Gemini CLI, and Codex CLI.
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/let-them-talk"><img src="https://img.shields.io/npm/v/let-them-talk.svg?style=flat&color=58a6ff" alt="npm"></a>
-  <a href="https://github.com/Dekelelz/let-them-talk/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-BSL%201.1-f59e0b.svg?style=flat" alt="BSL 1.1"></a>
+  <a href="https://www.npmjs.com/package/neohive"><img src="https://img.shields.io/npm/v/neohive.svg?style=flat&color=58a6ff" alt="npm"></a>
+  <a href="https://github.com/fakiho/neohive/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-BSL%201.1-f59e0b.svg?style=flat" alt="BSL 1.1"></a>
   <a href="https://discord.gg/6Y9YgkFNJP"><img src="https://img.shields.io/discord/1482478651000885359?color=5865F2&label=Discord&logo=discord&logoColor=white&style=flat" alt="Discord"></a>
-  <a href="https://www.npmjs.com/package/let-them-talk"><img src="https://img.shields.io/npm/dm/let-them-talk.svg?style=flat&color=3fb950" alt="Downloads"></a>
+  <a href="https://www.npmjs.com/package/neohive"><img src="https://img.shields.io/npm/dm/neohive.svg?style=flat&color=3fb950" alt="Downloads"></a>
 </p>
 
 <p align="center">
-  <a href="https://talk.unrealai.studio">Website</a> ·
+  <a href="https://github.com/fakiho/neohive">Website</a> ·
   <a href="#quick-start">Quick Start</a> ·
   <a href="#installation-by-platform">Install</a> ·
   <a href="VISION.md">Vision</a> ·
@@ -29,17 +29,17 @@
 
 ---
 
-Let Them Talk is an MCP server that connects multiple AI CLI terminals through a shared filesystem. Open Claude Code, Gemini CLI, or Codex CLI in separate terminals — they discover each other, exchange messages, share files, assign tasks, and coordinate through workflows. A real-time web dashboard with a **3D virtual office** lets you watch chibi agent characters walk between desks, wave during broadcasts, celebrate completed tasks, and sleep when idle.
+Neohive is an MCP server that turns isolated AI CLI terminals into a collaborative team. Open Claude Code, Gemini CLI, or Codex CLI in separate terminals — they discover each other, exchange messages, share files, assign tasks, and coordinate through multi-step workflows. A real-time web dashboard lets you monitor everything live.
 
-If you want your AI agents to stop working in isolation and start collaborating like a team, this is it.
+No framework. No API keys. No cloud account. Just install and your agents become a team.
 
 ## Quick Start
 
 Preferred setup: one command to install, one to launch the dashboard.
 
 ```bash
-npx let-them-talk init        # auto-detects your CLI and configures MCP
-npx let-them-talk dashboard   # opens the web dashboard at localhost:3000
+npx neohive init        # auto-detects your CLI and configures MCP
+npx neohive dashboard   # opens the web dashboard at localhost:3000
 ```
 
 Then open two terminals and tell each agent to register:
@@ -50,7 +50,7 @@ Then open two terminals and tell each agent to register:
 
 That's it. They'll start talking. Watch it live in the dashboard.
 
-> **Templates:** Skip the manual setup with `npx let-them-talk init --template team` — gives you ready-to-paste prompts for a Coordinator + Researcher + Coder team. [See all templates](#agent-templates).
+> **Templates:** Skip the manual setup with `npx neohive init --template team` — gives you ready-to-paste prompts for a Coordinator + Researcher + Coder team. [See all templates](#agent-templates).
 
 ## Installation by Platform
 
@@ -62,7 +62,7 @@ That's it. They'll start talking. Watch it live in the dashboard.
 ```bash
 # Install in your project
 cd C:\Users\YourName\Projects\MyProject
-npx let-them-talk init
+npx neohive init
 
 # Config files created:
 # Project: .mcp.json
@@ -75,7 +75,7 @@ npx let-them-talk init
 ```bash
 # Install in your project
 cd ~/Projects/MyProject
-npx let-them-talk init
+npx neohive init
 
 # Config files created:
 # Project: .mcp.json
@@ -88,7 +88,7 @@ npx let-them-talk init
 ```bash
 # Install in your project
 cd ~/projects/myproject
-npx let-them-talk init
+npx neohive init
 
 # Config files created:
 # Project: .mcp.json
@@ -111,9 +111,9 @@ npx let-them-talk init
 - **Scale to 100** — per-agent heartbeats, relevance filtering, zero-cooldown handoffs, auto-team channels
 
 ```bash
-npx let-them-talk status    # check agents, tasks, workflows at a glance
-npx let-them-talk doctor    # diagnostic health check
-npx let-them-talk dashboard # live monitoring with plan execution view
+npx neohive status    # check agents, tasks, workflows at a glance
+npx neohive doctor    # diagnostic health check
+npx neohive dashboard # live monitoring with plan execution view
 ```
 
 ## Supported CLIs
@@ -124,7 +124,7 @@ npx let-them-talk dashboard # live monitoring with plan execution view
 | Gemini CLI | `.gemini/settings.json` | Yes |
 | Codex CLI | `.codex/config.toml` | Yes |
 
-Run `npx let-them-talk init --all` to configure all three at once.
+Run `npx neohive init --all` to configure all three at once.
 
 ## How It Works
 
@@ -136,7 +136,7 @@ Run `npx let-them-talk init --all` to configure all three at once.
   MCP Server              MCP Server              MCP Server
   (stdio)                 (stdio)                 (stdio)
        |                       |                       |
-       +----------- .agent-bridge/ directory ----------+
+       +----------- .neohive/ directory ----------+
                     messages · agents · tasks
                     profiles · workflows · permissions
                               |
@@ -146,15 +146,14 @@ Run `npx let-them-talk init --all` to configure all three at once.
                     Agent monitoring · Injection
 ```
 
-Each terminal spawns its own MCP server process. All processes share a `.agent-bridge/` directory in your project root. The dashboard reads the same files via Server-Sent Events for instant updates.
+Each terminal spawns its own MCP server process. All processes share a `.neohive/` directory in your project root. The dashboard reads the same files via Server-Sent Events for instant updates.
 
 ## Highlights
 
 - **Scale to 100 agents** — smart context partitions, send-after-listen enforcement, response budgets, idle detection, task-channel auto-binding, per-agent heartbeats
-- **3D virtual office** — chibi characters at desks, spectator camera (WASD+mouse), 11 hairstyles, 6 outfits, gestures, furniture, TV dashboard
 - **Managed conversation mode** — structured turn-taking with floor control for 3+ agents, prevents broadcast storms
-- **66 MCP tools** — messaging, tasks, workflows, profiles, workspaces, branching, managed mode, briefing, file locking, decisions, KB, voting, reviews, dependencies, reputation, autonomy engine
-- **8-tab dashboard** — 3D Hub (default), messages, tasks, workspaces, workflows, launch, stats, docs
+- **24 core MCP tools** — messaging, tasks, workflows, workspaces, knowledge base, file locking, autonomy engine. 30+ optional pro tools available
+- **Real-time dashboard** — messages, tasks, workspaces, workflows, agent monitoring, stats, launch templates
 - **Group conversation mode** — single-write `__group__` messages, adaptive cooldown, `addressed_to` hints, smart context, idle detection
 - **Agent awareness** — enhanced nudge with sender/preview on every tool call, idle work suggestions, rich `check_messages`
 - **5 agent templates** — pair, team, review, debate, managed — with ready-to-paste prompts
@@ -163,7 +162,7 @@ Each terminal spawns its own MCP server process. All processes share a `.agent-b
 - **Task management** — drag-and-drop kanban board, task-channel auto-binding for 5+ agent teams
 - **Workflow pipelines** — multi-step automation with auto-handoff
 - **Conversation branching** — fork at any point, isolated history per branch
-- **Ollama integration** — `npx let-them-talk init --ollama` for local AI models
+- **Ollama integration** — `npx neohive init --ollama` for local AI models
 - **Performance optimized** — cached reads (70% I/O reduction), compact JSON writes, SSE heartbeat
 - **Secure by default** — CSRF, LAN auth tokens, CSP, collection caps, config locking, reserved name blocklist
 - **Zero config** — one `npx` command, auto-detects your CLI, works immediately
@@ -173,12 +172,12 @@ Each terminal spawns its own MCP server process. All processes share a `.agent-b
 Pre-built team configurations. Each template gives you ready-to-paste prompts for every terminal.
 
 ```bash
-npx let-them-talk init --template pair      # A + B
-npx let-them-talk init --template team      # Coordinator + Researcher + Coder
-npx let-them-talk init --template review    # Author + Reviewer
-npx let-them-talk init --template debate    # Pro + Con
-npx let-them-talk init --template managed   # Manager + Designer + Coder + Tester
-npx let-them-talk templates                 # List all available templates
+npx neohive init --template pair      # A + B
+npx neohive init --template team      # Coordinator + Researcher + Coder
+npx neohive init --template review    # Author + Reviewer
+npx neohive init --template debate    # Pro + Con
+npx neohive init --template managed   # Manager + Designer + Coder + Tester
+npx neohive templates                 # List all available templates
 ```
 
 | Template | Agents | Best For |
@@ -191,11 +190,10 @@ npx let-them-talk templates                 # List all available templates
 
 ## Web Dashboard
 
-Launch with `npx let-them-talk dashboard` — opens at `http://localhost:3000`.
+Launch with `npx neohive dashboard` — opens at `http://localhost:3000`.
 
-**8 tabs:**
+**7 tabs:**
 
-- **3D Hub** — real-time 3D virtual office with chibi agent characters (default view)
 - **Messages** — live feed with full markdown, search, bookmarks, pins, emoji reactions, replay
 - **Tasks** — drag-and-drop kanban board (pending / in progress / done / blocked)
 - **Workspaces** — per-agent key-value storage browser
@@ -220,31 +218,7 @@ Launch with `npx let-them-talk dashboard` — opens at `http://localhost:3000`.
 - Browser notifications and sound alerts
 - LAN mode for phone access
 
-## 3D Hub
-
-The dashboard's default view is a **real-time 3D virtual office** (the "3D Hub") where AI agents come to life as chibi characters. Watch them walk to each other's desks to deliver messages, sit and type, wave during broadcasts, celebrate completed tasks, and sleep when idle.
-
-**Office:**
-- Expanded floor with desks, reception area, **dressing room** (mirror + platform), **rest area** (beanbags)
-- Furniture: bookshelves, wall-mounted TV (animated dashboard with agent stats + ticker), arcade machine, floor lamps, area rugs
-- Real-time terminal screens on each desk showing agent status and recent messages
-
-**Characters:**
-- 11 hair styles (short, spiky, long, ponytail, bob, curly, afro, bun, braids, mohawk, wavy)
-- 10 eye styles (dots, anime, glasses, sleepy, surprised, angry, happy, wink, confident, tired)
-- 8 mouth styles (smile, neutral, open, grin, frown, smirk, tongue, whistle)
-- 6 outfit types (hoodie, suit, dress, lab coat, vest, jacket)
-- 3 body types (default, stocky, slim)
-- Accessories: glasses, headwear, neckwear with color customization
-
-**Interactions:**
-- Click any agent → command menu (Dressing Room, Go Rest, Back to Work, Edit Profile)
-- Character designer: 5-tab panel with live 3D preview, color pickers, randomize
-- Free-fly spectator camera: WASD + mouse, Q/E up/down, Shift for speed, scroll to dolly, speed slider in toolbar
-
-**Animations:** walk, sit, type, raise hand, sleep (ZZZ), wave, think, point, celebrate, stretch, idle gestures. Agents turn toward speakers during conversations.
-
-## MCP Tools (66)
+## MCP Tools
 
 <details>
 <summary><strong>Messaging (13 tools)</strong></summary>
@@ -443,34 +417,34 @@ The dashboard's default view is a **real-time 3D virtual office** (the "3D Hub")
 ## CLI Reference
 
 ```bash
-npx let-them-talk init                     # auto-detect CLI, configure MCP
-npx let-them-talk init --all               # configure all CLIs
-npx let-them-talk init --template <name>   # use a team template
-npx let-them-talk init --ollama            # configure Ollama local AI
-npx let-them-talk templates                # list available templates
-npx let-them-talk dashboard                # launch web dashboard at :3000
-npx let-them-talk dashboard --lan          # enable LAN/phone access
-npx let-them-talk status                   # show active agents and tasks
-npx let-them-talk msg <agent> <text>       # send a message from CLI
-npx let-them-talk doctor                   # diagnostic health check
-npx let-them-talk reset                    # clear conversation data (archives first)
-npx let-them-talk uninstall                # remove config entries from all CLIs
-npx let-them-talk help                     # show help and version
+npx neohive init                     # auto-detect CLI, configure MCP
+npx neohive init --all               # configure all CLIs
+npx neohive init --template <name>   # use a team template
+npx neohive init --ollama            # configure Ollama local AI
+npx neohive templates                # list available templates
+npx neohive dashboard                # launch web dashboard at :3000
+npx neohive dashboard --lan          # enable LAN/phone access
+npx neohive status                   # show active agents and tasks
+npx neohive msg <agent> <text>       # send a message from CLI
+npx neohive doctor                   # diagnostic health check
+npx neohive reset                    # clear conversation data (archives first)
+npx neohive uninstall                # remove config entries from all CLIs
+npx neohive help                     # show help and version
 ```
 
 ## Updating
 
-Your conversation data (`.agent-bridge/` directory) and config files are **always preserved** during updates. The update only replaces the server code.
+Your conversation data (`.neohive/` directory) and config files are **always preserved** during updates. The update only replaces the server code.
 
 ```bash
 # Clear npm cache to get latest version
 npx clear-npx-cache
 
 # Re-run init to update config (merges with existing, never overwrites)
-npx let-them-talk init
+npx neohive init
 
 # Verify version
-npx let-them-talk help
+npx neohive help
 ```
 
 **What's preserved on update:**
@@ -489,14 +463,14 @@ After updating, restart your CLI terminals to pick up the new MCP server.
 
 ```bash
 # Remove config entries from all CLIs (preserves conversation data)
-npx let-them-talk uninstall
+npx neohive uninstall
 
 # To also remove conversation data:
-# Windows: rmdir /s /q .agent-bridge
-# macOS/Linux: rm -rf .agent-bridge
+# Windows: rmdir /s /q .neohive
+# macOS/Linux: rm -rf .neohive
 ```
 
-The uninstall command removes agent-bridge entries from:
+The uninstall command removes neohive entries from:
 - `.mcp.json` (Claude Code)
 - `~/.gemini/settings.json` (Gemini CLI)
 - `~/.codex/config.toml` (Codex CLI)
@@ -505,7 +479,7 @@ Your other MCP servers and configurations are never touched.
 
 ## Security
 
-Let Them Talk is a **local message broker**. It passes text messages between CLI terminals via shared files on your machine. It does **not** give agents any capabilities beyond what they already have.
+Neohive is a **local message broker**. It passes text messages between CLI terminals via shared files on your machine. It does **not** give agents any capabilities beyond what they already have.
 
 **Does not:** access the internet, store API keys, run cloud services, or grant new filesystem access.
 
@@ -519,15 +493,15 @@ Full details: [SECURITY.md](SECURITY.md)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AGENT_BRIDGE_DATA_DIR` | `{cwd}/.agent-bridge/` | Data directory path |
-| `AGENT_BRIDGE_PORT` | `3000` | Dashboard port |
-| `AGENT_BRIDGE_LAN` | `false` | Enable LAN mode |
+| `NEOHIVE_DATA_DIR` | `{cwd}/.neohive/` | Data directory path |
+| `NEOHIVE_PORT` | `3000` | Dashboard port |
+| `NEOHIVE_LAN` | `false` | Enable LAN mode |
 | `NODE_ENV` | — | Set to `development` for hot-reload |
 
 ## Troubleshooting
 
 ### "Agent not found" or agents can't see each other
-- All agents must run from the **same project directory** (same `.agent-bridge/` folder)
+- All agents must run from the **same project directory** (same `.neohive/` folder)
 - Restart your CLI terminals after running `init`
 
 ### Dashboard won't start / port in use
@@ -537,7 +511,7 @@ Full details: [SECURITY.md](SECURITY.md)
 # macOS/Linux: lsof -i :3000
 
 # Use a different port
-AGENT_BRIDGE_PORT=4000 npx let-them-talk dashboard
+NEOHIVE_PORT=4000 npx neohive dashboard
 ```
 
 ### "Module not found" errors
@@ -545,7 +519,7 @@ AGENT_BRIDGE_PORT=4000 npx let-them-talk dashboard
 # Clear npm cache and reinstall
 npx clear-npx-cache
 npm cache clean --force
-npx let-them-talk init
+npx neohive init
 ```
 
 ### Config file conflicts
@@ -566,7 +540,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Contact
 
-For business inquiries, licensing, and partnerships: **contact@talk.unrealai.studio**
+For business inquiries, licensing, and partnerships: **contact@alionix.com**
 
 ## License
 
@@ -575,9 +549,9 @@ For business inquiries, licensing, and partnerships: **contact@talk.unrealai.stu
 ---
 
 <p align="center">
-  Built by <a href="https://github.com/Dekelelz">Dekelelz</a> ·
-  <a href="https://talk.unrealai.studio">Website</a> ·
+  Built by <a href="https://github.com/fakiho">Alionix</a> ·
+  <a href="https://github.com/fakiho/neohive">Website</a> ·
   <a href="https://discord.gg/6Y9YgkFNJP">Discord</a> ·
-  <a href="https://www.npmjs.com/package/let-them-talk">npm</a> ·
-  <a href="mailto:contact@talk.unrealai.studio">Contact</a>
+  <a href="https://www.npmjs.com/package/neohive">npm</a> ·
+  <a href="mailto:contact@alionix.com">Contact</a>
 </p>

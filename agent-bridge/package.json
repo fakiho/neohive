@@ -1,11 +1,10 @@
 {
-  "name": "let-them-talk",
-  "version": "5.3.0",
-  "description": "MCP message broker + web dashboard for inter-agent communication. Let AI CLI agents talk to each other.",
+  "name": "neohive",
+  "version": "6.0.0",
+  "description": "The MCP collaboration layer for AI CLI tools. Turn Claude Code, Gemini CLI, and Codex CLI into a team.",
   "main": "server.js",
   "bin": {
-    "agent-bridge": "./cli.js",
-    "let-them-talk": "./cli.js"
+    "neohive": "./cli.js"
   },
   "scripts": {
     "start": "node server.js",
@@ -19,9 +18,9 @@
     "server.js",
     "dashboard.js",
     "dashboard.html",
-    "office/",
-    "mods/",
     "cli.js",
+    "lib/",
+    "tools/",
     "templates/",
     "conversation-templates/",
     "logo.png",
@@ -40,20 +39,19 @@
     "communication",
     "message-broker",
     "ai-agents",
-    "let-them-talk"
+    "neohive"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Dekelelz/let-them-talk.git"
+    "url": "git+https://github.com/fakiho/neohive.git"
   },
-  "homepage": "https://talk.unrealai.studio",
+  "homepage": "https://github.com/fakiho/neohive",
   "bugs": {
-    "url": "https://github.com/Dekelelz/let-them-talk/issues"
+    "url": "https://github.com/fakiho/neohive/issues"
   },
-  "author": "Dekelelz <contact@talk.unrealai.studio>",
+  "author": "Alionix <contact@alionix.com>",
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.27.1",
-    "three": "0.175.0"
+    "@modelcontextprotocol/sdk": "1.27.1"
   }
 }

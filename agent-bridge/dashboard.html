@@ -3,19 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Let Them Talk</title>
+<title>Neohive</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect rx='20' width='100' height='100' fill='%230d1117'/><path d='M20 30 Q20 20 30 20 H70 Q80 20 80 30 V55 Q80 65 70 65 H55 L40 80 V65 H30 Q20 65 20 55Z' fill='%2358a6ff'/><circle cx='38' cy='42' r='5' fill='%230d1117'/><circle cx='55' cy='42' r='5' fill='%230d1117'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script type="importmap">
-{
-  "imports": {
-    "three": "/lib/three/build/three.module.js",
-    "three/addons/": "/lib/three/examples/jsm/"
-  }
-}
-</script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -2775,298 +2767,6 @@
     gap: 10px;
   }
 
-  /* ===== VIRTUAL OFFICE ===== */
-  .office-area {
-    flex: 1;
-    overflow: hidden;
-    display: none;
-    position: relative;
-    background: var(--bg);
-  }
-  .office-area.visible { display: flex; flex-direction: column; }
-  .office-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    flex-shrink: 0;
-    font-size: 11px;
-  }
-  .office-toolbar select {
-    background: var(--surface-2);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 11px;
-    outline: none;
-    cursor: pointer;
-  }
-  .office-toolbar label {
-    color: var(--text-muted);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .office-canvas-wrap {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-  }
-  .office-canvas-wrap canvas {
-    display: block;
-    width: 100%;
-    height: 100%;
-  }
-  .office-legend {
-    position: absolute;
-    bottom: 8px;
-    right: 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 10px;
-    font-size: 10px;
-    color: var(--text-muted);
-    pointer-events: none;
-    opacity: 0.85;
-  }
-  .office-legend span { margin-right: 10px; }
-  .office-legend .dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    margin-right: 3px;
-    vertical-align: middle;
-  }
-
-  /* 3D Office mode toggle */
-  .office-mode-toggle {
-    display: flex;
-    gap: 0;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-    margin-right: 12px;
-  }
-  .office-mode-btn {
-    background: var(--surface-2);
-    border: none;
-    color: var(--text-muted);
-    padding: 4px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s;
-    font-family: inherit;
-  }
-  .office-mode-btn:hover { color: var(--text-dim); background: var(--surface-3); }
-  .office-mode-btn.active {
-    background: var(--accent);
-    color: #fff;
-  }
-  .office-mode-btn + .office-mode-btn {
-    border-left: 1px solid var(--border);
-  }
-
-  /* 3D container */
-  #office-3d-container {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-  }
-  #office-3d-container canvas {
-    display: block;
-    width: 100% !important;
-    height: 100% !important;
-  }
-
-  /* 3D speech bubbles */
-  .office3d-bubble {
-    background: rgba(255,255,255,0.95);
-    color: #1a1a2e;
-    padding: 6px 12px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-family: Inter, sans-serif;
-    max-width: 200px;
-    word-wrap: break-word;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    pointer-events: none;
-    transition: opacity 0.5s;
-    position: relative;
-  }
-  .office3d-bubble::after {
-    content: '';
-    position: absolute;
-    bottom: -6px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-top: 6px solid rgba(255,255,255,0.95);
-  }
-
-  /* 3D name labels */
-  .office3d-label {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    background: rgba(0,0,0,0.7);
-    padding: 2px 8px;
-    border-radius: 10px;
-    pointer-events: none;
-    white-space: nowrap;
-  }
-  .office3d-label-name {
-    color: #fff;
-    font-size: 10px;
-    font-weight: 600;
-    font-family: Inter, sans-serif;
-  }
-  .office3d-label-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #4ade80;
-    flex-shrink: 0;
-  }
-
-  [data-theme="light"] .office3d-bubble {
-    background: rgba(255,255,255,0.98);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-  }
-  [data-theme="light"] .office3d-bubble::after {
-    border-top-color: rgba(255,255,255,0.98);
-  }
-
-  /* 3D ZZZ sleeping indicators */
-  .office3d-zzz {
-    color: #facc15;
-    font-weight: 800;
-    font-family: Inter, sans-serif;
-    pointer-events: none;
-    text-shadow: 0 0 4px rgba(250, 204, 21, 0.5);
-    opacity: 0;
-    transition: none;
-  }
-  .office3d-listen-lost {
-    pointer-events: none;
-    font-family: Inter, sans-serif;
-    white-space: nowrap;
-  }
-  @keyframes office3d-pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(1.1); }
-  }
-
-  /* 3D task indicator */
-  .office3d-task-indicator {
-    pointer-events: none;
-    font-size: 12px;
-    font-family: Inter, sans-serif;
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    padding: 1px 6px;
-    border-radius: 8px;
-    white-space: nowrap;
-  }
-  .office3d-task-indicator.working {
-    background: rgba(108, 138, 255, 0.85);
-    color: #fff;
-  }
-  .office3d-task-indicator.done {
-    background: rgba(52, 211, 153, 0.85);
-    color: #fff;
-  }
-  .office3d-task-indicator.blocked {
-    background: rgba(248, 113, 113, 0.85);
-    color: #fff;
-  }
-
-  /* 3D typing dots */
-  .office3d-typing {
-    pointer-events: none;
-    display: flex;
-    gap: 3px;
-    align-items: center;
-    padding: 2px 6px;
-  }
-  .office3d-typing-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent, #6c8aff);
-    animation: office3d-typing-bounce 1.2s ease-in-out infinite;
-  }
-  .office3d-typing-dot:nth-child(2) { animation-delay: 0.2s; }
-  .office3d-typing-dot:nth-child(3) { animation-delay: 0.4s; }
-  @keyframes office3d-typing-bounce {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-    30% { transform: translateY(-4px); opacity: 1; }
-  }
-
-  /* Agent command menu (floating above clicked agent) */
-  .office3d-cmd-menu {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    background: rgba(15, 19, 24, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    padding: 6px;
-    backdrop-filter: blur(8px);
-    pointer-events: auto;
-    min-width: 140px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    animation: office3d-cmd-pop 0.15s ease-out;
-  }
-  @keyframes office3d-cmd-pop {
-    from { transform: scale(0.85) translateY(6px); opacity: 0; }
-    to { transform: scale(1) translateY(0); opacity: 1; }
-  }
-  .office3d-cmd-btn {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 6px 10px;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: #e0e4ea;
-    font-size: 11px;
-    font-family: Inter, sans-serif;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s;
-    white-space: nowrap;
-    pointer-events: auto;
-  }
-  .office3d-cmd-btn:hover {
-    background: rgba(108, 138, 255, 0.18);
-    color: #fff;
-  }
-  .office3d-cmd-btn.disabled {
-    opacity: 0.35;
-    pointer-events: none;
-  }
-  .office3d-cmd-icon {
-    font-size: 13px;
-    width: 18px;
-    text-align: center;
-    flex-shrink: 0;
-  }
-  .office3d-cmd-menu .office3d-cmd-divider {
-    height: 1px;
-    background: rgba(255, 255, 255, 0.06);
-    margin: 2px 4px;
-  }
-
   /* ===== LOAD MORE BUTTON ===== */
   .load-more-bar {
     display: flex;
@@ -3630,7 +3330,7 @@
   <div class="header-left">
     <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
     <img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect rx='20' width='100' height='100' fill='%230d1117'/><path d='M20 30 Q20 20 30 20 H70 Q80 20 80 30 V55 Q80 65 70 65 H55 L40 80 V65 H30 Q20 65 20 55Z' fill='%2358a6ff'/><circle cx='38' cy='42' r='5' fill='%230d1117'/><circle cx='55' cy='42' r='5' fill='%230d1117'/></svg>" alt="" style="height:28px;margin-right:4px;vertical-align:middle">
-    <div class="logo">Let Them Talk</div>
+    <div class="logo">Neohive</div>
     <span id="mobile-project-name" style="display:none;font-size:11px;color:var(--orange);font-weight:600;background:var(--orange-dim);padding:2px 8px;border-radius:10px" onclick="toggleSidebar()"></span>
     <select id="mobile-project-select" class="mobile-project-select" onchange="mobileSelectProject(this.value)" style="display:none">
       <option value="">Select project...</option>
@@ -3798,8 +3498,7 @@
       <button class="replay-exit" onclick="exitReplay()">Exit Replay</button>
     </div>
     <div class="view-tabs" id="view-tabs">
-      <div class="view-tab active" id="tab-office" onclick="switchView('office')">3D Hub</div>
-      <div class="view-tab" id="tab-messages" onclick="switchView('messages')">Messages</div>
+      <div class="view-tab active" id="tab-messages" onclick="switchView('messages')">Messages</div>
       <div class="view-tab" id="tab-tasks" onclick="switchView('tasks')">Tasks</div>
       <div class="view-tab" id="tab-workspaces" onclick="switchView('workspaces')">Workspaces</div>
       <div class="view-tab" id="tab-workflows" onclick="switchView('workflows')">Workflows</div>
@@ -3831,32 +3530,6 @@
     <div class="workflows-area" id="workflows-area"></div>
     <div class="plan-area" id="plan-area"></div>
     <div class="plan-area" id="monitor-panel" style="display:none"></div>
-    <div class="office-area" id="office-area">
-      <div class="office-toolbar">
-        <label>Environment:</label>
-        <select id="office-env-select" onchange="officeSetEnvironment(this.value)">
-          <option value="campus" selected>Tech Campus</option>
-          <option value="modern">Modern Office</option>
-          <option value="startup">Startup Garage</option>
-        </select>
-        <button id="player-mode-btn" onclick="togglePlayerMode()" style="background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.2s" title="Enter the world as a character">Enter World</button>
-        <div style="flex:1"></div>
-        <label style="font-size:10px;color:var(--text-muted)">Speed:</label>
-        <input type="range" id="office-cam-speed" min="1" max="20" value="4" step="1" style="width:80px;accent-color:var(--accent);vertical-align:middle" oninput="officeCamSpeed(this.value)" title="Camera movement speed">
-        <span style="color:var(--text-dim);font-size:9px;min-width:16px" id="office-speed-val">4</span>
-        <span style="color:var(--text-muted);font-size:9px;opacity:0.6;margin-left:8px" title="WASD=Move, Right-Drag=Look, Scroll=Dolly, Shift=Fast, Q/E=Down/Up">WASD + Mouse</span>
-        <span style="color:var(--text-dim);font-size:10px" id="office-fps"></span>
-        <button id="fullscreen-btn" onclick="toggleFullscreen()" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);padding:3px 10px;border-radius:6px;font-size:10px;cursor:pointer;font-family:inherit;margin-left:8px;transition:all 0.2s" title="Toggle fullscreen (End key to exit)">&#x26F6; Fullscreen</button>
-      </div>
-      <div class="office-canvas-wrap">
-        <div id="office-3d-container"></div>
-        <div class="office-legend">
-          <span><span class="dot" style="background:#4ade80"></span>Active</span>
-          <span><span class="dot" style="background:#facc15"></span>Sleeping</span>
-          <span><span class="dot" style="background:#f87171"></span>Offline</span>
-        </div>
-      </div>
-    </div>
     <div class="launch-area" id="launch-area"></div>
     <div class="rules-area" id="rules-area"></div>
     <div class="stats-area" id="stats-area"></div>
@@ -3882,7 +3555,7 @@
   </div>
 </div>
 <div class="app-footer">
-  <span>Let Them Talk v3.5.0</span>
+  <span>Neohive v3.5.0</span>
 </div>
 <div class="profile-popup" id="profile-popup" onclick="event.stopPropagation()">
   <div class="profile-popup-header">
@@ -4950,11 +4623,11 @@ function renderMessages(messages) {
     } else {
       el.innerHTML = '<div class="empty-state">' +
         '<div class="empty-icon">&#x1f680;</div>' +
-        '<div class="empty-text">Let Them Talk v5.0</div>' +
+        '<div class="empty-text">Neohive v5.0</div>' +
         '<div class="empty-sub">Autonomous AI agent teams — one command, zero babysitting</div>' +
         '<div class="onboard-steps">' +
           '<div class="onboard-step" style="margin-bottom:12px"><span class="onboard-num" style="background:var(--accent)">&#x26A1;</span><span style="font-weight:600">Quickest start — one command:</span></div>' +
-          '<div class="copy-block" onclick="copyText(this)" data-text="npx let-them-talk run &quot;build a REST API with auth&quot; --agents 4"><span class="copy-hint">click to copy</span>npx let-them-talk run "build a REST API with auth" --agents 4</div>' +
+          '<div class="copy-block" onclick="copyText(this)" data-text="npx neohive run &quot;build a REST API with auth&quot; --agents 4"><span class="copy-hint">click to copy</span>npx neohive run "build a REST API with auth" --agents 4</div>' +
           '<div style="font-size:11px;color:var(--text-muted);margin:8px 0 16px;text-align:center">Spawns 4 agents, auto-assigns roles, creates autonomous workflow. Walk away, come back to finished work.</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"></div>' +
           '<div class="onboard-step"><span class="onboard-num">1</span><span>Or set up manually: open two terminals and run <code>claude</code> in each</span></div>' +
@@ -5753,8 +5426,6 @@ document.addEventListener('keydown', function(e) {
     return;
   }
 
-  // 1 — 3D Hub tab
-  if (e.key === '1') { switchView('office'); return; }
   // 2 — Messages tab
   if (e.key === '2') { switchView('messages'); return; }
   // 3 — Tasks tab
@@ -5788,7 +5459,6 @@ function toggleShortcutsOverlay() {
     '<kbd style="background:var(--surface-2);padding:2px 8px;border-radius:4px;text-align:center;font-family:monospace">?</kbd><span>Show this help</span>' +
     '<kbd style="background:var(--surface-2);padding:2px 8px;border-radius:4px;text-align:center;font-family:monospace">/</kbd><span>Focus search</span>' +
     '<kbd style="background:var(--surface-2);padding:2px 8px;border-radius:4px;text-align:center;font-family:monospace">Esc</kbd><span>Clear search / exit</span>' +
-    '<kbd style="background:var(--surface-2);padding:2px 8px;border-radius:4px;text-align:center;font-family:monospace">1</kbd><span>3D Hub</span>' +
     '<kbd style="background:var(--surface-2);padding:2px 8px;border-radius:4px;text-align:center;font-family:monospace">2</kbd><span>Messages</span>' +
     '<kbd style="background:var(--surface-2);padding:2px 8px;border-radius:4px;text-align:center;font-family:monospace">3</kbd><span>Tasks</span>' +
     '<kbd style="background:var(--surface-2);padding:2px 8px;border-radius:4px;text-align:center;font-family:monospace">4</kbd><span>Workspaces</span>' +
@@ -6013,7 +5683,7 @@ loadBookmarks();
 
 function exportConversation() {
   if (!cachedHistory.length) return;
-  var md = '# Let Them Talk — Conversation Export\n\n';
+  var md = '# Neohive — Conversation Export\n\n';
   md += 'Exported: ' + new Date().toLocaleString() + '\n\n---\n\n';
   for (var i = 0; i < cachedHistory.length; i++) {
     var m = cachedHistory[i];
@@ -6049,7 +5719,6 @@ function switchView(view) {
   document.getElementById('tab-workspaces').classList.toggle('active', view === 'workspaces');
   document.getElementById('tab-workflows').classList.toggle('active', view === 'workflows');
   document.getElementById('tab-plan').classList.toggle('active', view === 'plan');
-  document.getElementById('tab-office').classList.toggle('active', view === 'office');
   document.getElementById('tab-launch').classList.toggle('active', view === 'launch');
   document.getElementById('tab-rules').classList.toggle('active', view === 'rules');
   document.getElementById('tab-stats').classList.toggle('active', view === 'stats');
@@ -6060,7 +5729,6 @@ function switchView(view) {
   document.getElementById('workflows-area').classList.toggle('visible', view === 'workflows');
   document.getElementById('plan-area').classList.toggle('visible', view === 'plan');
   document.getElementById('monitor-panel').style.display = view === 'plan' ? 'block' : 'none';
-  document.getElementById('office-area').classList.toggle('visible', view === 'office');
   document.getElementById('launch-area').classList.toggle('visible', view === 'launch');
   document.getElementById('rules-area').classList.toggle('visible', view === 'rules');
   document.getElementById('stats-area').classList.toggle('visible', view === 'stats');
@@ -6073,34 +5741,9 @@ function switchView(view) {
   if (view === 'workflows') fetchWorkflows();
   if (view === 'plan') { fetchPlanStatus(); fetchMonitorHealth(); }
   if (view === 'docs') renderDocs();
-  if (view === 'office') {
-    if (window.office3dStart) {
-      window.office3dStart();
-    } else {
-      // Show helpful error if 3D engine failed to load (Three.js missing)
-      var officeEl = document.getElementById('office-area');
-      if (officeEl && !officeEl.querySelector('.office-error')) {
-        var errDiv = document.createElement('div');
-        errDiv.className = 'office-error';
-        errDiv.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-dim);text-align:center;padding:40px';
-        errDiv.innerHTML = '<div style="font-size:48px;margin-bottom:16px">&#x1f3d7;</div>' +
-          '<div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px">3D Hub loading...</div>' +
-          '<div style="font-size:12px;max-width:400px;line-height:1.6">If the 3D world doesn\'t appear, Three.js may not have loaded correctly. Try refreshing the page. If the problem persists, check the browser console for errors.</div>';
-        officeEl.appendChild(errDiv);
-        // Remove error message once 3D loads
-        var checkInterval = setInterval(function() {
-          if (window.office3dStart) { errDiv.remove(); clearInterval(checkInterval); window.office3dStart(); }
-        }, 2000);
-        setTimeout(function() { clearInterval(checkInterval); }, 30000);
-      }
-    }
-  }
   if (view === 'launch') renderLaunchPanel();
   if (view === 'rules') fetchRules();
   if (view === 'stats') fetchStats();
-  if (view !== 'office') {
-    if (window.office3dStop) window.office3dStop();
-  }
   // Auto-close sidebar on mobile after view switch
   if (isMobile) closeSidebar();
 }
@@ -6834,11 +6477,8 @@ function openProfileEditor() {
   document.getElementById('pe-avatar-url').value = '';
   selectedAvatar = agent.avatar || '';
 
-  // Resolve full appearance (with deterministic defaults)
   var app = agent.appearance || {};
-  var defApp = typeof officeGetAppearance === 'function'
-    ? officeGetAppearance({ displayName: editingAgent, appearance: app })
-    : app;
+  var defApp = app;
 
   // Set color pickers
   document.getElementById('pe-head-color').value = defApp.head_color || '#FFD5B8';
@@ -6929,23 +6569,6 @@ function saveProfile() {
   var avatar = avatarUrl || selectedAvatar;
   var app = cdGetAppearance();
 
-  // Player mode — save to localStorage and spawn, don't send to server
-  if (window._playerDesignMode) {
-    window._playerDesignMode = false;
-    if (window.office3dSavePlayerAppearance) window.office3dSavePlayerAppearance(app);
-    if (window.office3dIsPlayerMode && window.office3dIsPlayerMode()) {
-      // Already in world — rebuild character
-      if (window.office3dRebuildPlayer) window.office3dRebuildPlayer(app);
-    } else {
-      // Enter the world
-      if (window.office3dSavePlayerAppearance) window.office3dSavePlayerAppearance(app);
-      if (window.office3dEnterWorld) window.office3dEnterWorld();
-      var btn = document.getElementById('player-mode-btn');
-      if (btn) { btn.textContent = 'Exit World'; btn.style.background = 'var(--accent)'; btn.style.color = '#fff'; }
-    }
-    closeProfileEditor();
-    return;
-  }
   var body = {
     agent: editingAgent,
     display_name: document.getElementById('pe-display-name').value.trim() || editingAgent,
@@ -7679,8 +7302,8 @@ function poll() {
 
     // Update tab title with message count
     document.title = status.messageCount > 0
-      ? 'Let Them Talk (' + status.messageCount + ')'
-      : 'Let Them Talk';
+      ? 'Neohive (' + status.messageCount + ')'
+      : 'Neohive';
 
     renderAgents(cachedAgents);
     renderAgentStats();
@@ -8686,15 +8309,15 @@ function renderDocs() {
   el.innerHTML =
     '<div class="docs-container">' +
 
-    '<h2>Let Them Talk v5.0</h2>' +
+    '<h2>Neohive v5.0</h2>' +
     '<p class="docs-subtitle">True Autonomy Engine \u2014 AI agents that self-organize, self-verify, and never stop working. Works with Claude Code, Gemini CLI, and Codex CLI.</p>' +
 
     // Quick Start — One Command
     '<div class="docs-section">' +
       '<h3>Quick Start \u2014 One Command</h3>' +
-      '<pre><code>npx let-them-talk run "build a REST API with auth" --agents 4</code></pre>' +
+      '<pre><code>npx neohive run "build a REST API with auth" --agents 4</code></pre>' +
       '<p>Spawns 4 agents, auto-assigns roles (Lead, Implementer, Quality, etc.), creates an autonomous workflow, and starts execution. Walk away, come back to finished work.</p>' +
-      '<p>Monitor progress: <code>npx let-them-talk dashboard</code> | Check status: <code>npx let-them-talk status</code> | Diagnose issues: <code>npx let-them-talk doctor</code></p>' +
+      '<p>Monitor progress: <code>npx neohive dashboard</code> | Check status: <code>npx neohive status</code> | Diagnose issues: <code>npx neohive doctor</code></p>' +
     '</div>' +
 
     // v5.0 Autonomy Engine
@@ -8716,11 +8339,11 @@ function renderDocs() {
       '<h3>Manual Setup</h3>' +
       '<h4>1. Install</h4>' +
       '<p>Open a terminal in your project folder and run:</p>' +
-      '<pre><code>npx let-them-talk init</code></pre>' +
-      '<p>This auto-detects your CLI (Claude Code, Gemini CLI, or Codex CLI) and adds the agent-bridge MCP server to its config. To set up all CLIs at once:</p>' +
-      '<pre><code>npx let-them-talk init --all</code></pre>' +
+      '<pre><code>npx neohive init</code></pre>' +
+      '<p>This auto-detects your CLI (Claude Code, Gemini CLI, or Codex CLI) and adds the neohive MCP server to its config. To set up all CLIs at once:</p>' +
+      '<pre><code>npx neohive init --all</code></pre>' +
       '<h4>2. Open the Dashboard</h4>' +
-      '<pre><code>npx let-them-talk dashboard</code></pre>' +
+      '<pre><code>npx neohive dashboard</code></pre>' +
       '<p>Opens this web dashboard at <code>http://localhost:3777</code>. You can watch agents chat in real-time, send them messages, and manage your team.</p>' +
       '<h4>3. Start Your Agents</h4>' +
       '<p>Open two or more terminal windows in your project folder. In each one, start your AI CLI (e.g. type <code>claude</code>) and tell it to register:</p>' +
@@ -8759,25 +8382,10 @@ function renderDocs() {
         '<li><strong>Tasks</strong> \u2014 Tasks that agents create and assign to each other. Track status (pending, in progress, done, blocked).</li>' +
         '<li><strong>Workspaces</strong> \u2014 Per-agent key-value storage. Agents use this to share data, notes, and findings.</li>' +
         '<li><strong>Workflows</strong> \u2014 Multi-step pipelines. See which step is active, who\'s responsible, and what\'s done.</li>' +
-        '<li><strong>3D Hub</strong> \u2014 A 3D virtual office where each agent has a desk with a live monitor. Walk around with WASD, sit at desks with E, and explore the campus.</li>' +
         '<li><strong>Launch</strong> \u2014 Open new agent terminals with templates and prompts. Supports Claude, Gemini, and Codex.</li>' +
         '<li><strong>Stats</strong> \u2014 Message counts, activity graphs, and per-agent statistics.</li>' +
         '<li><strong>Docs</strong> \u2014 This page.</li>' +
       '</ul>' +
-    '</div>' +
-
-    // 3D Hub Controls
-    '<div class="docs-section">' +
-      '<h3>3D Hub Controls</h3>' +
-      '<div class="docs-tool-grid">' +
-        '<div class="docs-tool-item"><code>W A S D</code><div class="desc">Move forward, left, backward, right</div></div>' +
-        '<div class="docs-tool-item"><code>Mouse</code><div class="desc">Look around (click to enable, Esc to release)</div></div>' +
-        '<div class="docs-tool-item"><code>E</code><div class="desc">Sit at a desk / stand up / interact with objects</div></div>' +
-        '<div class="docs-tool-item"><code>Space</code><div class="desc">Jump</div></div>' +
-        '<div class="docs-tool-item"><code>Shift</code><div class="desc">Run</div></div>' +
-        '<div class="docs-tool-item"><code>C</code><div class="desc">Toggle spectator camera (fly mode)</div></div>' +
-        '<div class="docs-tool-item"><code>Click agent</code><div class="desc">View agent info and send messages</div></div>' +
-      '</div>' +
     '</div>' +
 
     // Conversation Modes
@@ -8796,12 +8404,12 @@ function renderDocs() {
     '<div class="docs-section">' +
       '<h3>CLI Commands</h3>' +
       '<div class="docs-tool-grid">' +
-        '<div class="docs-tool-item"><code>npx let-them-talk init</code><div class="desc">Set up MCP server config for your CLI</div></div>' +
-        '<div class="docs-tool-item"><code>npx let-them-talk init --all</code><div class="desc">Set up for all detected CLIs at once</div></div>' +
-        '<div class="docs-tool-item"><code>npx let-them-talk init --template &lt;name&gt;</code><div class="desc">Start with a team template</div></div>' +
-        '<div class="docs-tool-item"><code>npx let-them-talk dashboard</code><div class="desc">Open the web dashboard</div></div>' +
-        '<div class="docs-tool-item"><code>npx let-them-talk templates</code><div class="desc">List available templates</div></div>' +
-        '<div class="docs-tool-item"><code>npx let-them-talk reset --force</code><div class="desc">Clear conversation data (auto-archives first)</div></div>' +
+        '<div class="docs-tool-item"><code>npx neohive init</code><div class="desc">Set up MCP server config for your CLI</div></div>' +
+        '<div class="docs-tool-item"><code>npx neohive init --all</code><div class="desc">Set up for all detected CLIs at once</div></div>' +
+        '<div class="docs-tool-item"><code>npx neohive init --template &lt;name&gt;</code><div class="desc">Start with a team template</div></div>' +
+        '<div class="docs-tool-item"><code>npx neohive dashboard</code><div class="desc">Open the web dashboard</div></div>' +
+        '<div class="docs-tool-item"><code>npx neohive templates</code><div class="desc">List available templates</div></div>' +
+        '<div class="docs-tool-item"><code>npx neohive reset --force</code><div class="desc">Clear conversation data (auto-archives first)</div></div>' +
       '</div>' +
     '</div>' +
 
@@ -8815,15 +8423,15 @@ function renderDocs() {
     '<div class="docs-section">' +
       '<h3>Frequently Asked Questions</h3>' +
       '<h4>Do agents need internet access?</h4>' +
-      '<p>No. Agents communicate through local files in your project\'s <code>.agent-bridge/</code> folder. No cloud servers, no API calls between agents. The AI CLIs themselves may need internet for their LLM providers, but the agent bridge is fully local.</p>' +
+      '<p>No. Agents communicate through local files in your project\'s <code>.neohive/</code> folder. No cloud servers, no API calls between agents. The AI CLIs themselves may need internet for their LLM providers, but the agent bridge is fully local.</p>' +
       '<h4>Can I mix different AI CLIs?</h4>' +
-      '<p>Yes! Claude Code, Gemini CLI, and Codex CLI can all talk to each other in the same conversation. Run <code>npx let-them-talk init --all</code> to configure all of them.</p>' +
+      '<p>Yes! Claude Code, Gemini CLI, and Codex CLI can all talk to each other in the same conversation. Run <code>npx neohive init --all</code> to configure all of them.</p>' +
       '<h4>What happens when message files get large?</h4>' +
       '<p>Messages auto-compact when they exceed 500 lines. Older messages are summarized and archived. The <code>reset --force</code> command archives everything before clearing. Your data is never silently deleted.</p>' +
       '<h4>Can I run multiple projects?</h4>' +
-      '<p>Yes. Each project has its own <code>.agent-bridge/</code> directory. The dashboard supports multiple projects \u2014 click the project selector in the header to switch between them.</p>' +
+      '<p>Yes. Each project has its own <code>.neohive/</code> directory. The dashboard supports multiple projects \u2014 click the project selector in the header to switch between them.</p>' +
       '<h4>How do I send a message to agents from the dashboard?</h4>' +
-      '<p>Click any agent\'s avatar in the Messages tab or 3D Hub. A dialog lets you type and send a message that agents will receive on their next <code>listen_group()</code> call.</p>' +
+      '<p>Click any agent\'s avatar in the Messages tab. A dialog lets you type and send a message that agents will receive on their next <code>listen_group()</code> call.</p>' +
     '</div>' +
 
     '</div>';
@@ -8843,7 +8451,7 @@ function copyLaunchPrompt() {
     var agentName = document.getElementById('launch-name').value.trim();
     prompt = agentName
       ? 'You are agent "' + agentName + '". Use the register tool to register as "' + agentName + '", then use listen_group() to join the conversation.'
-      : 'Register with the agent-bridge MCP tools and use listen_group() to join the conversation.';
+      : 'Register with the neohive MCP tools and use listen_group() to join the conversation.';
   }
   navigator.clipboard.writeText(prompt).then(function() {
     var resultEl = document.getElementById('launch-result');
@@ -8852,122 +8460,6 @@ function copyLaunchPrompt() {
     setTimeout(function() { resultEl.className = 'launch-result'; resultEl.innerHTML = ''; }, 2000);
   });
 }
-
-// ==================== VIRTUAL OFFICE ====================
-// 3D engine extracted to office/ modules (loaded as ES module below).
-// Minimal compat shim for legacy callers:
-
-var officeMode = '3d';
-window.officeMode = '3d';
-
-function officeSetMode(mode) {
-  // 3D only — no-op
-}
-
-var officeEnvironment = 'modern';
-
-// officeSetEnvironment bridges to 3D module
-function officeSetEnvironment(env) {
-  officeEnvironment = env;
-  if (window.office3dSetEnvironment) window.office3dSetEnvironment(env);
-}
-function officeCamSpeed(val) {
-  document.getElementById('office-speed-val').textContent = val;
-  if (window.office3dSetCamSpeed) window.office3dSetCamSpeed(Number(val));
-}
-
-// Player avatar mode
-// --- Fullscreen toggle ---
-function toggleFullscreen() {
-  if (document.fullscreenElement) {
-    document.exitFullscreen();
-  } else {
-    // If on 3D Hub, fullscreen only the 3D container (game mode)
-    var officeContainer = document.getElementById('office-3d-container');
-    if (window.activeView === 'office' && officeContainer) {
-      officeContainer.requestFullscreen().catch(function() {});
-    } else {
-      document.documentElement.requestFullscreen().catch(function() {});
-    }
-  }
-}
-// End key exits fullscreen
-document.addEventListener('keydown', function(e) {
-  if (e.code === 'End' && document.fullscreenElement) {
-    document.exitFullscreen();
-  }
-});
-// Update button text on fullscreen change
-document.addEventListener('fullscreenchange', function() {
-  var btn = document.getElementById('fullscreen-btn');
-  if (btn) {
-    btn.innerHTML = document.fullscreenElement ? '&#x2716; Exit Fullscreen' : '&#x26F6; Fullscreen';
-  }
-});
-
-function togglePlayerMode() {
-  var btn = document.getElementById('player-mode-btn');
-  if (window.office3dIsPlayerMode && window.office3dIsPlayerMode()) {
-    // Exit player mode
-    window.office3dExitWorld();
-    btn.textContent = 'Enter World';
-    btn.style.background = 'var(--accent-dim)';
-    btn.style.color = 'var(--accent)';
-  } else {
-    // Open character designer for the player first
-    window._playerDesignMode = true;
-    editingAgent = '_player_';
-    // Load saved player appearance
-    var pApp = window.office3dGetPlayerAppearance ? window.office3dGetPlayerAppearance() : {};
-    // Set up character designer with player appearance
-    document.getElementById('pe-display-name').value = 'You';
-    document.getElementById('pe-role').value = 'Explorer';
-    document.getElementById('pe-bio').value = '';
-    document.getElementById('pe-avatar-url').value = '';
-    selectedAvatar = '';
-    var defApp = typeof officeGetAppearance === 'function'
-      ? officeGetAppearance({ displayName: 'Player', appearance: pApp })
-      : pApp;
-    document.getElementById('pe-head-color').value = defApp.head_color || '#FFD5B8';
-    document.getElementById('pe-shirt-color').value = defApp.shirt_color || '#58a6ff';
-    document.getElementById('pe-hair-color').value = defApp.hair_color || '#4A3728';
-    document.getElementById('pe-pants-color').value = defApp.pants_color || '#2d3748';
-    document.getElementById('pe-shoe-color').value = defApp.shoe_color || '#1a1a2e';
-    document.getElementById('pe-glasses-color').value = defApp.glasses_color || '#555555';
-    document.getElementById('pe-headwear-color').value = defApp.headwear_color || '#333333';
-    document.getElementById('pe-neckwear-color').value = defApp.neckwear_color || '#c0392b';
-    cdAppearance.hair_style = defApp.hair_style || 'short';
-    cdAppearance.eye_style = defApp.eye_style || 'dots';
-    cdAppearance.mouth_style = defApp.mouth_style || 'smile';
-    cdAppearance.glasses = defApp.glasses || null;
-    cdAppearance.headwear = defApp.headwear || null;
-    cdAppearance.neckwear = defApp.neckwear || null;
-    cdAppearance.outfit = defApp.outfit || null;
-    cdAppearance.body_type = defApp.body_type || 'default';
-    cdActivateCard('cd-hair-styles', cdAppearance.hair_style);
-    cdActivateCard('cd-eye-styles', cdAppearance.eye_style);
-    cdActivateCard('cd-mouth-styles', cdAppearance.mouth_style);
-    cdActivateCard('cd-glasses-styles', cdAppearance.glasses || '');
-    cdActivateCard('cd-headwear-styles', cdAppearance.headwear || '');
-    cdActivateCard('cd-neckwear-styles', cdAppearance.neckwear || '');
-    cdActivateCard('cd-outfit-styles', cdAppearance.outfit || '');
-    cdActivateCard('cd-body-types', cdAppearance.body_type);
-    document.getElementById('cd-glasses-color-row').style.display = cdAppearance.glasses ? 'flex' : 'none';
-    document.getElementById('cd-headwear-color-row').style.display = cdAppearance.headwear ? 'flex' : 'none';
-    document.getElementById('cd-neckwear-color-row').style.display = cdAppearance.neckwear ? 'flex' : 'none';
-    cdSwitchTab('body', document.querySelector('.cd-tab'));
-    document.getElementById('char-designer').classList.add('open');
-    document.getElementById('cd-backdrop').classList.add('open');
-    cdOnChange();
-    if (window._cdInitPreview) window._cdInitPreview();
-  }
-}
-
-// Override saveProfile to handle player mode
-var _origSaveProfile = typeof saveProfile === 'function' ? saveProfile : null;
-
-// Hook into poll() to sync office state (3D module handles its own sync interval)
-// Visibility change for 3D mode is handled by the 3D module
 
 // ==================== SSE + POLLING ====================
 
@@ -9073,177 +8565,6 @@ loadProjects().then(function() {
 });
 // Safety-net poll at 10s (SSE handles real-time, this catches any missed updates)
 setInterval(poll, 10000);
-</script>
-
-<script type="module" src="/office/index.js"></script>
-
-<script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createCharacter } from '/office/index.js';
-
-var renderer = null;
-var scene = null;
-var camera = null;
-var controls = null;
-var animId = null;
-var charObj = null;
-var container = null;
-var autoRotateSpeed = 0.8;
-
-function initPreview() {
-  container = document.getElementById('cd-preview-container');
-  if (!container) return;
-
-  // Clean up if already exists
-  disposePreview();
-
-  var w = container.clientWidth || 440;
-  var h = 250;
-
-  // Renderer
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(w, h);
-  renderer.setClearColor(0x12151c);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  container.appendChild(renderer.domElement);
-
-  // Scene
-  scene = new THREE.Scene();
-
-  // Camera
-  camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 50);
-  camera.position.set(0, 1.2, 3.2);
-  camera.lookAt(0, 0.6, 0);
-
-  // Controls
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 0.6, 0);
-  controls.enablePan = false;
-  controls.enableZoom = false;
-  controls.minPolarAngle = Math.PI * 0.2;
-  controls.maxPolarAngle = Math.PI * 0.65;
-  controls.autoRotate = true;
-  controls.autoRotateSpeed = autoRotateSpeed;
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.update();
-
-  // Lights
-  var ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-  scene.add(ambientLight);
-  var dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-  dirLight.position.set(3, 5, 4);
-  dirLight.castShadow = true;
-  dirLight.shadow.mapSize.set(512, 512);
-  dirLight.shadow.camera.near = 0.5;
-  dirLight.shadow.camera.far = 15;
-  dirLight.shadow.camera.left = -2;
-  dirLight.shadow.camera.right = 2;
-  dirLight.shadow.camera.top = 2;
-  dirLight.shadow.camera.bottom = -1;
-  scene.add(dirLight);
-  var fillLight = new THREE.DirectionalLight(0x8899cc, 0.3);
-  fillLight.position.set(-2, 2, -1);
-  scene.add(fillLight);
-
-  // Floor disc
-  var floorGeo = new THREE.CircleGeometry(0.6, 32);
-  var floorMat = new THREE.MeshStandardMaterial({ color: 0x1e2530, roughness: 0.9 });
-  var floor = new THREE.Mesh(floorGeo, floorMat);
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = 0.01;
-  floor.receiveShadow = true;
-  scene.add(floor);
-
-  // Build character with current appearance
-  rebuildCharacter(window.cdGetAppearance ? window.cdGetAppearance() : {});
-
-  // Start render loop
-  function animate() {
-    animId = requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
-  }
-  animate();
-
-  // Handle resize
-  var ro = new ResizeObserver(function() {
-    if (!container || !renderer) return;
-    var nw = container.clientWidth;
-    var nh = 250;
-    camera.aspect = nw / nh;
-    camera.updateProjectionMatrix();
-    renderer.setSize(nw, nh);
-  });
-  ro.observe(container);
-  container._ro = ro;
-}
-
-function rebuildCharacter(appearance) {
-  if (!scene) return;
-
-  // Remove old character
-  if (charObj) {
-    scene.remove(charObj.group);
-    charObj.group.traverse(function(child) {
-      if (child.geometry) child.geometry.dispose();
-      if (child.material) {
-        if (child.material.map) child.material.map.dispose();
-        child.material.dispose();
-      }
-    });
-    // Remove CSS2D label/bubble divs
-    if (charObj.labelDiv && charObj.labelDiv.parentNode) charObj.labelDiv.parentNode.removeChild(charObj.labelDiv);
-    if (charObj.bubbleDiv && charObj.bubbleDiv.parentNode) charObj.bubbleDiv.parentNode.removeChild(charObj.bubbleDiv);
-    charObj = null;
-  }
-
-  try {
-    charObj = createCharacter(window.editingAgent || 'agent', appearance);
-    // Hide labels and bubbles in preview
-    if (charObj.label) charObj.label.visible = false;
-    if (charObj.bubble) charObj.bubble.visible = false;
-    if (charObj.taskLabel) charObj.taskLabel.visible = false;
-    if (charObj.typingLabel) charObj.typingLabel.visible = false;
-    if (charObj.zzzObjects) charObj.zzzObjects.forEach(function(z) { z.obj.visible = false; });
-    scene.add(charObj.group);
-  } catch (e) {
-    console.warn('[CD] Failed to create preview character:', e);
-  }
-}
-
-function disposePreview() {
-  if (animId) { cancelAnimationFrame(animId); animId = null; }
-  if (container && container._ro) { container._ro.disconnect(); container._ro = null; }
-  if (charObj) {
-    charObj.group.traverse(function(child) {
-      if (child.geometry) child.geometry.dispose();
-      if (child.material) {
-        if (child.material.map) child.material.map.dispose();
-        child.material.dispose();
-      }
-    });
-    if (charObj.labelDiv && charObj.labelDiv.parentNode) charObj.labelDiv.parentNode.removeChild(charObj.labelDiv);
-    if (charObj.bubbleDiv && charObj.bubbleDiv.parentNode) charObj.bubbleDiv.parentNode.removeChild(charObj.bubbleDiv);
-    charObj = null;
-  }
-  if (controls) { controls.dispose(); controls = null; }
-  if (renderer) {
-    if (container && container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
-    renderer.dispose();
-    renderer = null;
-  }
-  scene = null;
-  camera = null;
-}
-
-// Expose to the main (non-module) script via window globals
-window._cdInitPreview = initPreview;
-window._cdDisposePreview = disposePreview;
-window._cdRebuildPreview = rebuildCharacter;
 </script>
 
 </body>

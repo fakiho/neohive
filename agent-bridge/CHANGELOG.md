@@ -48,7 +48,7 @@ Built by a 4-agent team (Backend, Protocol, Tester, Coordinator) + Advisor agent
 ### Added — Dashboard & CLI
 - **Plan execution view** — progress bar, step cards, confidence, controls (pause/stop/skip/reassign)
 - **Monitor health panel** — agent health grid, intervention log, system metrics
-- **`npx let-them-talk run "prompt" --agents N`** — one-command autonomous execution
+- **`npx neohive run "prompt" --agents N`** — one-command autonomous execution
 - **npm test** wires v5 test suite (158+ tests on every run)
 - Updated conversation templates (autonomous format with depends_on)
 
@@ -183,7 +183,7 @@ Massive scaling overhaul designed, implemented, and audited by a 3-agent team (A
 ### Added — Dynamic Guide with Progressive Disclosure
 - **`buildGuide()`** — replaces hardcoded guide in register() and get_guide(). Returns only rules relevant to the current system state.
 - **Tiered rules:** Tier 0 (listen after every action), Tier 1 (core behavior), Tier 2 (group mode features), Tier 2b (channels), Tier 3 (large teams 5+)
-- **User-customizable:** `.agent-bridge/guide.md` for project-specific rules
+- **User-customizable:** `.neohive/guide.md` for project-specific rules
 - 2-agent direct mode = 5 rules. 10-agent group with channels = 12 rules.
 
 ## [3.9.1] - 2026-03-17
@@ -379,7 +379,7 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 - **Agent leaderboard** — performance scoring (0-100) with responsiveness, activity, reliability, collaboration dimensions
 - **Cross-project search** — "All Projects" toggle in search bar, searches across all registered projects
 - **Animated replay export** — Export conversation as self-playing HTML file with typing animations and play/pause controls
-- **Ollama integration** — `npx let-them-talk init --ollama` auto-detects Ollama, creates bridge script for local models
+- **Ollama integration** — `npx neohive init --ollama` auto-detects Ollama, creates bridge script for local models
 
 ### Fixed — PID & Registration Integrity
 - Registration file locking with try/finally (prevents race conditions when multiple agents register simultaneously)
@@ -408,7 +408,7 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 ### Removed — Plugin System
 - Removed the entire plugin system (`vm.runInNewContext` sandbox, plugin CLI commands, dashboard plugin UI)
 - **Why:** Plugins were an unnecessary attack surface. Node.js `vm` is not a security sandbox — plugins could escape and execute arbitrary OS commands. CLI terminals (Claude Code, Gemini, Codex) have their own extension systems, making our plugins redundant.
-- `npx let-them-talk plugin` now shows a deprecation notice
+- `npx neohive plugin` now shows a deprecation notice
 - MCP tools reduced from 27 + plugins to 27 (all core tools remain)
 - ~200 lines of code removed from server.js, cli.js, dashboard.js, dashboard.html
 
@@ -483,8 +483,8 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 - `GET/POST /api/permissions` — agent permission management
 
 ### Added — CLI Commands
-- `npx let-them-talk msg <agent> <text>` — send a message from CLI
-- `npx let-them-talk status` — show active agents and message counts
+- `npx neohive msg <agent> <text>` — send a message from CLI
+- `npx neohive status` — show active agents and message counts
 
 ### Changed — Premium UI Redesign
 - Deeper dark palette with blue undertones (#080b12 background)
@@ -547,7 +547,7 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 ### Added — Plugin System
 - Dynamic tool loading from `plugins/*.js` files
 - Sandboxed execution with 30s timeout
-- CLI: `npx let-them-talk plugin add/list/remove/enable/disable`
+- CLI: `npx neohive plugin add/list/remove/enable/disable`
 - Dashboard plugin cards with enable/disable toggles
 
 ### Changed
@@ -617,10 +617,10 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 - Message sequence numbers for ordering
 - `pending_count` and `agents_online` in delivery responses
 - 4 agent templates: pair, team, review, debate
-- CLI: `npx let-them-talk templates` command
+- CLI: `npx neohive templates` command
 - CLI: `--template` flag for guided setup
 - Multi-CLI support: Claude Code, Gemini CLI, Codex CLI
-- `AGENT_BRIDGE_DATA_DIR` env var in MCP config
+- `NEOHIVE_DATA_DIR` env var in MCP config
 
 ### Fixed
 - Heartbeat timer `.unref()` to prevent zombie processes

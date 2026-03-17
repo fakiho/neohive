@@ -14,9 +14,9 @@ function withFileLock(filePath, fn) {
   return next;
 }
 
-const PORT = parseInt(process.env.AGENT_BRIDGE_PORT || '3000', 10);
+const PORT = parseInt(process.env.NEOHIVE_PORT || '3000', 10);
 const LAN_STATE_FILE = path.join(__dirname, '.lan-mode');
-let LAN_MODE = process.env.AGENT_BRIDGE_LAN === 'true' || (fs.existsSync(LAN_STATE_FILE) && fs.readFileSync(LAN_STATE_FILE, 'utf8').trim() === 'true');
+let LAN_MODE = process.env.NEOHIVE_LAN === 'true' || (fs.existsSync(LAN_STATE_FILE) && fs.readFileSync(LAN_STATE_FILE, 'utf8').trim() === 'true');
 
 const LAN_TOKEN_FILE = path.join(__dirname, '.lan-token');
 let LAN_TOKEN = null;
@@ -56,7 +56,7 @@ function getLanIP() {
   }
   return fallback;
 }
-const DEFAULT_DATA_DIR = process.env.AGENT_BRIDGE_DATA || path.join(process.cwd(), '.agent-bridge');
+const DEFAULT_DATA_DIR = process.env.NEOHIVE_DATA || path.join(process.cwd(), '.neohive');
 const HTML_FILE = path.join(__dirname, 'dashboard.html');
 const LOGO_FILE = path.join(__dirname, 'logo.png');
 const PROJECTS_FILE = path.join(__dirname, 'projects.json');
@@ -85,7 +85,7 @@ function hasDataFiles(dir) {
 // Prefers directories with actual data files over empty ones
 function resolveDataDir(projectPath) {
   if (projectPath) {
-    const dir = path.join(projectPath, '.agent-bridge');
+    const dir = path.join(projectPath, '.neohive');
     const dataDir = path.join(projectPath, 'data');
     // Prefer whichever has data
     if (hasDataFiles(dir)) return dir;
@@ -136,32 +136,6 @@ function readJsonl(file) {
 function readJson(file) {
   if (!fs.existsSync(file)) return {};
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return {}; }
-}
-
-// Economy helpers
-function getEconomyLedger(projectPath) {
-  const ledgerFile = filePath('economy.jsonl', projectPath);
-  if (!fs.existsSync(ledgerFile)) return [];
-  try {
-    return fs.readFileSync(ledgerFile, 'utf8').trim().split(/\r?\n/)
-      .filter(l => l.trim()).map(l => JSON.parse(l));
-  } catch { return []; }
-}
-
-function getBalances(projectPath) {
-  const ledger = getEconomyLedger(projectPath);
-  const balances = {};
-  for (const entry of ledger) {
-    if (!balances[entry.agent]) balances[entry.agent] = 0;
-    balances[entry.agent] += entry.amount;
-  }
-  return balances;
-}
-
-function appendEconomyEntry(projectPath, entry) {
-  const ledgerFile = filePath('economy.jsonl', projectPath);
-  const line = JSON.stringify({ ...entry, timestamp: new Date().toISOString() }) + '\n';
-  fs.appendFileSync(ledgerFile, line);
 }
 
 function isPidAlive(pid, lastActivity) {
@@ -658,7 +632,7 @@ function apiExportReplay(query) {
 
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Let Them Talk — Replay</title>
+<title>Neohive — Replay</title>
 <style>
 :root{--bg:#0d1117;--surface:#161b22;--surface-2:#21262d;--border:#30363d;--text:#e6edf3;--dim:#8b949e}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -682,7 +656,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .progress{font-size:12px;color:var(--dim)}
 </style></head><body>
 <div class="header">
-<span class="title">Let Them Talk — Replay</span>
+<span class="title">Neohive — Replay</span>
 <div class="controls">
 <button id="btn" onclick="toggle()">Pause</button>
 <label><span style="color:var(--dim);font-size:12px">Speed:</span>
@@ -862,6 +836,8 @@ function apiInjectMessage(body, query) {
   if (typeof body.content !== 'string' || body.content.length > 100000) {
     return { error: 'Message content too long (max 100KB)' };
   }
+  // Strip control characters to prevent injection
+  body.content = body.content.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
   if (body.to !== '__all__' && !/^[a-zA-Z0-9_-]{1,20}$/.test(body.to)) {
     return { error: 'Invalid agent name' };
   }
@@ -928,8 +904,8 @@ function apiAddProject(body) {
   const name = body.name || path.basename(absPath);
   if (projects.find(p => p.path === absPath)) return { error: 'Project already added' };
 
-  // Create .agent-bridge directory if it doesn't exist
-  const abDir = path.join(absPath, '.agent-bridge');
+  // Create .neohive directory if it doesn't exist
+  const abDir = path.join(absPath, '.neohive');
   if (!fs.existsSync(abDir)) fs.mkdirSync(abDir, { recursive: true });
 
   // Set up MCP config so agents can use it
@@ -970,7 +946,7 @@ function apiExportHtml(query) {
 
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Let Them Talk — Conversation Export</title>
+<title>Neohive — Conversation Export</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect rx='20' width='100' height='100' fill='%230d1117'/><path d='M20 30 Q20 20 30 20 H70 Q80 20 80 30 V55 Q80 65 70 65 H55 L40 80 V65 H30 Q20 65 20 55Z' fill='%2358a6ff'/><circle cx='38' cy='42' r='5' fill='%230d1117'/><circle cx='55' cy='42' r='5' fill='%230d1117'/></svg>">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -1016,7 +992,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .footer a:hover{color:#58a6ff}
 </style></head><body>
 <div class="export-header">
-<div class="logo">Let Them Talk</div>
+<div class="logo">Neohive</div>
 <div class="export-meta">
 <span class="meta-item"><span class="meta-val">${history.length}</span> messages</span>
 <span class="meta-item"><span class="meta-val">${agentNames.length}</span> agents</span>
@@ -1026,7 +1002,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="agent-chips" id="agent-chips"></div>
 </div>
 <div class="messages" id="messages"></div>
-<div class="footer">Generated by <a href="https://github.com/Dekelelz/let-them-talk" target="_blank">Let Them Talk</a> &middot; BSL 1.1</div>
+<div class="footer">Generated by <a href="https://github.com/fakiho/neohive" target="_blank">Neohive</a> &middot; BSL 1.1</div>
 <script>
 var COLORS=['#58a6ff','#3fb950','#d29922','#f85149','#bc8cff','#f778ba','#79c0ff','#7ee787','#e3b341','#ffa198'];
 var colorMap={},ci=0;
@@ -1214,7 +1190,7 @@ function apiDeleteRule(body, query) {
   return { success: true };
 }
 
-// Auto-discover .agent-bridge directories nearby
+// Auto-discover .neohive directories nearby
 function apiDiscover() {
   const found = [];
   const checked = new Set();
@@ -1228,10 +1204,10 @@ function apiDiscover() {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
-        if (entry.name.startsWith('.') && entry.name !== '.agent-bridge') continue;
+        if (entry.name.startsWith('.') && entry.name !== '.neohive') continue;
         if (entry.name === 'node_modules') continue;
         const fullPath = path.join(dir, entry.name);
-        if (entry.name === '.agent-bridge' && hasDataFiles(fullPath)) {
+        if (entry.name === '.neohive' && hasDataFiles(fullPath)) {
           const projectPath = dir;
           if (!existing.has(projectPath)) {
             found.push({ name: path.basename(projectPath), path: projectPath, dataDir: fullPath });
@@ -1263,15 +1239,15 @@ function apiDiscover() {
 // --- Agent Launcher ---
 
 function ensureMCPConfig(cli, serverPath, projectDir) {
-  const abDir = path.join(projectDir, '.agent-bridge').replace(/\\/g, '/');
+  const abDir = path.join(projectDir, '.neohive').replace(/\\/g, '/');
   if (cli === 'claude') {
     const mcpConfigPath = path.join(projectDir, '.mcp.json');
     let mcpConfig = { mcpServers: {} };
     if (fs.existsSync(mcpConfigPath)) {
       try { mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8')); if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {}; } catch {}
     }
-    if (!mcpConfig.mcpServers['agent-bridge']) {
-      mcpConfig.mcpServers['agent-bridge'] = { command: 'node', args: [serverPath], env: { AGENT_BRIDGE_DATA_DIR: abDir } };
+    if (!mcpConfig.mcpServers['neohive']) {
+      mcpConfig.mcpServers['neohive'] = { command: 'node', args: [serverPath], env: { NEOHIVE_DATA_DIR: abDir } };
       fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
     }
   } else if (cli === 'gemini') {
@@ -1282,8 +1258,8 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
     if (fs.existsSync(settingsPath)) {
       try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); if (!settings.mcpServers) settings.mcpServers = {}; } catch {}
     }
-    if (!settings.mcpServers['agent-bridge']) {
-      settings.mcpServers['agent-bridge'] = { command: 'node', args: [serverPath], env: { AGENT_BRIDGE_DATA_DIR: abDir } };
+    if (!settings.mcpServers['neohive']) {
+      settings.mcpServers['neohive'] = { command: 'node', args: [serverPath], env: { NEOHIVE_DATA_DIR: abDir } };
       fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
     }
   } else if (cli === 'codex') {
@@ -1292,8 +1268,8 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
     if (!fs.existsSync(codexDir)) fs.mkdirSync(codexDir, { recursive: true });
     let config = '';
     if (fs.existsSync(configPath)) config = fs.readFileSync(configPath, 'utf8');
-    if (!config.includes('[mcp_servers.agent-bridge]')) {
-      config += `\n[mcp_servers.agent-bridge]\ncommand = "node"\nargs = [${JSON.stringify(serverPath)}]\n\n[mcp_servers.agent-bridge.env]\nAGENT_BRIDGE_DATA_DIR = ${JSON.stringify(abDir)}\n`;
+    if (!config.includes('[mcp_servers.neohive]')) {
+      config += `\n[mcp_servers.neohive]\ncommand = "node"\nargs = [${JSON.stringify(serverPath)}]\n\n[mcp_servers.neohive.env]\nNEOHIVE_DATA_DIR = ${JSON.stringify(abDir)}\n`;
       fs.writeFileSync(configPath, config);
     }
   }
@@ -1318,7 +1294,7 @@ function apiLaunchAgent(body) {
   const cliCommands = { claude: 'claude', gemini: 'gemini', codex: 'codex' };
   const cliCmd = cliCommands[cli];
   const safeName = (agent_name || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
-  const launchPrompt = prompt || (safeName ? `You are agent "${safeName}". Use the register tool to register as "${safeName}", then use listen to wait for messages.` : `Register with the agent-bridge MCP tools and use listen to wait for messages.`);
+  const launchPrompt = prompt || (safeName ? `You are agent "${safeName}". Use the register tool to register as "${safeName}", then use listen to wait for messages.` : `Register with the neohive MCP tools and use listen to wait for messages.`);
 
   // Try to launch terminal — user pastes prompt from clipboard after CLI loads
   if (process.platform === 'win32') {
@@ -1683,8 +1659,13 @@ const server = http.createServer(async (req, res) => {
     const source = origin || referer;
     if (!source) {
       // No origin/referer — non-browser client (curl, scripts, etc.)
-      // Custom header check above is the only protection layer here — allow through
-      // since local CLI tools (like our own `msg` command) need to work
+      // Allow local CLI tools but block non-local requests without origin
+      const reqHost = (req.headers.host || '').replace(/:\d+$/, '');
+      if (reqHost !== 'localhost' && reqHost !== '127.0.0.1' && !reqHost.startsWith('192.168.') && !reqHost.startsWith('10.')) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Forbidden: non-local request without origin' }));
+        return;
+      }
     }
     const allowedSources = [`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`];
     if (LAN_MODE && getLanIP()) allowedSources.push(`http://${getLanIP()}:${PORT}`);
@@ -1730,119 +1711,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Serve static library files from node_modules (Three.js etc.)
-    if (url.pathname.startsWith('/lib/')) {
-      const libPath = url.pathname.replace('/lib/', '');
-      // Sanitize: prevent path traversal
-      if (libPath.includes('..') || libPath.includes('\\')) {
-        res.writeHead(400); res.end('Bad path'); return;
-      }
-      // Search multiple node_modules locations (handles npx, local dev, monorepo, global)
-      const searchPaths = [
-        path.join(__dirname, 'node_modules', libPath),       // inside package (nested deps)
-        path.join(__dirname, '..', 'node_modules', libPath), // repo root (local dev)
-        path.join(__dirname, '..', libPath),                  // npx sibling packages (three/ is next to let-them-talk/)
-      ];
-      // Also try require.resolve for robust npm path resolution (works with hoisted deps, npx cache, etc.)
-      // Note: use require.resolve(pkg) not require.resolve(pkg/package.json) — modern packages
-      // with "exports" fields block resolving package.json directly (ERR_PACKAGE_PATH_NOT_EXPORTED)
-      try {
-        const parts = libPath.split('/');
-        const pkgName = parts[0];
-        const subPath = parts.slice(1).join('/');
-        // Try resolving the package's main entry, then navigate to subPath
-        const resolved = require.resolve(pkgName);
-        const pkgDir = path.dirname(resolved);
-        // Walk up from the resolved entry to the package root (handle nested build/ dirs)
-        let pkgRoot = pkgDir;
-        while (pkgRoot !== path.dirname(pkgRoot)) {
-          if (fs.existsSync(path.join(pkgRoot, 'package.json'))) {
-            try {
-              const pkg = JSON.parse(fs.readFileSync(path.join(pkgRoot, 'package.json'), 'utf8'));
-              if (pkg.name === pkgName) break;
-            } catch {}
-          }
-          pkgRoot = path.dirname(pkgRoot);
-        }
-        searchPaths.push(path.join(pkgRoot, subPath));
-      } catch {}
-      const filePath = searchPaths.find(p => fs.existsSync(p));
-      if (filePath) {
-        // Verify resolved path is within an allowed directory
-        const resolvedFile = path.resolve(filePath);
-        const allowedDirs = searchPaths.map(p => path.resolve(path.dirname(p)));
-        const isAllowed = allowedDirs.some(dir => resolvedFile.startsWith(dir + path.sep) || resolvedFile === dir);
-        if (!isAllowed) {
-          res.writeHead(403); res.end('Forbidden'); return;
-        }
-        const ext = path.extname(filePath);
-        const mimeTypes = { '.js': 'application/javascript', '.mjs': 'application/javascript', '.json': 'application/json', '.wasm': 'application/wasm' };
-        const contentType = mimeTypes[ext] || 'application/octet-stream';
-        res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=604800' });
-        res.end(fs.readFileSync(filePath));
-      } else {
-        res.writeHead(404); res.end('Not found: ' + libPath);
-      }
-      return;
-    }
-
-    // Serve 3D office modules from agent-bridge/office/
-    if (url.pathname.startsWith('/office/')) {
-      const officePath = url.pathname.replace('/office/', '');
-      if (officePath.includes('..') || officePath.includes('\\')) {
-        res.writeHead(400); res.end('Bad path'); return;
-      }
-      const filePath = path.join(__dirname, 'office', officePath);
-      const resolvedOffice = path.resolve(filePath);
-      const allowedOfficeDir = path.resolve(path.join(__dirname, 'office'));
-      if (!resolvedOffice.startsWith(allowedOfficeDir + path.sep) && resolvedOffice !== allowedOfficeDir) {
-        res.writeHead(403); res.end('Forbidden'); return;
-      }
-      if (fs.existsSync(filePath)) {
-        const ext = path.extname(filePath);
-        const mimeTypes = { '.js': 'application/javascript', '.json': 'application/json' };
-        const contentType = mimeTypes[ext] || 'application/octet-stream';
-        res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-cache' });
-        res.end(fs.readFileSync(filePath));
-      } else {
-        res.writeHead(404); res.end('Not found');
-      }
-      return;
-    }
-
-    // Serve mod assets from agent-bridge/mods/
-    if (url.pathname.startsWith('/mods/')) {
-      const modPath = url.pathname.replace('/mods/', '');
-      if (modPath.includes('..') || modPath.includes('\\')) {
-        res.writeHead(400); res.end('Bad path'); return;
-      }
-      const filePath = path.join(__dirname, 'mods', modPath);
-      const resolvedMod = path.resolve(filePath);
-      const allowedModDir = path.resolve(path.join(__dirname, 'mods'));
-      if (!resolvedMod.startsWith(allowedModDir + path.sep) && resolvedMod !== allowedModDir) {
-        res.writeHead(403); res.end('Forbidden'); return;
-      }
-      if (fs.existsSync(filePath)) {
-        const ext = path.extname(filePath);
-        const allowedMime = { '.json': 'application/json', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.png': 'image/png' };
-        const contentType = allowedMime[ext];
-        if (!contentType) {
-          res.writeHead(403); res.end('File type not allowed'); return;
-        }
-        res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=86400' });
-        res.end(fs.readFileSync(filePath));
-      } else {
-        res.writeHead(404); res.end('Not found');
-      }
-      return;
-    }
-
     // Serve dashboard HTML (always re-read for hot reload)
     if (url.pathname === '/' || url.pathname === '/index.html') {
       const html = fs.readFileSync(HTML_FILE, 'utf8');
       res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
         'X-Frame-Options': 'DENY',
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'no-referrer',
@@ -1962,7 +1836,7 @@ const server = http.createServer(async (req, res) => {
 
       // Build the respawn prompt
       const mode = config.conversation_mode || 'group';
-      let prompt = `You are resuming as agent "${agentName}" in a multi-agent team using Let Them Talk (MCP agent bridge).\n\n`;
+      let prompt = `You are resuming as agent "${agentName}" in a multi-agent team using Neohive (MCP agent bridge).\n\n`;
 
       if (profile.role) prompt += `**Your role:** ${profile.role}\n`;
       if (profile.bio) prompt += `**Your bio:** ${profile.bio}\n`;
@@ -2215,39 +2089,6 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(apiDiscover()));
     }
-    // --- World Builder: load/save world layout ---
-    else if (url.pathname === '/api/world-layout' && req.method === 'GET') {
-      const projectPath = url.searchParams.get('project') || null;
-      const worldFile = filePath('world-layout.json', projectPath);
-      if (fs.existsSync(worldFile)) {
-        try {
-          const data = JSON.parse(fs.readFileSync(worldFile, 'utf8'));
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(data));
-        } catch {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end('[]');
-        }
-      } else {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end('[]');
-      }
-    }
-    else if (url.pathname === '/api/world-save' && req.method === 'POST') {
-      const body = await parseBody(req);
-      const projectPath = url.searchParams.get('project') || null;
-      const worldFile = filePath('world-layout.json', projectPath);
-      if (!Array.isArray(body)) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Expected array of placements' }));
-        return;
-      }
-      // Limit to 1000 placements for safety
-      const placements = body.slice(0, 1000);
-      fs.writeFileSync(worldFile, JSON.stringify(placements, null, 2));
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, count: placements.length }));
-    }
     // --- v3.0 API endpoints ---
     else if (url.pathname === '/api/profiles' && req.method === 'GET') {
       const projectPath = url.searchParams.get('project') || null;
@@ -2268,24 +2109,6 @@ const server = http.createServer(async (req, res) => {
       }
       if (body.bio !== undefined) profiles[body.agent].bio = (body.bio || '').substring(0, 200);
       if (body.role !== undefined) profiles[body.agent].role = (body.role || '').substring(0, 30);
-      if (body.appearance !== undefined && typeof body.appearance === 'object') {
-        const validKeys = ['head_color', 'hair_style', 'hair_color', 'eye_style', 'mouth_style', 'shirt_color', 'pants_color', 'shoe_color', 'glasses', 'glasses_color', 'headwear', 'headwear_color', 'neckwear', 'neckwear_color'];
-        const enumValidation = {
-          hair_style: ['none', 'short', 'spiky', 'long', 'ponytail', 'bob'],
-          eye_style: ['dots', 'anime', 'glasses', 'sleepy'],
-          mouth_style: ['smile', 'neutral', 'open'],
-          glasses: ['none', 'round', 'square', 'sunglasses'],
-          headwear: ['none', 'beanie', 'cap', 'headphones', 'headband'],
-          neckwear: ['none', 'tie', 'bowtie', 'lanyard'],
-        };
-        const cleaned = {};
-        for (const [k, v] of Object.entries(body.appearance)) {
-          if (!validKeys.includes(k) || typeof v !== 'string' || v.length > 20) continue;
-          if (enumValidation[k] && !enumValidation[k].includes(v)) continue;
-          cleaned[k] = v;
-        }
-        profiles[body.agent].appearance = Object.assign(profiles[body.agent].appearance || {}, cleaned);
-      }
       profiles[body.agent].updated_at = new Date().toISOString();
       fs.writeFileSync(profilesFile, JSON.stringify(profiles, null, 2));
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -3024,261 +2847,6 @@ const server = http.createServer(async (req, res) => {
       heartbeat.unref();
       req.on('close', () => { clearInterval(heartbeat); sseClients.delete(res); });
     }
-    // --- Mod system API ---
-    else if (url.pathname === '/api/mods' && req.method === 'GET') {
-      const registryFile = path.join(__dirname, 'mods', 'registry.json');
-      const registry = fs.existsSync(registryFile) ? JSON.parse(fs.readFileSync(registryFile, 'utf8')) : { version: 1, mods: {} };
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(registry));
-    }
-    else if (url.pathname === '/api/mods' && req.method === 'POST') {
-      const body = await parseBody(req);
-      if (!body.manifest) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing manifest' }));
-        return;
-      }
-      const manifest = body.manifest;
-      // Validate manifest
-      const requiredFields = ['id', 'name', 'version', 'author', 'type', 'category'];
-      const validTypes = ['accessory', 'hairstyle', 'outfit', 'character', 'environment'];
-      const idPattern = /^[a-z0-9_-]{1,40}$/;
-      const errors = [];
-      for (const f of requiredFields) { if (!manifest[f]) errors.push('Missing: ' + f); }
-      if (manifest.id && !idPattern.test(manifest.id)) errors.push('Invalid id format');
-      if (manifest.type && !validTypes.includes(manifest.type)) errors.push('Invalid type');
-      if (!manifest.asset || !manifest.asset.format) errors.push('Missing asset definition');
-      if (manifest.asset && !['glb', 'gltf', 'procedural'].includes(manifest.asset.format)) errors.push('Invalid asset format');
-      if (errors.length > 0) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Validation failed', errors }));
-        return;
-      }
-      // Check for file if GLB mod (must be uploaded separately)
-      if (manifest.asset.format === 'glb' || manifest.asset.format === 'gltf') {
-        const modDir = path.join(__dirname, 'mods', manifest.id);
-        if (!fs.existsSync(modDir)) fs.mkdirSync(modDir, { recursive: true });
-        // If glbData is provided as base64, write it
-        if (body.glbData) {
-          const allowedExts = ['.glb', '.gltf', '.json', '.png'];
-          const assetFile = manifest.asset.file || (manifest.id + '.glb');
-          const ext = path.extname(assetFile);
-          if (!allowedExts.includes(ext)) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'File type not allowed: ' + ext }));
-            return;
-          }
-          // Size check
-          const typeLimits = { accessory: 200*1024, hairstyle: 300*1024, outfit: 500*1024, character: 1024*1024, environment: 2*1024*1024 };
-          const maxSize = typeLimits[manifest.type] || 200*1024;
-          const buf = Buffer.from(body.glbData, 'base64');
-          if (buf.length > maxSize) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'File too large: ' + (buf.length/1024).toFixed(0) + 'KB > ' + (maxSize/1024) + 'KB limit' }));
-            return;
-          }
-          // GLB magic bytes check
-          if (ext === '.glb' && buf.length >= 4) {
-            const magic = buf.readUInt32LE(0);
-            if (magic !== 0x46546C67) {
-              res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'Invalid GLB file (bad magic bytes)' }));
-              return;
-            }
-          }
-          const resolvedAsset = path.resolve(path.join(modDir, assetFile));
-          if (!resolvedAsset.startsWith(path.resolve(modDir) + path.sep)) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Invalid asset file path' }));
-            return;
-          }
-          fs.writeFileSync(resolvedAsset, buf);
-          manifest.asset.file = assetFile;
-        }
-        // Write manifest
-        fs.writeFileSync(path.join(modDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
-      }
-      // Add to registry
-      await withFileLock(path.join(__dirname, 'mods', 'registry.json'), () => {
-        const registryFile = path.join(__dirname, 'mods', 'registry.json');
-        const registry = fs.existsSync(registryFile) ? JSON.parse(fs.readFileSync(registryFile, 'utf8')) : { version: 1, mods: {} };
-        if (registry.mods[manifest.id]) {
-          res.writeHead(409, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Mod ID already exists: ' + manifest.id }));
-          return;
-        }
-        registry.mods[manifest.id] = manifest;
-        fs.writeFileSync(registryFile, JSON.stringify(registry, null, 2));
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, id: manifest.id }));
-      });
-    }
-    else if (url.pathname === '/api/mods' && req.method === 'DELETE') {
-      const body = await parseBody(req);
-      if (!body.id) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing mod id' }));
-        return;
-      }
-      const modId = body.id;
-      if (!/^[a-z0-9_-]{1,40}$/.test(modId)) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Invalid mod id' }));
-        return;
-      }
-      // Don't allow deleting built-in mods
-      if (modId.startsWith('builtin-')) {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Cannot delete built-in mods' }));
-        return;
-      }
-      await withFileLock(path.join(__dirname, 'mods', 'registry.json'), () => {
-        const registryFile = path.join(__dirname, 'mods', 'registry.json');
-        const registry = fs.existsSync(registryFile) ? JSON.parse(fs.readFileSync(registryFile, 'utf8')) : { version: 1, mods: {} };
-        if (!registry.mods[modId]) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Mod not found: ' + modId }));
-          return;
-        }
-        delete registry.mods[modId];
-        fs.writeFileSync(registryFile, JSON.stringify(registry, null, 2));
-        // Clean up mod directory if it exists
-        const modDir = path.join(__dirname, 'mods', modId);
-        if (fs.existsSync(modDir)) {
-          try { fs.rmSync(modDir, { recursive: true }); } catch (e) { /* best effort */ }
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true }));
-      });
-    }
-    // --- City API endpoints (AI City Phase 1) ---
-    else if (url.pathname === '/api/city/layout' && req.method === 'GET') {
-      const projectPath = url.searchParams.get('project') || null;
-      const cityMapFile = filePath('city-map.json', projectPath);
-      if (fs.existsSync(cityMapFile)) {
-        try {
-          const data = JSON.parse(fs.readFileSync(cityMapFile, 'utf8'));
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(data));
-        } catch {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ districts: {}, buildings: {} }));
-        }
-      } else {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ districts: {}, buildings: {} }));
-      }
-    }
-    else if (url.pathname === '/api/city/agents' && req.method === 'GET') {
-      const projectPath = url.searchParams.get('project') || null;
-      const agents = readJson(filePath('agents.json', projectPath));
-      const tasksRaw = readJson(filePath('tasks.json', projectPath));
-      const tasks = Array.isArray(tasksRaw) ? tasksRaw : (tasksRaw && tasksRaw.tasks ? tasksRaw.tasks : []);
-      const cityAgents = {};
-      for (const [name, info] of Object.entries(agents)) {
-        const alive = isPidAlive(info.pid, info.last_activity);
-        const lastActivity = info.last_activity || info.timestamp;
-        const idleSeconds = Math.floor((Date.now() - new Date(lastActivity).getTime()) / 1000);
-        const isListening = !!(info.listening_since && alive);
-        const activeTasks = tasks.filter(t => t.assignee === name && t.status !== 'done');
-        let behavior = 'dead';
-        let location = null;
-        if (alive) {
-          if (activeTasks.length > 0) { behavior = 'working'; location = 'office'; }
-          else if (isListening) { behavior = 'listening'; location = 'office'; }
-          else if (idleSeconds > 900) { behavior = 'off_duty'; location = 'residential'; }
-          else if (idleSeconds > 300) { behavior = 'off_duty'; location = 'cafe'; }
-          else { behavior = 'idle'; location = 'office'; }
-        }
-        cityAgents[name] = {
-          alive,
-          behavior,
-          location,
-          branch: info.branch || 'main',
-          idle_seconds: alive ? idleSeconds : null,
-          provider: info.provider || 'unknown',
-        };
-      }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(cityAgents));
-    }
-    // Phase 2: Agent activity radio feed for car HUD
-    else if (url.pathname === '/api/city/radio' && req.method === 'GET') {
-      const projectPath = url.searchParams.get('project') || null;
-      const limit = Math.min(parseInt(url.searchParams.get('limit') || '10', 10) || 10, 50);
-      const history = readJsonl(filePath('history.jsonl', projectPath));
-      const agents = readJson(filePath('agents.json', projectPath));
-      const feed = [];
-      // Recent messages (skip system messages, truncate content)
-      const recentMsgs = history.slice(-limit * 2).filter(m => m.from !== '__system__');
-      for (const m of recentMsgs.slice(-limit)) {
-        feed.push({
-          type: 'message',
-          from: m.from,
-          to: m.to === '__group__' ? 'everyone' : m.to,
-          preview: (m.content || '').slice(0, 120),
-          timestamp: m.timestamp,
-        });
-      }
-      // Agent status updates (who's alive, who just joined/died)
-      const statuses = [];
-      for (const [name, info] of Object.entries(agents)) {
-        const alive = isPidAlive(info.pid, info.last_activity);
-        statuses.push({ name, alive, last_activity: info.last_activity });
-      }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ feed, agents_status: statuses, total_messages: history.length }));
-    }
-    // Phase 3: Economy system
-    else if (url.pathname === '/api/city/economy' && req.method === 'GET') {
-      const projectPath = url.searchParams.get('project') || null;
-      const balances = getBalances(projectPath);
-      const ledger = getEconomyLedger(projectPath);
-      const recent = ledger.slice(-20);
-      const totalCredits = Object.values(balances).reduce((s, v) => s + v, 0);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ balances, recent_transactions: recent, total_credits: totalCredits, ledger_entries: ledger.length }));
-    }
-    else if (url.pathname === '/api/city/economy' && req.method === 'POST') {
-      const body = await parseBody(req);
-      const projectPath = url.searchParams.get('project') || null;
-      if (!body.agent || !body.amount || !body.reason) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing agent, amount, or reason' }));
-        return;
-      }
-      const amount = parseInt(body.amount, 10);
-      if (isNaN(amount)) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Invalid amount' }));
-        return;
-      }
-      // Prevent negative balances on spend
-      if (amount < 0) {
-        const balances = getBalances(projectPath);
-        const current = balances[body.agent] || 0;
-        if (current + amount < 0) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Insufficient credits', balance: current, requested: Math.abs(amount) }));
-          return;
-        }
-      }
-      appendEconomyEntry(projectPath, { agent: body.agent, amount, reason: body.reason, type: amount > 0 ? 'earn' : 'spend' });
-      const balances = getBalances(projectPath);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, balance: balances[body.agent] || 0 }));
-    }
-    // Phase 4: Game time endpoint
-    else if (url.pathname === '/api/city/time' && req.method === 'GET') {
-      const speed = parseInt(url.searchParams.get('speed') || '60', 10) || 60;
-      const now = Date.now();
-      const gameMinutes = Math.floor((now / 1000) * speed / 60) % 1440;
-      const hours = Math.floor(gameMinutes / 60);
-      const minutes = gameMinutes % 60;
-      const period = hours < 6 ? 'night' : hours < 8 ? 'dawn' : hours < 18 ? 'day' : hours < 20 ? 'dusk' : 'night';
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ hours, minutes, period, game_minutes: gameMinutes, speed, formatted: `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}` }));
-    }
     else {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not found' }));
@@ -3370,7 +2938,7 @@ server.on('error', (err) => {
     console.error(`\n  Error: Port ${PORT} is already in use.`);
     console.error(`  Another dashboard may be running. Try:`);
     console.error(`    - Kill it: npx kill-port ${PORT}`);
-    console.error(`    - Or use a different port: AGENT_BRIDGE_PORT=3001 npx let-them-talk dashboard\n`);
+    console.error(`    - Or use a different port: NEOHIVE_PORT=3001 npx neohive dashboard\n`);
     process.exit(1);
   }
   throw err;
@@ -3380,7 +2948,7 @@ server.listen(PORT, LAN_MODE ? '0.0.0.0' : '127.0.0.1', () => {
   const dataDir = resolveDataDir();
   const lanIP = getLanIP();
   console.log('');
-  console.log('  Let Them Talk - Agent Bridge Dashboard v3.5.1');
+  console.log('  Neohive - Neohive Dashboard v3.5.1');
   console.log('  ============================================');
   console.log('  Dashboard:  http://localhost:' + PORT);
   if (LAN_MODE && lanIP) {

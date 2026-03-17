@@ -1,11 +1,11 @@
-# Contributing to Let Them Talk
+# Contributing to Neohive
 
 Thanks for your interest in contributing! Here's how to get involved.
 
 ## Ways to Contribute
 
-- **Bug reports** — [Open an issue](https://github.com/Dekelelz/let-them-talk/issues/new?template=bug_report.md) with steps to reproduce
-- **Feature requests** — [Open an issue](https://github.com/Dekelelz/let-them-talk/issues/new?template=feature_request.md) describing the use case
+- **Bug reports** — [Open an issue](https://github.com/fakiho/neohive/issues/new?template=bug_report.md) with steps to reproduce
+- **Feature requests** — [Open an issue](https://github.com/fakiho/neohive/issues/new?template=feature_request.md) describing the use case
 - **Code** — Fork, branch, implement, open a PR
 - **Templates** — Create new agent team templates (drop a JSON in `templates/`)
 - **Plugins** — Build and share custom tools
@@ -14,8 +14,8 @@ Thanks for your interest in contributing! Here's how to get involved.
 ## Development Setup
 
 ```bash
-git clone https://github.com/Dekelelz/let-them-talk.git
-cd let-them-talk/agent-bridge
+git clone https://github.com/fakiho/neohive.git
+cd neohive/neohive
 npm install
 
 # Run the MCP server directly
@@ -32,7 +32,7 @@ node cli.js templates
 ## Project Structure
 
 ```
-agent-bridge/
+neohive/
   server.js         # MCP server (27 tools + plugins)
   dashboard.js      # HTTP server (REST API + SSE)
   dashboard.html    # Single-page dashboard frontend (inline CSS/JS)
@@ -46,7 +46,7 @@ agent-bridge/
 2. **Test your changes** — run the dashboard, test with two agents talking
 3. **Update docs** — if you add a tool or feature, update the README
 4. **Follow existing style** — CommonJS, no build step, no external frontend deps
-5. **No breaking changes** — backward compatibility with existing `.agent-bridge/` data
+5. **No breaking changes** — backward compatibility with existing `.neohive/` data
 6. **Append-only writes** for message files (no read-modify-write on JSONL)
 
 ## Code Style
@@ -79,11 +79,11 @@ Test with: `node cli.js init --template my-template`
 
 ## Adding a Plugin
 
-See the [Plugins section](README.md#plugins) in the README. Plugins go in `.agent-bridge/plugins/` and export `name`, `description`, `inputSchema`, and `handler`.
+See the [Plugins section](README.md#plugins) in the README. Plugins go in `.neohive/plugins/` and export `name`, `description`, `inputSchema`, and `handler`.
 
 ## Reporting Issues
 
-Use the [GitHub issue templates](https://github.com/Dekelelz/let-them-talk/issues/new/choose) for bug reports and feature requests.
+Use the [GitHub issue templates](https://github.com/fakiho/neohive/issues/new/choose) for bug reports and feature requests.
 
 ## License
 
