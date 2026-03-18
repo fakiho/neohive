@@ -2174,7 +2174,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true }));
     }
-    // ========== Plan Control API (v5.0 Autonomy Engine) ==========
+    // ========== Plan Control API (v6.0 Autonomy Engine) ==========
 
     else if (url.pathname === '/api/plan/status' && req.method === 'GET') {
       const projectPath = url.searchParams.get('project') || null;
@@ -2948,7 +2948,7 @@ server.listen(PORT, LAN_MODE ? '0.0.0.0' : '127.0.0.1', () => {
   const dataDir = resolveDataDir();
   const lanIP = getLanIP();
   console.log('');
-  console.log('  Neohive - Neohive Dashboard v3.5.1');
+  console.log('  Neohive Dashboard v6.0.0');
   console.log('  ============================================');
   console.log('  Dashboard:  http://localhost:' + PORT);
   if (LAN_MODE && lanIP) {

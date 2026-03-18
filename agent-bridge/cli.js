@@ -9,35 +9,29 @@ const command = process.argv[2];
 
 function printUsage() {
   console.log(`
-  Neohive — Neohive v5.3.0
-  MCP message broker for inter-agent communication
-  Supports: Claude Code, Gemini CLI, Codex CLI, Ollama
+  Neohive v6.0.0
+  The MCP collaboration layer for AI CLI tools.
 
   Usage:
-    npx neohive init              Auto-detect CLI and configure MCP
-    npx neohive init --claude     Configure for Claude Code
-    npx neohive init --gemini     Configure for Gemini CLI
-    npx neohive init --codex      Configure for Codex CLI
-    npx neohive init --all        Configure for all supported CLIs
-    npx neohive init --ollama    Setup Ollama agent bridge (local LLM)
-    npx neohive init --template T  Initialize with a team template (pair, team, review, debate, ollama)
-    npx neohive templates         List available agent templates
-    npx neohive dashboard         Launch the web dashboard (http://localhost:3000)
-    npx neohive dashboard --lan   Launch dashboard accessible on LAN (phone/tablet)
-    npx neohive reset             Clear all conversation data
-    npx neohive msg <agent> <text> Send a message to an agent
-    npx neohive status             Show active agents and message count
-    npx neohive uninstall          Remove neohive from all CLI configs
-    npx neohive help               Show this help message
+    npx neohive init                Auto-detect CLI and configure MCP
+    npx neohive init --claude       Configure for Claude Code only
+    npx neohive init --gemini       Configure for Gemini CLI only
+    npx neohive init --codex        Configure for Codex CLI only
+    npx neohive init --all          Configure for all detected CLIs
+    npx neohive init --ollama       Setup Ollama local LLM bridge
+    npx neohive init --template T   Initialize with a team template
+    npx neohive dashboard           Launch web dashboard (http://localhost:3000)
+    npx neohive dashboard --lan     Dashboard accessible on LAN
+    npx neohive status              Show active agents and tasks
+    npx neohive msg <agent> <text>  Send a message from CLI
+    npx neohive doctor              Diagnostic health check
+    npx neohive templates           List available team templates
+    npx neohive reset --force       Clear all data (auto-archives first)
+    npx neohive uninstall           Remove from all CLI configs
+    npx neohive help                Show this help
 
-  v5.0 — True Autonomy Engine (61 tools):
-    New tools: get_work, verify_and_advance, start_plan, retry_with_improvement
-    Proactive work loop: get_work → do work → verify_and_advance → get_work
-    Parallel workflow steps with dependency graphs (depends_on)
-    Auto-retry with skill accumulation (3 attempts then team escalation)
-    Watchdog engine: idle nudge, stuck detection, auto-reassign
-    100ms handoff cooldowns in autonomous mode
-    Plan dashboard: live progress, pause/stop/skip/reassign controls
+  Templates: pair, team, review, debate, managed
+  Docs: https://github.com/fakiho/neohive
   `);
 }
 
@@ -654,7 +648,7 @@ function cliStatus() {
   console.log('');
 }
 
-// v5.0: Diagnostic health check
+// v6.0: Diagnostic health check
 function cliDoctor() {
   console.log('');
   console.log('  \x1b[1mNeohive — Doctor\x1b[0m');

@@ -6097,7 +6097,7 @@ function toolToggleRule(ruleId) {
 // --- MCP Server setup ---
 
 const server = new Server(
-  { name: 'neohive', version: '5.3.0' },
+  { name: 'neohive', version: '6.0.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -7164,7 +7164,7 @@ async function main() {
   try {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error('Neohive MCP server v5.3.0 running (66 tools)');
+    console.error('Neohive MCP server v6.0.0 running (66 tools)');
   } catch (e) {
     console.error('ERROR: MCP server failed to start: ' + e.message);
     console.error('Fix: Run "npx neohive doctor" to check your setup.');
