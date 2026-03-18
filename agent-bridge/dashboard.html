@@ -33,7 +33,12 @@
     --purple: #a78bfa;
     --purple-dim: rgba(167, 139, 250, 0.12);
     --yellow: #eab308;
-    --sidebar-w: 280px;
+    --text-xs: 11px;
+    --text-sm: 12px;
+    --text-base: 13px;
+    --text-lg: 15px;
+    --text-xl: 20px;
+    --sidebar-w: 220px;
     --header-h: 56px;
     --glow: 0 0 24px rgba(245, 158, 11, 0.06);
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
@@ -246,7 +251,13 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transition: transform 0.25s ease;
+    transition: width 0.25s ease, min-width 0.25s ease, margin-left 0.25s ease;
+  }
+  .sidebar.collapsed {
+    width: 0;
+    min-width: 0;
+    border-right: none;
+    overflow: hidden;
   }
 
   .sidebar-scroll {
@@ -1489,41 +1500,95 @@
     30% { opacity: 1; transform: translateY(-3px); }
   }
 
-  /* ===== ICON RAIL NAVIGATION ===== */
-  .icon-rail {
-    width: 56px;
-    min-width: 56px;
+  /* ===== UNIFIED NAV SIDEBAR ===== */
+  .nav-sidebar {
+    width: 220px;
+    min-width: 220px;
     background: var(--surface);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    padding: 8px 0;
-    gap: 2px;
     overflow-y: auto;
+    overflow-x: hidden;
+    flex-shrink: 0;
+    transition: width 0.25s ease, min-width 0.25s ease;
+  }
+  .nav-sidebar.collapsed {
+    width: 56px;
+    min-width: 56px;
+  }
+  .nav-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 14px 10px;
     flex-shrink: 0;
   }
-  .rail-item {
+  .nav-sidebar-logo {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .nav-sidebar.collapsed .nav-sidebar-logo { display: none; }
+  .nav-sidebar-toggle {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 6px;
+    transition: all 0.15s;
+    font-family: inherit;
+    flex-shrink: 0;
+  }
+  .nav-sidebar-toggle:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+  .nav-sidebar.collapsed .nav-sidebar-header { justify-content: center; padding: 14px 8px 10px; }
+  .nav-sidebar.collapsed .nav-sidebar-toggle { margin: 0; }
+  .nav-sidebar-section { padding: 4px 8px; }
+  .nav-section-main { display: flex; flex-direction: column; gap: 2px; }
+  .nav-sidebar-divider { height: 1px; background: var(--border); margin: 8px 12px; flex-shrink: 0; }
+  .nav-sidebar-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    padding: 8px 12px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .nav-sidebar.collapsed .nav-sidebar-label { display: none; }
+  .nav-sidebar.collapsed .nav-sidebar-project { display: none; }
+  .nav-sidebar.collapsed .nav-sidebar-agents #agents-list { display: none; }
+  .nav-sidebar-spacer { flex: 1; }
+  .nav-sidebar-agents { overflow-y: auto; min-height: 0; }
+
+  /* Nav items */
+  .nav-item {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 2px;
-    padding: 8px 4px;
+    gap: 10px;
+    padding: 9px 12px;
     cursor: pointer;
     border-radius: 8px;
     border-left: 3px solid transparent;
-    width: 52px;
     transition: all 0.15s;
-    text-decoration: none;
-    position: relative;
+    white-space: nowrap;
+    overflow: hidden;
+    margin: 0 2px;
   }
-  .rail-item:hover { background: rgba(255,255,255,0.04); }
-  .rail-item.active { border-left-color: var(--accent); background: var(--accent-dim); }
-  .rail-item .rail-icon { font-size: 18px; line-height: 1; }
-  .rail-item .rail-label { font-size: 9px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.02em; }
-  .rail-item.active .rail-label { color: var(--accent); }
-  .rail-item:hover .rail-label { color: var(--text); }
-  .rail-spacer { flex: 1; }
+  .nav-item:hover { background: rgba(255,255,255,0.04); }
+  .nav-item.active { border-left-color: var(--accent); background: var(--accent-dim); }
+  .nav-item .nav-icon { line-height: 0; flex-shrink: 0; width: 20px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+  .nav-item.active .nav-icon { color: var(--accent); }
+  .nav-item:hover .nav-icon { color: var(--text); }
+  .nav-item .nav-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+  .nav-item.active .nav-text { color: var(--accent); }
+  .nav-item:hover .nav-text { color: var(--text); }
+  .nav-sidebar.collapsed .nav-item { justify-content: center; padding: 10px 4px; margin: 0; }
+  .nav-sidebar.collapsed .nav-item .nav-text { display: none; }
 
   /* ===== AGENT STATUS BAR ===== */
   .agent-bar {
@@ -1638,8 +1703,51 @@
   @keyframes toast-in { from { opacity: 0; transform: translateY(12px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
   @keyframes toast-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(12px); } }
 
-  /* Hide old view-tabs (replaced by icon rail) */
+  /* Hide old view-tabs (replaced by nav sidebar) */
   .view-tabs { display: none !important; }
+
+  /* ===== SETTINGS MENU ===== */
+  .header-settings-btn {
+    background: none; border: none; color: var(--text-muted); cursor: pointer;
+    padding: 6px; border-radius: 6px; display: flex; align-items: center;
+    transition: all 0.15s;
+  }
+  .header-settings-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+  .settings-item {
+    padding: 8px 14px; font-size: 12px; color: var(--text-dim); cursor: pointer;
+    display: flex; align-items: center; gap: 8px; transition: background 0.1s;
+  }
+  .settings-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+  .settings-item.settings-danger { color: var(--red); }
+  .settings-item.settings-danger:hover { background: var(--red-dim); }
+
+  /* ===== UPDATED METRIC CARDS ===== */
+  .metric-card {
+    position: relative;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; display: flex; flex-direction: column; gap: 4px;
+    overflow: hidden;
+  }
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    border-radius: 3px 0 0 3px;
+  }
+  .metric-card .metric-label { font-size: var(--text-sm); color: var(--text-muted); font-weight: 500; }
+  .metric-card .metric-value { font-size: 24px; font-weight: 800; color: var(--text); line-height: 1.2; }
+  .metric-card .metric-sub { font-size: var(--text-xs); color: var(--text-muted); }
+
+  /* ===== BUTTON SYSTEM ===== */
+  .btn-primary { background: var(--gradient-accent); color: #fff; border: none; }
+  .btn-secondary { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--text); }
+  .btn-ghost { background: none; border: none; color: var(--text-muted); }
+  .btn-ghost:hover { color: var(--text); }
+  .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red-dim); }
+  .btn-danger:hover { background: var(--red-dim); }
 
   /* ===== LAN BADGE ===== */
   .lan-badge {
@@ -2330,6 +2438,17 @@
 
     /* Scroll-to-bottom button: bigger touch target */
     .scroll-bottom { width: 44px; height: 44px; font-size: 18px; bottom: 80px; }
+
+    /* Icon rail: hide on mobile */
+    .nav-sidebar { display: none; }
+
+    /* Agent bar: smaller on mobile */
+    .agent-bar { padding: 4px 8px; min-height: 30px; }
+    .agent-pill { font-size: 10px; padding: 2px 8px 2px 5px; }
+
+    /* Overview: single column on mobile */
+    .overview-grid { grid-template-columns: 1fr; }
+    .overview-metrics { grid-template-columns: 1fr; }
   }
 
   /* ===== MOBILE: PHONE (480px) ===== */
@@ -3455,50 +3574,37 @@
 <div class="header">
   <div class="header-left">
     <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
-    <svg width="28" height="28" viewBox="0 0 32 32" style="margin-right:6px;vertical-align:middle"><defs><linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#f97316"/></linearGradient></defs><path d="M16 2L27.6 9v14L16 30 4.4 23V9z" fill="url(#hg)" opacity="0.9"/><path d="M16 7L23 11v8l-7 4-7-4v-8z" fill="#09090b" opacity="0.6"/><circle cx="16" cy="15.5" r="3" fill="#fff" opacity="0.9"/></svg>
+    <svg width="24" height="24" viewBox="0 0 32 32" style="margin-right:6px;vertical-align:middle"><defs><linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#f97316"/></linearGradient></defs><path d="M16 2L27.6 9v14L16 30 4.4 23V9z" fill="url(#hg)" opacity="0.9"/><path d="M16 7L23 11v8l-7 4-7-4v-8z" fill="#09090b" opacity="0.6"/><circle cx="16" cy="15.5" r="3" fill="#fff" opacity="0.9"/></svg>
     <div class="logo">Neohive</div>
-    <span id="mobile-project-name" style="display:none;font-size:11px;color:var(--orange);font-weight:600;background:var(--orange-dim);padding:2px 8px;border-radius:10px" onclick="toggleSidebar()"></span>
-    <select id="mobile-project-select" class="mobile-project-select" onchange="mobileSelectProject(this.value)" style="display:none">
-      <option value="">Select project...</option>
-    </select>
-    <div class="header-stats">
-      <div class="h-stat"><span class="h-stat-val" id="stat-messages">0</span> msgs</div>
-      <div class="h-stat"><span class="h-stat-val" id="stat-agents">0</span> agents</div>
-      <div class="h-stat"><span class="h-stat-val" id="stat-sleeping" style="color:var(--orange)">0</span> sleeping</div>
-      <div class="h-stat"><span class="h-stat-val" id="stat-threads">0</span> threads</div>
-      <div class="h-stat"><span class="h-stat-val" id="stat-clis">0</span> CLI types</div>
-      <div class="h-stat" id="managed-badge" style="display:none;background:var(--accent-dim);border-radius:8px;padding:2px 8px">
-        <span class="h-stat-val" style="color:var(--accent);font-size:11px" id="managed-phase">MANAGED</span>
-        <span style="color:#8b949e;font-size:10px" id="managed-floor-info"></span>
-      </div>
-    </div>
+    <!-- Hidden stat elements for JS compatibility -->
+    <span id="stat-messages" style="display:none">0</span>
+    <span id="stat-agents" style="display:none">0</span>
+    <span id="stat-sleeping" style="display:none">0</span>
+    <span id="stat-threads" style="display:none">0</span>
+    <span id="stat-clis" style="display:none">0</span>
+    <div id="managed-badge" style="display:none"><span id="managed-phase"></span><span id="managed-floor-info"></span></div>
   </div>
   <div class="header-actions">
+    <span class="conn-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 2s infinite" title="Connected"></span>
+    <!-- Settings dropdown -->
     <div style="position:relative;display:inline-block">
-      <button class="notif-toggle" id="notif-bell" onclick="toggleNotifPanel()" title="Notifications" style="position:relative">&#x1f514;<span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:8px;font-weight:700;min-width:14px;height:14px;border-radius:7px;text-align:center;line-height:14px;padding:0 3px">0</span></button>
-      <div id="notif-panel" style="display:none;position:absolute;right:0;top:100%;margin-top:8px;background:var(--surface);border:1px solid var(--border-light);border-radius:12px;width:320px;max-height:400px;overflow-y:auto;z-index:300;box-shadow:var(--shadow-lg)">
-        <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:13px;display:flex;justify-content:space-between;align-items:center">Notifications <button onclick="clearNotifications()" style="background:none;border:none;color:var(--text-muted);font-size:11px;cursor:pointer">Clear</button></div>
-        <div id="notif-list" style="padding:4px 0"><div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px">No notifications yet</div></div>
+      <button class="header-settings-btn" onclick="toggleSettingsMenu()" title="Settings">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"/></svg>
+      </button>
+      <div id="settings-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:6px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;z-index:300;min-width:180px;box-shadow:var(--shadow-lg)">
+        <div class="settings-item" onclick="toggleTheme();toggleSettingsMenu()"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="4"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/></svg> Theme</div>
+        <div class="settings-item" onclick="toggleSound();toggleSettingsMenu()"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 6h3l4-3v10l-4-3H2z"/></svg> Sound</div>
+        <div class="settings-item" onclick="toggleNotifications();toggleSettingsMenu()"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6a4 4 0 018 0v3l2 2H2l2-2z"/><path d="M6 13a2 2 0 004 0"/></svg> Notifications</div>
+        <div style="height:1px;background:var(--border);margin:4px 8px"></div>
+        <div class="settings-item" onclick="exportShareableHTML();toggleSettingsMenu()">Export HTML</div>
+        <div class="settings-item" onclick="exportJSON();toggleSettingsMenu()">Export JSON</div>
+        <div class="settings-item" onclick="enterReplay();toggleSettingsMenu()">Replay</div>
+        <div class="settings-item" onclick="openPhoneAccess();toggleSettingsMenu()">Phone Access</div>
+        <div class="settings-item" onclick="switchView('docs');toggleSettingsMenu()">Help &amp; Docs</div>
+        <div style="height:1px;background:var(--border);margin:4px 8px"></div>
+        <div class="settings-item settings-danger" onclick="doReset();toggleSettingsMenu()">Reset Data</div>
       </div>
     </div>
-    <button class="notif-toggle" id="notif-toggle" onclick="toggleNotifications()" title="Browser notifications">&#x1f514;</button>
-    <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light theme">&#x1f319;</button>
-    <span onclick="toggleShortcutsOverlay()" style="font-size:10px;color:var(--text-muted);cursor:pointer;padding:0 4px" title="Keyboard shortcuts">? keys</span>
-    <button class="sound-toggle" id="sound-toggle" onclick="toggleSound()" title="Toggle notification sound">&#x1f508;</button>
-    <button class="phone-btn" id="phone-btn" onclick="openPhoneAccess()" title="Phone access (LAN)">&#x1F4F1;</button>
-    <button class="theme-toggle" onclick="switchView('docs')" title="Help &amp; Docs" style="font-size:14px">&#x2753;</button>
-    <div class="connection"><span class="conn-dot"></span><span id="conn-label">Live</span><span class="conn-detail" id="conn-detail"></span></div>
-    <button class="btn" onclick="enterReplay()" id="replay-header-btn" title="Replay conversation">Replay</button>
-    <div style="position:relative;display:inline-block">
-      <button class="btn btn-primary" onclick="toggleExportMenu()">Export &#x25BE;</button>
-      <div id="export-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;overflow:hidden;z-index:200;min-width:160px">
-        <div style="padding:7px 12px;font-size:12px;cursor:pointer;transition:background 0.1s" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background=''" onclick="exportShareableHTML();toggleExportMenu()">HTML (shareable)</div>
-        <div style="padding:7px 12px;font-size:12px;cursor:pointer;transition:background 0.1s" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background=''" onclick="exportConversation();toggleExportMenu()">Markdown (.md)</div>
-        <div style="padding:7px 12px;font-size:12px;cursor:pointer;transition:background 0.1s" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background=''" onclick="exportJSON();toggleExportMenu()">JSON (.json)</div>
-        <div style="padding:7px 12px;font-size:12px;cursor:pointer;transition:background 0.1s;border-top:1px solid var(--border)" onmouseover="this.style.background='var(--surface-3)'" onmouseout="this.style.background=''" onclick="exportReplay();toggleExportMenu()">Animated Replay (.html)</div>
-      </div>
-    </div>
-    <button class="btn btn-danger" onclick="doReset()">Reset</button>
   </div>
 </div>
 
@@ -3533,113 +3639,53 @@
 
 <!-- APP LAYOUT -->
 <div class="app">
-  <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
-
-  <!-- SIDEBAR -->
-  <div class="sidebar" id="sidebar">
-    <!-- Project Switcher -->
-    <div class="project-switcher">
-      <select class="project-select" id="project-select" onchange="switchProject()">
+  <!-- UNIFIED NAV SIDEBAR -->
+  <nav class="nav-sidebar expanded" id="nav-sidebar">
+    <div class="nav-sidebar-header">
+      <span class="nav-sidebar-logo"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="var(--accent)" stroke-width="1.5" style="vertical-align:-2px;margin-right:6px"><path d="M8 1.5L14 5v6l-6 3.5L2 11V5z"/></svg>Neohive</span>
+      <button class="nav-sidebar-toggle" onclick="toggleNavSidebar()" title="Collapse sidebar">&#x25C0;</button>
+    </div>
+    <!-- Navigation -->
+    <div class="nav-sidebar-section nav-section-main">
+      <div class="nav-item active" data-view="overview" onclick="switchView('overview')">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5L14 5v6l-6 3.5L2 11V5z"/></svg></span><span class="nav-text">Overview</span>
+      </div>
+      <div class="nav-item" data-view="messages" onclick="switchView('messages')">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h12v8H6l-3 2.5V11H2z" stroke-linejoin="round"/></svg></span><span class="nav-text">Messages</span>
+      </div>
+      <div class="nav-item" data-view="tasks" onclick="switchView('tasks')">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8l2 2 4-4"/></svg></span><span class="nav-text">Tasks</span>
+      </div>
+      <div class="nav-item" data-view="workflows" onclick="switchView('workflows')">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8a6 6 0 0111 0M14 8a6 6 0 01-11 0"/><path d="M13 5v3h-3M3 11v-3h3"/></svg></span><span class="nav-text">Workflows</span>
+      </div>
+      <div class="nav-item" data-view="stats" onclick="switchView('stats')">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14V8M8 14V3M13 14V6"/></svg></span><span class="nav-text">Analytics</span>
+      </div>
+    </div>
+    <div class="nav-sidebar-divider"></div>
+    <!-- Agents -->
+    <div class="nav-sidebar-section nav-sidebar-agents">
+      <div class="nav-sidebar-label">AGENTS</div>
+      <div id="agents-list"></div>
+    </div>
+    <div class="nav-sidebar-divider"></div>
+    <!-- Project -->
+    <div class="nav-sidebar-section nav-sidebar-project">
+      <div class="nav-sidebar-label">PROJECT</div>
+      <select class="project-select" id="project-select" onchange="switchProject()" style="width:100%;margin-top:4px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px">
         <option value="">Default (local)</option>
       </select>
-      <input class="project-input" id="project-path-input" placeholder="Enter project folder path..."
-        onkeydown="if(event.key==='Enter'){addProject();}">
-      <div class="project-actions">
-        <button class="btn btn-primary" onclick="showAddProject()">+ Add</button>
-        <button class="btn" onclick="discoverProjects()">Discover</button>
-        <button class="btn btn-danger" onclick="removeProject()" id="remove-project-btn" style="display:none">Remove</button>
+    </div>
+    <div class="nav-sidebar-spacer"></div>
+    <!-- Bottom nav -->
+    <div class="nav-sidebar-section">
+      <div class="nav-item" data-view="plan" onclick="switchView('plan')">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l10 6-10 6z"/></svg></span><span class="nav-text">Plan</span>
       </div>
-      <div id="discover-results" style="display:none"></div>
-    </div>
-    <div class="sidebar-scroll">
-      <!-- Agents Section -->
-      <div class="sidebar-section">
-        <div class="sidebar-title">
-          <span>Agents</span>
-          <span class="alert-count" id="alert-count" style="display:none">0</span>
-        </div>
-        <div class="agent-filter-bar" id="agent-filter-bar">
-          <input type="text" id="agent-search" placeholder="Search..." oninput="filterAgents()">
-          <select id="agent-role-filter" onchange="filterAgents()">
-            <option value="">Role</option>
-            <option value="lead">Lead</option>
-            <option value="backend">Backend</option>
-            <option value="frontend">Frontend</option>
-            <option value="quality">Quality</option>
-            <option value="monitor">Monitor</option>
-            <option value="advisor">Advisor</option>
-          </select>
-          <select id="agent-status-filter" onchange="filterAgents()">
-            <option value="">Status</option>
-            <option value="active">Online</option>
-            <option value="dead">Offline</option>
-            <option value="sleeping">Idle</option>
-          </select>
-        </div>
-        <div id="agents-list"></div>
+      <div class="nav-item" data-view="rules" onclick="switchView('rules')">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"/></svg></span><span class="nav-text">Rules</span>
       </div>
-
-      <!-- Agent Stats Section -->
-      <div class="sidebar-section">
-        <div class="sidebar-title"><span>Stats</span></div>
-        <div id="agent-stats"></div>
-      </div>
-
-      <!-- Activity Heatmap -->
-      <div class="sidebar-section">
-        <div class="sidebar-title"><span>Activity</span></div>
-        <div id="activity-heatmap"></div>
-      </div>
-
-      <!-- Bookmarks Section -->
-      <div class="sidebar-section">
-        <div class="sidebar-title">
-          <span>Bookmarks</span>
-          <span class="alert-count" id="bookmark-count" style="display:none">0</span>
-        </div>
-        <div id="bookmarks-list"></div>
-        <div class="filter-clear" id="bookmark-clear" onclick="clearBookmarkFilter()" style="display:none">&#x2715; Clear filter</div>
-      </div>
-
-      <!-- Threads Section -->
-      <div class="sidebar-section">
-        <div class="sidebar-title"><span>Threads</span></div>
-        <div id="threads-list"></div>
-        <div class="filter-clear" id="filter-clear" onclick="clearThreadFilter()">&#x2715; Clear filter</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ICON RAIL -->
-  <nav class="icon-rail" id="icon-rail">
-    <div class="rail-item active" data-view="overview" onclick="switchView('overview')">
-      <span class="rail-icon">&#x2B21;</span>
-      <span class="rail-label">Home</span>
-    </div>
-    <div class="rail-item" data-view="messages" onclick="switchView('messages')">
-      <span class="rail-icon">&#x1F4AC;</span>
-      <span class="rail-label">Messages</span>
-    </div>
-    <div class="rail-item" data-view="tasks" onclick="switchView('tasks')">
-      <span class="rail-icon">&#x2705;</span>
-      <span class="rail-label">Tasks</span>
-    </div>
-    <div class="rail-item" data-view="workflows" onclick="switchView('workflows')">
-      <span class="rail-icon">&#x1F504;</span>
-      <span class="rail-label">Workflows</span>
-    </div>
-    <div class="rail-item" data-view="stats" onclick="switchView('stats')">
-      <span class="rail-icon">&#x1F4CA;</span>
-      <span class="rail-label">Analytics</span>
-    </div>
-    <div class="rail-spacer"></div>
-    <div class="rail-item" data-view="plan" onclick="switchView('plan')">
-      <span class="rail-icon">&#x1F680;</span>
-      <span class="rail-label">Plan</span>
-    </div>
-    <div class="rail-item" data-view="rules" onclick="switchView('rules')">
-      <span class="rail-icon">&#x2699;</span>
-      <span class="rail-label">Rules</span>
     </div>
   </nav>
 
@@ -4129,6 +4175,9 @@ function lttFetch(url, opts) {
 
 var activeThread = null;
 var activeChannel = null; // null = all channels
+// Safe element getter — returns dummy div for removed elements to prevent null crashes
+function $id(id) { return document.getElementById(id) || document.createElement('div'); }
+
 var activeProject = ''; // empty = default/local
 var cachedHistory = [];
 var cachedAgents = {};
@@ -4374,6 +4423,7 @@ var agentFilterStatus = '';
 var collapsedRoleGroups = {};
 
 function filterAgents() {
+  if (!document.getElementById('agent-search')) return;
   agentFilterSearch = (document.getElementById('agent-search').value || '').toLowerCase();
   agentFilterRole = document.getElementById('agent-role-filter').value;
   agentFilterStatus = document.getElementById('agent-status-filter').value;
@@ -4549,6 +4599,7 @@ function renderAgents(agents) {
 
   // Update alert badge
   var alertEl = document.getElementById('alert-count');
+  if (!alertEl) return;
   if (sleepCount > 0) {
     alertEl.textContent = sleepCount;
     alertEl.style.display = '';
@@ -4731,6 +4782,7 @@ function doInject() {
 // ==================== THREADS ====================
 
 function renderThreads(messages) {
+  if (!document.getElementById('threads-list')) return;
   var threads = {};
   for (var i = 0; i < messages.length; i++) {
     var m = messages[i];
@@ -5135,13 +5187,17 @@ function renderChannelBar(messages) {
 }
 
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
-  document.getElementById('sidebar-overlay').classList.toggle('open');
+  var sb = document.getElementById('sidebar') || document.getElementById('nav-sidebar');
+  if (sb) sb.classList.toggle('open');
+  var ov = document.getElementById('sidebar-overlay');
+  if (ov) ov.classList.toggle('open');
 }
 
 function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebar-overlay').classList.remove('open');
+  var sb = document.getElementById('sidebar') || document.getElementById('nav-sidebar');
+  if (sb) sb.classList.remove('open');
+  var ov = document.getElementById('sidebar-overlay');
+  if (ov) ov.classList.remove('open');
 }
 
 var newWhileScrolled = 0;
@@ -5544,11 +5600,11 @@ function applyTheme(theme) {
   currentTheme = theme;
   if (theme === 'light') {
     document.documentElement.setAttribute('data-theme', 'light');
-    document.getElementById('theme-toggle').innerHTML = '&#x2600;&#xfe0f;';
   } else {
     document.documentElement.removeAttribute('data-theme');
-    document.getElementById('theme-toggle').innerHTML = '&#x1f319;';
   }
+  var themeBtn = document.getElementById('theme-toggle');
+  if (themeBtn) themeBtn.innerHTML = theme === 'light' ? '&#x2600;&#xfe0f;' : '&#x1f319;';
   localStorage.setItem('ltt-theme', theme);
 }
 
@@ -5667,6 +5723,7 @@ function copyText(el) {
 // ==================== AGENT STATS ====================
 
 function renderAgentStats() {
+  if (!document.getElementById('agent-stats')) return;
   var el = document.getElementById('agent-stats');
   if (!cachedHistory.length) {
     el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:4px;">No data yet</div>';
@@ -5738,6 +5795,7 @@ function fetchActivity() {
 
 function renderActivityHeatmap(data) {
   var el = document.getElementById('activity-heatmap');
+  if (!el) return;
   if (!data.agents || !Object.keys(data.agents).length) {
     el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:4px;">No activity data</div>';
     return;
@@ -5795,6 +5853,7 @@ function toggleBookmark(msgId) {
 }
 
 function renderBookmarksSidebar() {
+  if (!document.getElementById('bookmarks-list')) return;
   var el = document.getElementById('bookmarks-list');
   var countEl = document.getElementById('bookmark-count');
   var clearEl = document.getElementById('bookmark-clear');
@@ -5877,10 +5936,10 @@ var activeView = 'overview';
 
 function switchView(view) {
   activeView = view;
-  // Update icon rail active state
-  var railItems = document.querySelectorAll('.rail-item');
-  for (var i = 0; i < railItems.length; i++) {
-    railItems[i].classList.toggle('active', railItems[i].getAttribute('data-view') === view);
+  // Update nav sidebar active state
+  var navItems = document.querySelectorAll('.nav-item');
+  for (var i = 0; i < navItems.length; i++) {
+    navItems[i].classList.toggle('active', navItems[i].getAttribute('data-view') === view);
   }
   // Update old tab active states (kept for compatibility)
   var tabIds = ['messages','tasks','workspaces','workflows','plan','launch','rules','stats','docs'];
@@ -5902,6 +5961,8 @@ function switchView(view) {
   document.getElementById('docs-area').classList.toggle('visible', view === 'docs');
   document.getElementById('search-bar').style.display = view === 'messages' ? 'flex' : 'none';
   document.getElementById('channel-filter-bar').style.display = view === 'messages' && activeChannel !== undefined ? '' : 'none';
+  var composeBar = document.querySelector('.msg-input-bar');
+  if (composeBar) composeBar.style.display = (view === 'messages') ? 'flex' : 'none';
   if (view === 'overview') renderOverview();
   if (view === 'messages') renderChannelBar(cachedHistory);
   if (view === 'tasks') fetchTasks();
@@ -6370,13 +6431,13 @@ function deleteRule(ruleId) {
 // ==================== EXPORT MENU ====================
 
 function toggleExportMenu() {
-  var menu = document.getElementById('export-menu');
+  var menu = document.getElementById('export-menu') || document.createElement('div');
   menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
 }
 
 // Close menu on outside click
 document.addEventListener('click', function(e) {
-  var menu = document.getElementById('export-menu');
+  var menu = document.getElementById('export-menu') || document.createElement('div');
   if (menu && menu.style.display !== 'none' && !e.target.closest('#export-menu') && !e.target.closest('.btn-primary')) {
     menu.style.display = 'none';
   }
@@ -7251,6 +7312,7 @@ var notifData = [];
 var notifSeen = 0;
 
 function toggleNotifPanel() {
+  if (!document.getElementById('notif-panel')) return;
   var panel = document.getElementById('notif-panel');
   var isOpen = panel.style.display !== 'none';
   panel.style.display = isOpen ? 'none' : 'block';
@@ -7287,6 +7349,7 @@ function renderNotifList() {
 }
 
 function updateNotifBadge() {
+  if (!document.getElementById('notif-badge')) return;
   var badge = document.getElementById('notif-badge');
   var unseen = notifData.length - notifSeen;
   if (unseen > 0) { badge.textContent = unseen; badge.style.display = 'block'; }
@@ -7294,6 +7357,7 @@ function updateNotifBadge() {
 }
 
 function clearNotifications() {
+  if (!document.getElementById('notif-list')) return;
   notifData = [];
   notifSeen = 0;
   renderNotifList();
@@ -7303,7 +7367,7 @@ function clearNotifications() {
 // Close notif panel on outside click
 document.addEventListener('click', function(e) {
   var panel = document.getElementById('notif-panel');
-  var bell = document.getElementById('notif-bell');
+  var bell = document.getElementById('notif-bell') || document.createElement('div');
   if (panel && panel.style.display !== 'none' && !panel.contains(e.target) && e.target !== bell && !bell.contains(e.target)) {
     panel.style.display = 'none';
   }
@@ -7438,13 +7502,13 @@ function poll() {
       sendBrowserNotification(cachedHistory[cachedHistory.length - 1]);
     }
 
-    document.getElementById('stat-messages').textContent = status.messageCount;
-    document.getElementById('stat-agents').textContent = status.agentCount;
-    document.getElementById('stat-sleeping').textContent = status.sleepingCount || 0;
-    document.getElementById('stat-threads').textContent = status.threadCount;
+    $id('stat-messages').textContent = status.messageCount;
+    $id('stat-agents').textContent = status.agentCount;
+    $id('stat-sleeping').textContent = status.sleepingCount || 0;
+    $id('stat-threads').textContent = status.threadCount;
 
     // Managed mode badge
-    var managedBadge = document.getElementById('managed-badge');
+    var managedBadge = $id('managed-badge');
     if (status.conversation_mode === 'managed' && status.managed) {
       managedBadge.style.display = '';
       var phaseLabel = String(status.managed.phase || 'discussion').toUpperCase();
@@ -7452,8 +7516,8 @@ function poll() {
         status.managed.floor === 'directed' ? (status.managed.turn_current || '?') + ' speaking' :
         status.managed.floor === 'open' ? 'round-robin' :
         status.managed.floor === 'execution' ? 'working' : '';
-      document.getElementById('managed-phase').textContent = phaseLabel;
-      document.getElementById('managed-floor-info').textContent = floorInfo ? ' | ' + floorInfo : '';
+      $id('managed-phase').textContent = phaseLabel;
+      $id('managed-floor-info').textContent = floorInfo ? ' | ' + floorInfo : '';
     } else {
       managedBadge.style.display = 'none';
     }
@@ -7465,7 +7529,7 @@ function poll() {
       var ag = cachedAgents[agentKeys[p]];
       if (ag.alive && ag.provider && ag.provider !== 'unknown') providers[ag.provider] = true;
     }
-    document.getElementById('stat-clis').textContent = Object.keys(providers).length;
+    $id('stat-clis').textContent = Object.keys(providers).length;
 
     // Update tab title with message count
     document.title = status.messageCount > 0
@@ -7492,7 +7556,7 @@ function poll() {
     checkPlanCompletion();
   }).catch(function(e) {
     console.error('Poll failed:', e);
-    document.getElementById('conn-detail').textContent = ' ERR: ' + e.message;
+    var _cd = document.getElementById('conn-detail'); if(_cd) _cd.textContent = ' ERR: ' + e.message;
   });
 }
 
@@ -7541,7 +7605,7 @@ function loadProjects() {
 
     if (activeProject) {
       sel.value = activeProject;
-      document.getElementById('remove-project-btn').style.display = '';
+      $id('remove-project-btn').style.display = '';
       // Update header project indicator for mobile
       var indicator = document.getElementById('mobile-project-name');
       if (indicator) {
@@ -7552,7 +7616,7 @@ function loadProjects() {
     }
 
     // Show/hide remove button
-    document.getElementById('remove-project-btn').style.display = activeProject ? '' : 'none';
+    $id('remove-project-btn').style.display = activeProject ? '' : 'none';
     // Sync mobile header project select
     syncMobileProjectSelect();
   }).catch(function(e) {
@@ -7563,7 +7627,7 @@ function loadProjects() {
 function switchProject() {
   activeProject = document.getElementById('project-select').value;
   lastMessageCount = 0;
-  document.getElementById('remove-project-btn').style.display = activeProject ? '' : 'none';
+  $id('remove-project-btn').style.display = activeProject ? '' : 'none';
   syncMobileProjectSelect();
   loadConversationList();
   poll();
@@ -7575,7 +7639,7 @@ function mobileSelectProject(val) {
   lastMessageCount = 0;
   // Sync sidebar select
   document.getElementById('project-select').value = val;
-  document.getElementById('remove-project-btn').style.display = val ? '' : 'none';
+  $id('remove-project-btn').style.display = val ? '' : 'none';
   poll();
 }
 
@@ -7596,6 +7660,7 @@ function syncMobileProjectSelect() {
 
 function showAddProject() {
   var input = document.getElementById('project-path-input');
+  if (!input) return;
   if (input.classList.contains('visible')) {
     input.classList.remove('visible');
   } else {
@@ -7606,6 +7671,7 @@ function showAddProject() {
 
 function addProject() {
   var input = document.getElementById('project-path-input');
+  if (!input) return;
   var projectPath = input.value.trim();
   if (!projectPath) return;
 
@@ -7632,6 +7698,7 @@ function addProject() {
 
 function discoverProjects() {
   var resultsEl = document.getElementById('discover-results');
+  if (!resultsEl) return;
   resultsEl.style.display = 'block';
   resultsEl.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:4px;">Scanning...</div>';
 
@@ -7667,7 +7734,7 @@ function addDiscovered(projectPath, name) {
     body: JSON.stringify({ path: projectPath, name: name })
   }).then(function(r) { return r.json(); }).then(function(res) {
     if (res.success) {
-      document.getElementById('discover-results').style.display = 'none';
+      var _dr = document.getElementById('discover-results'); if (_dr) _dr.style.display = 'none';
       loadProjects();
     }
   }).catch(function() {});
@@ -7698,7 +7765,7 @@ var audioCtx = null;
 
 function toggleSound() {
   soundEnabled = !soundEnabled;
-  var btn = document.getElementById('sound-toggle');
+  var btn = document.getElementById('sound-toggle') || document.createElement('div');
   if (soundEnabled) {
     btn.classList.add('active');
     btn.innerHTML = '&#x1f50a;';
@@ -7755,14 +7822,6 @@ var pollLatency = 0;
 
 function updateConnectionInfo(latency) {
   pollLatency = latency;
-  var detail = document.getElementById('conn-detail');
-  if (latency < 100) {
-    detail.textContent = ' ' + latency + 'ms';
-  } else if (latency < 500) {
-    detail.textContent = ' ' + latency + 'ms';
-  } else {
-    detail.textContent = ' slow';
-  }
 }
 
 // ==================== REPLAY MODE ====================
@@ -7783,7 +7842,7 @@ function enterReplay() {
   document.getElementById('search-bar').style.display = 'none';
   document.getElementById('replay-slider').max = cachedHistory.length;
   document.getElementById('replay-slider').value = 0;
-  document.getElementById('replay-header-btn').style.display = 'none';
+  var _rh = document.getElementById('replay-header-btn'); if(_rh) _rh.style.display = 'none';
   renderReplayMessages();
 }
 
@@ -7794,7 +7853,7 @@ function exitReplay() {
   document.getElementById('replay-bar').classList.remove('visible');
   document.getElementById('view-tabs').style.display = '';
   document.getElementById('search-bar').style.display = '';
-  document.getElementById('replay-header-btn').style.display = '';
+  var _rh = document.getElementById('replay-header-btn'); if(_rh) _rh.style.display = '';
   lastMessageCount = 0;
   renderMessages(cachedHistory);
 }
@@ -7911,7 +7970,7 @@ function toggleNotifications() {
 }
 
 function updateNotifBtn() {
-  var btn = document.getElementById('notif-toggle');
+  var btn = document.getElementById('notif-toggle') || document.createElement('div');
   if (notifEnabled) {
     btn.classList.add('active');
     btn.innerHTML = '&#x1f514;';
@@ -7951,7 +8010,7 @@ function fetchLanState() {
 
 function updateLanUI() {
   // Update phone button indicator
-  var phoneBtn = document.getElementById('phone-btn');
+  var phoneBtn = document.getElementById('phone-btn') || document.createElement('div');
   phoneBtn.classList.toggle('lan-active', lanState.lan_mode);
 
   // Update LAN badge in connection area
@@ -8628,6 +8687,48 @@ function copyLaunchPrompt() {
   });
 }
 
+// ==================== SETTINGS MENU ====================
+
+function toggleSettingsMenu() {
+  var menu = document.getElementById('settings-menu');
+  if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+// Close settings when clicking outside
+document.addEventListener('click', function(e) {
+  var menu = document.getElementById('settings-menu');
+  if (menu && menu.style.display === 'block' && !e.target.closest('.header-settings-btn') && !e.target.closest('#settings-menu')) {
+    menu.style.display = 'none';
+  }
+});
+
+// ==================== SIDEBAR TOGGLE ====================
+
+function toggleNavSidebar() {
+  var sidebar = document.getElementById('nav-sidebar');
+  if (!sidebar) return;
+  var isExpanded = sidebar.classList.contains('expanded');
+  sidebar.classList.toggle('expanded');
+  sidebar.classList.toggle('collapsed');
+  var btn = sidebar.querySelector('.nav-sidebar-toggle');
+  if (btn) btn.innerHTML = isExpanded ? '&#x25B6;' : '&#x25C0;';
+  try { localStorage.setItem('neohive-sidebar-collapsed', isExpanded ? '1' : '0'); } catch(e) {}
+}
+// Restore sidebar state from localStorage
+(function() {
+  try {
+    var saved = localStorage.getItem('neohive-sidebar-collapsed');
+    if (saved === '1') {
+      var sidebar = document.getElementById('nav-sidebar');
+      if (sidebar) {
+        sidebar.classList.remove('expanded');
+        sidebar.classList.add('collapsed');
+        var btn = sidebar.querySelector('.nav-sidebar-toggle');
+        if (btn) btn.innerHTML = '&#x25B6;';
+      }
+    }
+  } catch(e) {}
+})();
+
 // ==================== AGENT STATUS BAR ====================
 
 var prevAgentBarState = {};
@@ -8701,68 +8802,78 @@ function renderOverview() {
     html += '<div class="metric-card"><div class="metric-label">Tasks</div><div class="metric-value">' + taskPct + '%</div><div class="metric-sub">' + done + ' done, ' + inProgress + ' active, ' + pending + ' pending</div></div>';
     html += '</div>';
 
-    // Grid: agents + workflows
-    html += '<div class="overview-grid">';
-
-    // Active agents panel
-    html += '<div class="overview-panel"><h3>Active Agents <a onclick="switchView(\'messages\')">View messages &rarr;</a></h3>';
-    var agentEntries = Object.entries(agents);
-    if (agentEntries.length === 0) {
-      html += '<div style="color:var(--text-muted);font-size:12px">No agents registered</div>';
-    } else {
-      for (var i = 0; i < agentEntries.length; i++) {
-        var aName = agentEntries[i][0];
-        var aInfo = agentEntries[i][1];
-        if (aName === '__system__') continue;
-        var dotColor = aInfo.alive ? (aInfo.is_listening ? 'var(--accent)' : 'var(--green)') : 'var(--text-muted)';
-        var statusText = !aInfo.alive ? 'offline' : aInfo.is_listening ? 'listening' : aInfo.status || 'active';
-        html += '<div class="overview-agent-row"><span class="overview-agent-dot" style="background:' + dotColor + '"></span><span class="overview-agent-name">' + aName + '</span><span class="overview-agent-status">' + statusText + ' &middot; ' + (aInfo.provider || '?') + '</span></div>';
-      }
-    }
-    html += '</div>';
-
-    // Workflow progress panel
-    html += '<div class="overview-panel"><h3>Workflows <a onclick="switchView(\'workflows\')">View all &rarr;</a></h3>';
+    // Check if everything is empty
+    var agentEntries = Object.entries(agents).filter(function(e) { return e[0] !== '__system__'; });
     var activeWfs = workflows.filter(function(w) { return w.status === 'active'; });
-    if (activeWfs.length === 0) {
-      html += '<div style="color:var(--text-muted);font-size:12px">No active workflows</div>';
+    var hasAgents = agentEntries.length > 0;
+    var hasMessages = history.length > 0;
+    var hasWorkflows = activeWfs.length > 0;
+    var hasTasks = tasks.length > 0;
+
+    if (!hasAgents && !hasMessages && !hasWorkflows && !hasTasks) {
+      // Unified empty state
+      html += '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center">';
+      html += '<svg viewBox="0 0 16 16" width="48" height="48" fill="none" stroke="var(--text-muted)" stroke-width="1" style="opacity:0.3;margin-bottom:16px"><path d="M8 1.5L14 5v6l-6 3.5L2 11V5z"/></svg>';
+      html += '<div style="font-size:var(--text-lg);font-weight:600;color:var(--text);margin-bottom:8px">No agents online</div>';
+      html += '<div style="font-size:var(--text-sm);color:var(--text-muted);max-width:360px;line-height:1.6">Open a CLI terminal and register an agent to get started.</div>';
+      html += '<button class="overview-launch-btn" onclick="switchView(\'launch\')" style="margin-top:16px">Launch Agents</button>';
+      html += '</div>';
     } else {
-      for (var w = 0; w < activeWfs.length; w++) {
-        var wf = activeWfs[w];
-        var wfDone = wf.steps ? wf.steps.filter(function(s) { return s.status === 'done'; }).length : 0;
-        var wfTotal = wf.steps ? wf.steps.length : 1;
-        var wfPct = Math.round((wfDone / wfTotal) * 100);
-        html += '<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">' + (wf.name || 'Workflow') + ' <span style="color:var(--text-muted);font-weight:400">' + wfPct + '%</span></div>';
-        html += '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + wfPct + '%;background:var(--gradient-accent);border-radius:3px;transition:width 0.3s"></div></div></div>';
+      // Grid: only show sections with data
+      html += '<div class="overview-grid">';
+
+      // Active agents panel
+      if (hasAgents) {
+        html += '<div class="overview-panel"><h3>Active Agents <a onclick="switchView(\'messages\')">View messages &rarr;</a></h3>';
+        for (var i = 0; i < agentEntries.length; i++) {
+          var aName = agentEntries[i][0];
+          var aInfo = agentEntries[i][1];
+          var dotColor = aInfo.alive ? (aInfo.is_listening ? 'var(--accent)' : 'var(--green)') : 'var(--text-muted)';
+          var statusText = !aInfo.alive ? 'offline' : aInfo.is_listening ? 'listening' : aInfo.status || 'active';
+          html += '<div class="overview-agent-row"><span class="overview-agent-dot" style="background:' + dotColor + '"></span><span class="overview-agent-name">' + aName + '</span><span class="overview-agent-status">' + statusText + ' &middot; ' + (aInfo.provider || '?') + '</span></div>';
+        }
+        html += '</div>';
       }
-    }
-    html += '</div>';
 
-    // Recent messages (full width)
-    html += '<div class="overview-panel overview-full-width"><h3>Recent Messages <a onclick="switchView(\'messages\')">View all &rarr;</a></h3>';
-    if (history.length === 0) {
-      html += '<div style="color:var(--text-muted);font-size:12px">No messages yet</div>';
-    } else {
-      for (var m = 0; m < history.length; m++) {
-        var msg = history[m];
-        var time = new Date(msg.timestamp);
-        var timeStr = time.getHours() + ':' + String(time.getMinutes()).padStart(2, '0');
-        html += '<div class="overview-msg-row"><span class="overview-msg-from">' + (msg.from || '?') + '</span><span class="overview-msg-text">' + ((msg.content || '').substring(0, 120)) + '</span><span class="overview-msg-time">' + timeStr + '</span></div>';
+      // Workflow progress panel
+      if (hasWorkflows) {
+        html += '<div class="overview-panel"><h3>Workflows <a onclick="switchView(\'workflows\')">View all &rarr;</a></h3>';
+        for (var w = 0; w < activeWfs.length; w++) {
+          var wf = activeWfs[w];
+          var wfDone = wf.steps ? wf.steps.filter(function(s) { return s.status === 'done'; }).length : 0;
+          var wfTotal = wf.steps ? wf.steps.length : 1;
+          var wfPct = Math.round((wfDone / wfTotal) * 100);
+          html += '<div style="margin-bottom:10px"><div style="font-size:var(--text-sm);font-weight:600;color:var(--text);margin-bottom:4px">' + (wf.name || 'Workflow') + ' <span style="color:var(--text-muted);font-weight:400">' + wfPct + '%</span></div>';
+          html += '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + wfPct + '%;background:var(--gradient-accent);border-radius:3px;transition:width 0.3s"></div></div></div>';
+        }
+        html += '</div>';
       }
-    }
-    html += '</div>';
 
-    // Task summary + Launch button (full width)
-    html += '<div class="overview-panel overview-full-width"><h3>Task Summary <a onclick="switchView(\'tasks\')">View all &rarr;</a></h3>';
-    html += '<div class="overview-task-summary">';
-    html += '<span class="overview-task-badge pending">' + pending + ' pending</span>';
-    html += '<span class="overview-task-badge active">' + inProgress + ' active</span>';
-    html += '<span class="overview-task-badge done">' + done + ' done</span>';
-    html += '</div>';
-    html += '<button class="overview-launch-btn" onclick="switchView(\'launch\')">&#x1F680; Launch Agents</button>';
-    html += '</div>';
+      // Recent messages
+      if (hasMessages) {
+        html += '<div class="overview-panel overview-full-width"><h3>Recent Messages <a onclick="switchView(\'messages\')">View all &rarr;</a></h3>';
+        for (var m = 0; m < history.length; m++) {
+          var msg = history[m];
+          var time = new Date(msg.timestamp);
+          var timeStr = time.getHours() + ':' + String(time.getMinutes()).padStart(2, '0');
+          html += '<div class="overview-msg-row"><span class="overview-msg-from">' + (msg.from || '?') + '</span><span class="overview-msg-text">' + ((msg.content || '').substring(0, 120)) + '</span><span class="overview-msg-time">' + timeStr + '</span></div>';
+        }
+        html += '</div>';
+      }
 
-    html += '</div>'; // close overview-grid
+      // Task summary (only if tasks exist)
+      if (hasTasks) {
+        html += '<div class="overview-panel overview-full-width"><h3>Tasks <a onclick="switchView(\'tasks\')">View all &rarr;</a></h3>';
+        html += '<div class="overview-task-summary">';
+        html += '<span class="overview-task-badge pending">' + pending + ' pending</span>';
+        html += '<span class="overview-task-badge active">' + inProgress + ' active</span>';
+        html += '<span class="overview-task-badge done">' + done + ' done</span>';
+        html += '</div>';
+        html += '</div>';
+      }
+
+      html += '</div>'; // close overview-grid
+    } // close else
     area.innerHTML = html;
   }).catch(function(e) {
     area.innerHTML = '<div style="padding:20px;color:var(--text-muted)">Failed to load overview: ' + e.message + '</div>';
@@ -8798,19 +8909,16 @@ var ssePollFallback = null;
 
 function setConnStatus(status) {
   var dot = document.querySelector('.conn-dot');
-  var label = document.getElementById('conn-label');
+  if (!dot) return;
   if (status === 'live') {
     dot.style.background = 'var(--green)';
     dot.style.animation = 'pulse 2s infinite';
-    label.textContent = 'Live (SSE)';
   } else if (status === 'reconnecting') {
     dot.style.background = 'var(--yellow, #f0ad4e)';
     dot.style.animation = 'pulse 0.8s infinite';
-    label.textContent = 'Reconnecting...';
   } else if (status === 'poll') {
     dot.style.background = 'var(--green)';
     dot.style.animation = 'pulse 2s infinite';
-    label.textContent = 'Live (poll)';
   }
 }
 

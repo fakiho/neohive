@@ -62,7 +62,8 @@ function autoCompact() {
     const messages = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
 
     const agents = getAgents();
-    const aliveAgentNames = Object.keys(agents).filter(n => isPidAlive(agents[n].pid, agents[n].last_activity));
+    const allAgentNames = Object.keys(agents);
+    const retentionMs = (parseInt(process.env.NEOHIVE_RETENTION_HOURS) || 24) * 3600000;
     const allConsumed = new Set();
     const perAgentConsumed = {};
     if (fs.existsSync(DATA_DIR)) {
@@ -80,7 +81,9 @@ function autoCompact() {
 
     const active = messages.filter(m => {
       if (m.to === '__group__') {
-        return !aliveAgentNames.every(n => n === m.from || (perAgentConsumed[n] && perAgentConsumed[n].has(m.id)));
+        const msgTime = new Date(m.timestamp).getTime();
+        if (msgTime < Date.now() - retentionMs) return false;
+        return !allAgentNames.every(n => n === m.from || (perAgentConsumed[n] && perAgentConsumed[n].has(m.id)));
       }
       if (!allConsumed.has(m.id)) return true;
       return false;

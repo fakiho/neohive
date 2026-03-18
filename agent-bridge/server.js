@@ -94,7 +94,7 @@ function lockConfigFile() {
   while (Date.now() - start < maxWait) {
     try { fs.writeFileSync(CONFIG_LOCK, String(process.pid), { flag: 'wx' }); return true; }
     catch { /* lock exists, wait */ }
-    const wait = Date.now(); while (Date.now() - wait < 50) {} // busy-wait 50ms
+    try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50); } catch {} // non-blocking 50ms wait
   }
   try { fs.unlinkSync(CONFIG_LOCK); } catch {}
   try { fs.writeFileSync(CONFIG_LOCK, String(process.pid), { flag: 'wx' }); return true; } catch {}
@@ -242,7 +242,7 @@ function migrateIfNeeded() {
     if (fs.existsSync(DATA_VERSION_FILE)) {
       dataVersion = parseInt(fs.readFileSync(DATA_VERSION_FILE, 'utf8').trim()) || 0;
     }
-  } catch {}
+  } catch (e) { log.debug("data version read failed:", e.message); }
   if (dataVersion >= CURRENT_DATA_VERSION) return;
 
   // Run migrations in order
@@ -307,7 +307,7 @@ function trimConsumedIds(agentName, ids) {
     for (const id of ids) {
       if (!currentIds.has(id)) ids.delete(id);
     }
-  } catch {}
+  } catch (e) { log.debug("consumed ID trim failed:", e.message); }
 }
 
 function readJsonl(file) {
@@ -368,7 +368,7 @@ function lockAgentsFile() {
   while (Date.now() - start < maxWait) {
     try { fs.writeFileSync(AGENTS_LOCK, String(process.pid), { flag: 'wx' }); return true; }
     catch { /* lock exists, wait with exponential backoff */ }
-    const wait = Date.now(); while (Date.now() - wait < backoff) {}
+    try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, backoff); } catch {}
     backoff = Math.min(backoff * 2, 500);
   }
   // Force-break stale lock after timeout
@@ -386,7 +386,7 @@ function withFileLock(filePath, fn) {
   while (Date.now() - start < maxWait) {
     try { fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' }); break; }
     catch { /* lock exists, wait with exponential backoff */ }
-    const wait = Date.now(); while (Date.now() - wait < backoff) {}
+    try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, backoff); } catch {}
     backoff = Math.min(backoff * 2, 500);
     if (Date.now() - start >= maxWait) {
       // Force-break stale lock — only if holding PID is dead
@@ -395,7 +395,7 @@ function withFileLock(filePath, fn) {
         if (lockPid && lockPid !== process.pid) {
           try { process.kill(lockPid, 0); /* PID alive — skip, don't corrupt */ return null; } catch { /* PID dead — safe to break */ }
         }
-      } catch {}
+      } catch (e) { log.debug("lock PID check failed:", e.message); }
       try { fs.unlinkSync(lockPath); } catch {}
       try { fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' }); } catch { return fn(); }
       break;
@@ -419,10 +419,10 @@ function getAgents() {
             const hb = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
             if (hb.last_activity) agents[name].last_activity = hb.last_activity;
             if (hb.pid) agents[name].pid = hb.pid;
-          } catch {}
+          } catch (e) { log.debug("heartbeat merge failed:", e.message); }
         }
       }
-    } catch {}
+    } catch (e) { log.debug("heartbeat scan failed:", e.message); }
     return agents;
   }, 1500);
 }
@@ -447,7 +447,7 @@ function touchHeartbeat(name) {
       last_activity: new Date().toISOString(),
       pid: process.pid,
     }));
-  } catch {}
+  } catch (e) { log.debug("heartbeat write failed:", e.message); }
 }
 
 
@@ -616,9 +616,11 @@ function autoCompact() {
 
     const messages = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
 
-    // Collect consumed IDs — for __group__ messages, only check ALIVE agents
+    // Collect consumed IDs — for __group__ messages, check ALL registered agents (alive + dead)
+    // This prevents message loss when agents reconnect after a crash
     const agents = getAgents();
-    const aliveAgentNames = Object.keys(agents).filter(n => isPidAlive(agents[n].pid, agents[n].last_activity));
+    const allAgentNames = Object.keys(agents);
+    const retentionMs = (parseInt(process.env.NEOHIVE_RETENTION_HOURS) || 24) * 3600000;
     const allConsumed = new Set();
     const perAgentConsumed = {};
     if (fs.existsSync(DATA_DIR)) {
@@ -629,18 +631,21 @@ function autoCompact() {
             const ids = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
             perAgentConsumed[agentName] = new Set(ids);
             ids.forEach(id => allConsumed.add(id));
-          } catch {}
+          } catch (e) { log.debug("consumed ID read failed:", e.message); }
         }
       }
     }
 
     // Keep messages that are NOT fully consumed
-    // For __group__ messages: consumed when ALL ALIVE agents have consumed it (dead agents don't block)
+    // For __group__ messages: consumed when ALL registered agents consumed OR message exceeds retention period
     // For direct messages: consumed when the recipient has consumed it
     const active = messages.filter(m => {
       if (m.to === '__group__') {
-        // __group__: check if all alive agents (except sender) have consumed
-        return !aliveAgentNames.every(n => n === m.from || (perAgentConsumed[n] && perAgentConsumed[n].has(m.id)));
+        // Time-based retention: messages older than retention period can be compacted regardless
+        const msgTime = new Date(m.timestamp).getTime();
+        if (msgTime < Date.now() - retentionMs) return false;
+        // Check ALL registered agents (alive + dead) to prevent loss on reconnect
+        return !allAgentNames.every(n => n === m.from || (perAgentConsumed[n] && perAgentConsumed[n].has(m.id)));
       }
       // Direct: standard check
       if (!allConsumed.has(m.id)) return true;
@@ -1143,7 +1148,7 @@ function buildGuide(level = 'standard') {
       try {
         const content = fs.readFileSync(guideFile, 'utf8').trim();
         if (content) projectRules = content.split(/\r?\n/).filter(l => l.trim() && !l.startsWith('#')).map(l => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
-      } catch {}
+      } catch (e) { log.debug("guide file read failed:", e.message); }
     }
 
     // Inject dashboard-managed rules into guide
@@ -1247,7 +1252,7 @@ function buildGuide(level = 'standard') {
     try {
       const content = fs.readFileSync(guideFile, 'utf8').trim();
       if (content) projectRules = content.split(/\r?\n/).filter(l => l.trim() && !l.startsWith('#')).map(l => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
-    } catch {}
+    } catch (e) { log.debug("guide file read failed:", e.message); }
   }
 
   // Inject dashboard-managed rules into guide
@@ -1311,12 +1316,9 @@ function toolRegister(name, provider = null) {
       return { error: `Agent "${name}" is already registered by a live process. Choose a different name.` };
     }
 
-    // If name was previously registered by a dead process, verify token to prevent impersonation
-    if (agents[name] && agents[name].token && !isPidAlive(agents[name].pid, agents[name].last_activity)) {
-      // Dead agent — only allow re-registration from the same process (same token)
-      if (registeredToken && registeredToken !== agents[name].token) {
-        return { error: `Agent "${name}" was previously registered by another process. Choose a different name.` };
-      }
+    // Dead agent name reclaim — allow any process to take a dead agent's name
+    if (agents[name] && !isPidAlive(agents[name].pid, agents[name].last_activity)) {
+      log.info(`Agent "${name}" reclaimed (previous PID ${agents[name].pid} is dead)`);
     }
 
     // Prevent re-registration under a different name from the same process
@@ -1392,7 +1394,7 @@ function toolRegister(name, provider = null) {
       triggerStandupIfDue();
       // Watchdog: nudge idle agents, reassign stuck work (autonomous mode only)
       watchdogCheck();
-    } catch {}
+    } catch (e) { log.warn("heartbeat loop error:", e.message); }
   }, 10000 + heartbeatJitter);
   heartbeatInterval.unref(); // Don't prevent process exit
 
@@ -1456,7 +1458,7 @@ function toolRegister(name, provider = null) {
           // Clean up snapshot after loading
           try { fs.unlinkSync(recoveryFile); } catch {}
         }
-      } catch {}
+      } catch (e) { log.debug("recovery file parse failed:", e.message); }
     }
 
     // Notify other agents
@@ -1470,7 +1472,7 @@ function toolRegister(name, provider = null) {
         if (roleAssignments && roleAssignments[name]) {
           result.your_role = roleAssignments[name];
         }
-      } catch {}
+      } catch (e) { log.debug("role assignment failed:", e.message); }
     }
 
     return result;
@@ -1502,7 +1504,7 @@ function setListening(isListening) {
         saveAgents(agents);
       }
     } finally { unlockAgentsFile(); }
-  } catch {}
+  } catch (e) { log.debug("register workspace status failed:", e.message); }
 }
 
 function toolListAgents() {
@@ -1534,7 +1536,7 @@ function toolListAgents() {
     try {
       const ws = getWorkspace(name);
       if (ws._status) result[name].current_status = ws._status;
-    } catch {}
+    } catch (e) { log.debug("workspace status read failed:", e.message); }
   }
   return { agents: result };
 }
@@ -1829,7 +1831,7 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
           result._decision_hint = `Related decision exists: "${overlap.decision}" (topic: ${overlap.topic || 'general'}). Check get_decisions() before re-debating.`;
         }
       }
-    } catch {}
+    } catch (e) { log.debug("listen channel watcher setup failed:", e.message); }
   }
   if (_cooldownApplied > 0) result.cooldown_applied_ms = _cooldownApplied;
   if (channel) result.channel = channel;
@@ -2599,7 +2601,7 @@ async function toolListenGroup() {
             });
             chWatcher.on('error', () => {});
             channelWatchers.push(chWatcher);
-          } catch {}
+          } catch (e) { log.debug("channel watcher setup failed:", e.message); }
         }
       }
     } catch {
@@ -3086,7 +3088,7 @@ function toolUpdateTask(taskId, status, notes = null) {
     } else if (status === 'blocked') {
       saveWorkspace(registeredName, Object.assign(getWorkspace(registeredName), { _status: `BLOCKED on: ${task.title}`, _status_since: new Date().toISOString() }));
     }
-  } catch {}
+  } catch (e) { log.warn("verify_and_advance failed:", e.message); }
 
   // Task-channel auto-join: when claiming a task that has a channel, auto-join it
   if (status === 'in_progress' && task.channel) {
@@ -3203,7 +3205,7 @@ function toolSearchMessages(query, from = null, limit = 20) {
         allMessages = allMessages.concat(chMsgs);
       }
     }
-  } catch {}
+  } catch (e) { log.warn("get_work search failed:", e.message); }
   // Sort by timestamp descending for newest-first results
   allMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
@@ -3233,7 +3235,7 @@ function toolSearchMessages(query, from = null, limit = 20) {
           allMessages = allMessages.concat(readJsonl(chFile));
         }
       }
-    } catch {}
+    } catch (e) { log.debug("get_work detail failed:", e.message); }
     allMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     for (let i = 0; i < allMessages.length && results.length < limit; i++) {
       const m = allMessages[i];
@@ -4160,7 +4162,7 @@ function watchdogCheck() {
         sendSystemMessage(worker, `[REBALANCE] You've been moved from ${quietTeam.name} to ${busyTeam.name} — they have ${busyTeam.pendingTasks} pending tasks and need help.`);
       }
     }
-  } catch {}
+  } catch (e) { log.warn("escalate blocked tasks failed:", e.message); }
 
   // UE5 safety: detect stale UE5 locks (ue5-editor, ue5-compile)
   try {
@@ -4185,7 +4187,7 @@ function watchdogCheck() {
       }
     }
     if (locksChanged) writeJsonFile(LOCKS_FILE, locks);
-  } catch {}
+  } catch (e) { log.warn("stale lock cleanup failed:", e.message); }
 
   if (agentsChanged) saveAgents(agents);
   if (workflowsChanged) saveWorkflows(workflows);
@@ -4407,7 +4409,7 @@ function generateCompletionReport(workflow) {
         totalRetries += relevant.length;
         for (const r of relevant) retryDetails.push({ agent: name, task: r.task, attempt: r.attempt });
       }
-    } catch {}
+    } catch (e) { log.debug("auto-plan retry scan failed:", e.message); }
   }
 
   const report = {
@@ -4585,7 +4587,7 @@ function autoAssignRoles() {
         }
       }
       saveChannelsData(channels);
-    } catch {}
+    } catch (e) { log.warn("stale channel cleanup failed:", e.message); }
   }
 
   return assignments;
@@ -4941,7 +4943,7 @@ function toolForkConversation(fromMessageId, branchName) {
         saveAgents(agents);
       }
     } finally { unlockAgentsFile(); }
-  } catch {}
+  } catch (e) { log.warn("auto role rebalance failed:", e.message); }
 
   return { success: true, branch: branchName, forked_from: branches[branchName].forked_from, messages_copied: forkedHistory.length };
 }
@@ -4965,7 +4967,7 @@ function toolSwitchBranch(branchName) {
         saveAgents(agents);
       }
     } finally { unlockAgentsFile(); }
-  } catch {}
+  } catch (e) { log.warn("quality lead failover failed:", e.message); }
 
   return { success: true, branch: branchName, message: `Switched to branch "${branchName}". Read offset reset.` };
 }
@@ -5166,7 +5168,7 @@ function escalateBlockedTasks() {
       }
     }
     if (changed) saveTasks(tasks);
-  } catch {}
+  } catch (e) { log.warn("watchdog check failed:", e.message); }
 }
 
 // Stand-up meetings: periodic team check-ins triggered by heartbeat
@@ -5207,7 +5209,7 @@ function triggerStandupIfDue() {
     summary += ' Each agent: report what you did, what\'s blocked, what\'s next. Then call listen_group().';
 
     broadcastSystemMessage(summary, registeredName);
-  } catch {}
+  } catch (e) { log.warn("standup trigger failed:", e.message); }
 }
 
 // Auto-recovery: snapshot dead agent state before cleanup
@@ -5249,7 +5251,7 @@ function snapshotDeadAgents(agents) {
           kb_entries_written: kbKeysWritten,
         });
       }
-    } catch {}
+    } catch (e) { log.warn("dead agent snapshot failed:", e.message); }
 
     // Quality Lead instant failover: if dead agent was Quality Lead, promote replacement immediately
     try {
@@ -5301,7 +5303,7 @@ function snapshotDeadAgents(agents) {
           broadcastSystemMessage(`[MONITOR FAILOVER] ${name} (Monitor) went offline. ${newMonitor} has been auto-promoted.`, newMonitor);
         }
       }
-    } catch {}
+    } catch (e) { log.warn("monitor failover failed:", e.message); }
   }
 }
 
@@ -7064,7 +7066,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             result._nudge = `${pending.length} messages waiting${addressedHint}: ${senderSummary}. Latest: "${preview}...". Call listen_group().`;
           }
         }
-      } catch {}
+      } catch (e) { log.debug("nudge detection failed:", e.message); }
     }
 
     // Global hook: reputation tracking

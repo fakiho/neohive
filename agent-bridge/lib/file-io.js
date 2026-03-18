@@ -107,7 +107,7 @@ function lockAgentsFile() {
   while (Date.now() - start < maxWait) {
     try { fs.writeFileSync(AGENTS_LOCK, String(process.pid), { flag: 'wx' }); return true; }
     catch {}
-    const wait = Date.now(); while (Date.now() - wait < backoff) {}
+    try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, backoff); } catch {}
     backoff = Math.min(backoff * 2, 500);
   }
   try { fs.unlinkSync(AGENTS_LOCK); } catch {}
@@ -123,7 +123,7 @@ function lockConfigFile() {
   while (Date.now() - start < maxWait) {
     try { fs.writeFileSync(CONFIG_LOCK, String(process.pid), { flag: 'wx' }); return true; }
     catch {}
-    const wait = Date.now(); while (Date.now() - wait < 50) {}
+    try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50); } catch {}
   }
   try { fs.unlinkSync(CONFIG_LOCK); } catch {}
   try { fs.writeFileSync(CONFIG_LOCK, String(process.pid), { flag: 'wx' }); return true; } catch {}
@@ -139,7 +139,7 @@ function withFileLock(filePath, fn) {
   while (Date.now() - start < maxWait) {
     try { fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' }); break; }
     catch {}
-    const wait = Date.now(); while (Date.now() - wait < backoff) {}
+    try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, backoff); } catch {}
     backoff = Math.min(backoff * 2, 500);
     if (Date.now() - start >= maxWait) {
       try {
