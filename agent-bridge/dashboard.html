@@ -1489,28 +1489,157 @@
     30% { opacity: 1; transform: translateY(-3px); }
   }
 
-  /* ===== VIEW TABS ===== */
-  .view-tabs {
+  /* ===== ICON RAIL NAVIGATION ===== */
+  .icon-rail {
+    width: 56px;
+    min-width: 56px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 0;
+    gap: 2px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .rail-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 4px;
+    cursor: pointer;
+    border-radius: 8px;
+    border-left: 3px solid transparent;
+    width: 52px;
+    transition: all 0.15s;
+    text-decoration: none;
+    position: relative;
+  }
+  .rail-item:hover { background: rgba(255,255,255,0.04); }
+  .rail-item.active { border-left-color: var(--accent); background: var(--accent-dim); }
+  .rail-item .rail-icon { font-size: 18px; line-height: 1; }
+  .rail-item .rail-label { font-size: 9px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.02em; }
+  .rail-item.active .rail-label { color: var(--accent); }
+  .rail-item:hover .rail-label { color: var(--text); }
+  .rail-spacer { flex: 1; }
+
+  /* ===== AGENT STATUS BAR ===== */
+  .agent-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    flex-shrink: 0;
+    min-height: 36px;
   }
-
-  .view-tab {
-    flex: 1;
-    text-align: center;
-    padding: 10px 8px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-muted);
+  .agent-bar::-webkit-scrollbar { height: 0; }
+  .agent-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px 3px 6px;
+    border-radius: 20px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    white-space: nowrap;
     cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: all 0.2s ease;
-    letter-spacing: 0.02em;
+    transition: all 0.15s;
+    flex-shrink: 0;
   }
+  .agent-pill:hover { border-color: var(--accent); }
+  .agent-pill .status-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
+  .agent-pill.online .status-dot { background: var(--green); }
+  .agent-pill.listening .status-dot { background: var(--accent); animation: pulse 2s infinite; }
+  .agent-pill.offline .status-dot { background: var(--text-muted); opacity: 0.4; }
+  .agent-pill .agent-name { font-weight: 600; color: var(--text); }
+  .agent-pill .agent-activity { color: var(--text-muted); font-size: 10px; }
+  .agent-pill.offline .agent-name { color: var(--text-muted); opacity: 0.6; }
 
-  .view-tab:hover { color: var(--text); background: rgba(255,255,255,0.02); }
-  .view-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-dim); }
+  /* ===== OVERVIEW PAGE ===== */
+  .overview-area { display: none; flex-direction: column; gap: 16px; padding: 20px; overflow-y: auto; }
+  .overview-area.visible { display: flex; }
+  .overview-metrics {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;
+  }
+  .metric-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .metric-card .metric-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+  .metric-card .metric-value { font-size: 28px; font-weight: 800; color: var(--text); line-height: 1.2; }
+  .metric-card .metric-sub { font-size: 11px; color: var(--text-muted); }
+
+  .overview-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  .overview-panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+  }
+  .overview-panel h3 {
+    font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .overview-panel h3 a { font-size: 11px; font-weight: 500; color: var(--accent); cursor: pointer; text-decoration: none; }
+  .overview-panel h3 a:hover { text-decoration: underline; }
+  .overview-agent-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .overview-agent-row:last-child { border-bottom: none; }
+  .overview-agent-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .overview-agent-name { font-size: 12px; font-weight: 600; color: var(--text); flex: 1; }
+  .overview-agent-status { font-size: 10px; color: var(--text-muted); }
+  .overview-msg-row {
+    display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .overview-msg-row:last-child { border-bottom: none; }
+  .overview-msg-from { font-weight: 600; color: var(--accent); min-width: 70px; }
+  .overview-msg-text { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .overview-msg-time { color: var(--text-muted); font-size: 10px; flex-shrink: 0; }
+  .overview-full-width { grid-column: 1 / -1; }
+  .overview-task-summary { display: flex; gap: 12px; flex-wrap: wrap; }
+  .overview-task-badge {
+    padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  }
+  .overview-task-badge.pending { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
+  .overview-task-badge.active { background: rgba(245, 158, 11, 0.15); color: var(--accent); }
+  .overview-task-badge.done { background: rgba(63, 185, 80, 0.15); color: var(--green); }
+  .overview-launch-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+    background: var(--gradient-accent); color: #fff; border: none; border-radius: 8px;
+    font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; margin-top: 8px;
+    transition: opacity 0.15s;
+  }
+  .overview-launch-btn:hover { opacity: 0.9; }
+
+  /* ===== TOAST NOTIFICATIONS ===== */
+  .toast-container {
+    position: fixed; bottom: 16px; right: 16px; z-index: 9999;
+    display: flex; flex-direction: column-reverse; gap: 8px; pointer-events: none;
+  }
+  .toast {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 16px; font-size: 12px; color: var(--text); box-shadow: var(--shadow-lg);
+    pointer-events: auto; display: flex; align-items: center; gap: 8px;
+    animation: toast-in 0.3s ease-out;
+    max-width: 320px;
+  }
+  .toast.leaving { animation: toast-out 0.3s ease-in forwards; }
+  .toast-icon { font-size: 16px; flex-shrink: 0; }
+  .toast-text { flex: 1; }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(12px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes toast-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(12px); } }
+
+  /* Hide old view-tabs (replaced by icon rail) */
+  .view-tabs { display: none !important; }
 
   /* ===== LAN BADGE ===== */
   .lan-badge {
@@ -3357,6 +3486,7 @@
     <span onclick="toggleShortcutsOverlay()" style="font-size:10px;color:var(--text-muted);cursor:pointer;padding:0 4px" title="Keyboard shortcuts">? keys</span>
     <button class="sound-toggle" id="sound-toggle" onclick="toggleSound()" title="Toggle notification sound">&#x1f508;</button>
     <button class="phone-btn" id="phone-btn" onclick="openPhoneAccess()" title="Phone access (LAN)">&#x1F4F1;</button>
+    <button class="theme-toggle" onclick="switchView('docs')" title="Help &amp; Docs" style="font-size:14px">&#x2753;</button>
     <div class="connection"><span class="conn-dot"></span><span id="conn-label">Live</span><span class="conn-detail" id="conn-detail"></span></div>
     <button class="btn" onclick="enterReplay()" id="replay-header-btn" title="Replay conversation">Replay</button>
     <div style="position:relative;display:inline-block">
@@ -3480,8 +3610,44 @@
     </div>
   </div>
 
+  <!-- ICON RAIL -->
+  <nav class="icon-rail" id="icon-rail">
+    <div class="rail-item active" data-view="overview" onclick="switchView('overview')">
+      <span class="rail-icon">&#x2B21;</span>
+      <span class="rail-label">Home</span>
+    </div>
+    <div class="rail-item" data-view="messages" onclick="switchView('overview')">
+      <span class="rail-icon">&#x1F4AC;</span>
+      <span class="rail-label">Messages</span>
+    </div>
+    <div class="rail-item" data-view="tasks" onclick="switchView('tasks')">
+      <span class="rail-icon">&#x2705;</span>
+      <span class="rail-label">Tasks</span>
+    </div>
+    <div class="rail-item" data-view="workflows" onclick="switchView('workflows')">
+      <span class="rail-icon">&#x1F504;</span>
+      <span class="rail-label">Workflows</span>
+    </div>
+    <div class="rail-item" data-view="stats" onclick="switchView('stats')">
+      <span class="rail-icon">&#x1F4CA;</span>
+      <span class="rail-label">Analytics</span>
+    </div>
+    <div class="rail-spacer"></div>
+    <div class="rail-item" data-view="plan" onclick="switchView('plan')">
+      <span class="rail-icon">&#x1F680;</span>
+      <span class="rail-label">Plan</span>
+    </div>
+    <div class="rail-item" data-view="rules" onclick="switchView('rules')">
+      <span class="rail-icon">&#x2699;</span>
+      <span class="rail-label">Rules</span>
+    </div>
+  </nav>
+
   <!-- MAIN -->
   <div class="main" style="position:relative">
+    <!-- Agent Status Bar -->
+    <div class="agent-bar" id="agent-bar"></div>
+
     <div class="replay-bar" id="replay-bar">
       <div class="replay-controls">
         <button class="replay-btn" onclick="replayPlayPause()" id="replay-play">&#x25B6;</button>
@@ -3495,7 +3661,7 @@
       <button class="replay-exit" onclick="exitReplay()">Exit Replay</button>
     </div>
     <div class="view-tabs" id="view-tabs">
-      <div class="view-tab active" id="tab-messages" onclick="switchView('messages')">Messages</div>
+      <div class="view-tab active" id="tab-messages" onclick="switchView('overview')">Messages</div>
       <div class="view-tab" id="tab-tasks" onclick="switchView('tasks')">Tasks</div>
       <div class="view-tab" id="tab-workspaces" onclick="switchView('workspaces')">Workspaces</div>
       <div class="view-tab" id="tab-workflows" onclick="switchView('workflows')">Workflows</div>
@@ -3522,6 +3688,7 @@
       <div id="pinned-list"></div>
     </div>
     <div class="messages-area" id="messages"></div>
+    <div class="overview-area visible" id="overview-area"></div>
     <div class="tasks-area" id="tasks-area"></div>
     <div class="workspaces-area" id="workspaces-area"></div>
     <div class="workflows-area" id="workflows-area"></div>
@@ -4219,6 +4386,7 @@ function toggleRoleGroup(role) {
 }
 
 function renderAgents(agents) {
+  updateAgentBar(agents);
   var el = document.getElementById('agents-list');
   var keys = Object.keys(agents);
   if (!keys.length) {
@@ -5422,7 +5590,7 @@ document.addEventListener('keydown', function(e) {
   }
 
   // 2 — Messages tab
-  if (e.key === '2') { switchView('messages'); return; }
+  if (e.key === '2') { switchView('overview'); return; }
   // 3 — Tasks tab
   if (e.key === '3') { switchView('tasks'); return; }
   // 4 — Workspaces tab
@@ -5705,19 +5873,23 @@ function exportJSON() {
 
 // ==================== VIEW SWITCHING ====================
 
-var activeView = 'messages';
+var activeView = 'overview';
 
 function switchView(view) {
   activeView = view;
-  document.getElementById('tab-messages').classList.toggle('active', view === 'messages');
-  document.getElementById('tab-tasks').classList.toggle('active', view === 'tasks');
-  document.getElementById('tab-workspaces').classList.toggle('active', view === 'workspaces');
-  document.getElementById('tab-workflows').classList.toggle('active', view === 'workflows');
-  document.getElementById('tab-plan').classList.toggle('active', view === 'plan');
-  document.getElementById('tab-launch').classList.toggle('active', view === 'launch');
-  document.getElementById('tab-rules').classList.toggle('active', view === 'rules');
-  document.getElementById('tab-stats').classList.toggle('active', view === 'stats');
-  document.getElementById('tab-docs').classList.toggle('active', view === 'docs');
+  // Update icon rail active state
+  var railItems = document.querySelectorAll('.rail-item');
+  for (var i = 0; i < railItems.length; i++) {
+    railItems[i].classList.toggle('active', railItems[i].getAttribute('data-view') === view);
+  }
+  // Update old tab active states (kept for compatibility)
+  var tabIds = ['messages','tasks','workspaces','workflows','plan','launch','rules','stats','docs'];
+  for (var t = 0; t < tabIds.length; t++) {
+    var el = document.getElementById('tab-' + tabIds[t]);
+    if (el) el.classList.toggle('active', view === tabIds[t]);
+  }
+  // Toggle view areas
+  document.getElementById('overview-area').classList.toggle('visible', view === 'overview');
   document.getElementById('messages').style.display = view === 'messages' ? 'flex' : 'none';
   document.getElementById('tasks-area').classList.toggle('visible', view === 'tasks');
   document.getElementById('workspaces-area').classList.toggle('visible', view === 'workspaces');
@@ -5730,6 +5902,7 @@ function switchView(view) {
   document.getElementById('docs-area').classList.toggle('visible', view === 'docs');
   document.getElementById('search-bar').style.display = view === 'messages' ? 'flex' : 'none';
   document.getElementById('channel-filter-bar').style.display = view === 'messages' && activeChannel !== undefined ? '' : 'none';
+  if (view === 'overview') renderOverview();
   if (view === 'messages') renderChannelBar(cachedHistory);
   if (view === 'tasks') fetchTasks();
   if (view === 'workspaces') fetchWorkspaces();
@@ -5739,7 +5912,6 @@ function switchView(view) {
   if (view === 'launch') renderLaunchPanel();
   if (view === 'rules') fetchRules();
   if (view === 'stats') fetchStats();
-  // Auto-close sidebar on mobile after view switch
   if (isMobile) closeSidebar();
 }
 
@@ -8456,6 +8628,167 @@ function copyLaunchPrompt() {
   });
 }
 
+// ==================== AGENT STATUS BAR ====================
+
+var prevAgentBarState = {};
+
+function updateAgentBar(agents) {
+  var bar = document.getElementById('agent-bar');
+  if (!bar || !agents) return;
+  var html = '';
+  var sorted = Object.entries(agents).sort(function(a, b) {
+    var aAlive = a[1].alive ? 1 : 0;
+    var bAlive = b[1].alive ? 1 : 0;
+    return bAlive - aAlive;
+  });
+  for (var i = 0; i < sorted.length; i++) {
+    var name = sorted[i][0];
+    var agent = sorted[i][1];
+    if (name === '__system__' || name === 'Dashboard') continue;
+    var cls = 'offline';
+    var activity = 'offline';
+    if (agent.alive) {
+      if (agent.is_listening) { cls = 'listening'; activity = 'listening'; }
+      else if (agent.status === 'active') { cls = 'online'; activity = 'active'; }
+      else { cls = 'online'; activity = agent.idle_seconds > 60 ? 'idle' : 'active'; }
+    }
+    // Toast on state change
+    var prevState = prevAgentBarState[name];
+    if (prevState !== undefined) {
+      if (!prevState && agent.alive) showToast('&#x1F7E2;', name + ' came online');
+      if (prevState && !agent.alive) showToast('&#x26AA;', name + ' went offline');
+    }
+    prevAgentBarState[name] = agent.alive;
+    html += '<div class="agent-pill ' + cls + '" onclick="showAgentPopup(\'' + name + '\')">' +
+      '<span class="status-dot"></span>' +
+      '<span class="agent-name">' + name + '</span>' +
+      '<span class="agent-activity">' + activity + '</span>' +
+    '</div>';
+  }
+  bar.innerHTML = html;
+}
+
+// ==================== OVERVIEW PAGE ====================
+
+function renderOverview() {
+  var area = document.getElementById('overview-area');
+  if (!area) return;
+  area.innerHTML = '<div style="padding:20px;color:var(--text-muted);font-size:12px">Loading...</div>';
+  var pq = projectParam();
+  Promise.all([
+    lttFetch('/api/status' + pq).then(function(r) { return r.json(); }),
+    lttFetch('/api/agents' + pq).then(function(r) { return r.json(); }),
+    lttFetch('/api/history' + pq + (pq ? '&' : '?') + 'limit=5').then(function(r) { return r.json(); }),
+    lttFetch('/api/tasks' + pq).then(function(r) { return r.json(); }),
+    lttFetch('/api/workflows' + pq).then(function(r) { return r.json(); })
+  ]).then(function(results) {
+    var status = results[0];
+    var agents = results[1];
+    var history = Array.isArray(results[2]) ? results[2] : (results[2].messages || []);
+    var tasks = Array.isArray(results[3]) ? results[3] : [];
+    var workflows = Array.isArray(results[4]) ? results[4] : [];
+
+    var pending = tasks.filter(function(t) { return t.status === 'pending'; }).length;
+    var inProgress = tasks.filter(function(t) { return t.status === 'in_progress'; }).length;
+    var done = tasks.filter(function(t) { return t.status === 'done'; }).length;
+    var taskPct = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0;
+
+    var html = '';
+    // Metric cards
+    html += '<div class="overview-metrics">';
+    html += '<div class="metric-card"><div class="metric-label">Agents</div><div class="metric-value">' + (status.aliveCount || 0) + '</div><div class="metric-sub">' + (status.agentCount || 0) + ' registered, ' + (status.sleepingCount || 0) + ' sleeping</div></div>';
+    html += '<div class="metric-card"><div class="metric-label">Messages</div><div class="metric-value">' + (status.messageCount || 0) + '</div><div class="metric-sub">' + (status.threadCount || 0) + ' threads, ' + (status.conversation_mode || 'direct') + ' mode</div></div>';
+    html += '<div class="metric-card"><div class="metric-label">Tasks</div><div class="metric-value">' + taskPct + '%</div><div class="metric-sub">' + done + ' done, ' + inProgress + ' active, ' + pending + ' pending</div></div>';
+    html += '</div>';
+
+    // Grid: agents + workflows
+    html += '<div class="overview-grid">';
+
+    // Active agents panel
+    html += '<div class="overview-panel"><h3>Active Agents <a onclick="switchView(\'messages\')">View messages &rarr;</a></h3>';
+    var agentEntries = Object.entries(agents);
+    if (agentEntries.length === 0) {
+      html += '<div style="color:var(--text-muted);font-size:12px">No agents registered</div>';
+    } else {
+      for (var i = 0; i < agentEntries.length; i++) {
+        var aName = agentEntries[i][0];
+        var aInfo = agentEntries[i][1];
+        if (aName === '__system__') continue;
+        var dotColor = aInfo.alive ? (aInfo.is_listening ? 'var(--accent)' : 'var(--green)') : 'var(--text-muted)';
+        var statusText = !aInfo.alive ? 'offline' : aInfo.is_listening ? 'listening' : aInfo.status || 'active';
+        html += '<div class="overview-agent-row"><span class="overview-agent-dot" style="background:' + dotColor + '"></span><span class="overview-agent-name">' + aName + '</span><span class="overview-agent-status">' + statusText + ' &middot; ' + (aInfo.provider || '?') + '</span></div>';
+      }
+    }
+    html += '</div>';
+
+    // Workflow progress panel
+    html += '<div class="overview-panel"><h3>Workflows <a onclick="switchView(\'workflows\')">View all &rarr;</a></h3>';
+    var activeWfs = workflows.filter(function(w) { return w.status === 'active'; });
+    if (activeWfs.length === 0) {
+      html += '<div style="color:var(--text-muted);font-size:12px">No active workflows</div>';
+    } else {
+      for (var w = 0; w < activeWfs.length; w++) {
+        var wf = activeWfs[w];
+        var wfDone = wf.steps ? wf.steps.filter(function(s) { return s.status === 'done'; }).length : 0;
+        var wfTotal = wf.steps ? wf.steps.length : 1;
+        var wfPct = Math.round((wfDone / wfTotal) * 100);
+        html += '<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">' + (wf.name || 'Workflow') + ' <span style="color:var(--text-muted);font-weight:400">' + wfPct + '%</span></div>';
+        html += '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + wfPct + '%;background:var(--gradient-accent);border-radius:3px;transition:width 0.3s"></div></div></div>';
+      }
+    }
+    html += '</div>';
+
+    // Recent messages (full width)
+    html += '<div class="overview-panel overview-full-width"><h3>Recent Messages <a onclick="switchView(\'messages\')">View all &rarr;</a></h3>';
+    if (history.length === 0) {
+      html += '<div style="color:var(--text-muted);font-size:12px">No messages yet</div>';
+    } else {
+      for (var m = 0; m < history.length; m++) {
+        var msg = history[m];
+        var time = new Date(msg.timestamp);
+        var timeStr = time.getHours() + ':' + String(time.getMinutes()).padStart(2, '0');
+        html += '<div class="overview-msg-row"><span class="overview-msg-from">' + (msg.from || '?') + '</span><span class="overview-msg-text">' + ((msg.content || '').substring(0, 120)) + '</span><span class="overview-msg-time">' + timeStr + '</span></div>';
+      }
+    }
+    html += '</div>';
+
+    // Task summary + Launch button (full width)
+    html += '<div class="overview-panel overview-full-width"><h3>Task Summary <a onclick="switchView(\'tasks\')">View all &rarr;</a></h3>';
+    html += '<div class="overview-task-summary">';
+    html += '<span class="overview-task-badge pending">' + pending + ' pending</span>';
+    html += '<span class="overview-task-badge active">' + inProgress + ' active</span>';
+    html += '<span class="overview-task-badge done">' + done + ' done</span>';
+    html += '</div>';
+    html += '<button class="overview-launch-btn" onclick="switchView(\'launch\')">&#x1F680; Launch Agents</button>';
+    html += '</div>';
+
+    html += '</div>'; // close overview-grid
+    area.innerHTML = html;
+  }).catch(function(e) {
+    area.innerHTML = '<div style="padding:20px;color:var(--text-muted)">Failed to load overview: ' + e.message + '</div>';
+  });
+}
+
+// ==================== TOAST NOTIFICATIONS ====================
+
+var toastQueue = [];
+function showToast(icon, text) {
+  var container = document.getElementById('toast-container');
+  if (!container) return;
+  // Max 3 toasts
+  while (container.children.length >= 3) {
+    container.removeChild(container.firstChild);
+  }
+  var toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = '<span class="toast-icon">' + icon + '</span><span class="toast-text">' + text + '</span>';
+  container.appendChild(toast);
+  setTimeout(function() {
+    toast.classList.add('leaving');
+    setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
+  }, 5000);
+}
+
 // ==================== SSE + POLLING ====================
 
 var sseConnected = false;
@@ -8551,16 +8884,17 @@ loadProjects().then(function() {
   loadConversationList();
   poll();
   initSSE();
-  switchView('messages');
+  switchView('overview');
 }).catch(function(e) {
   console.error('[LTT] init: loadProjects failed, polling anyway:', e);
   poll();
   initSSE();
-  switchView('messages');
+  switchView('overview');
 });
 // Safety-net poll at 10s (SSE handles real-time, this catches any missed updates)
 setInterval(poll, 10000);
 </script>
 
+<div class="toast-container" id="toast-container"></div>
 </body>
 </html>
