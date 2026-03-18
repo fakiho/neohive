@@ -1703,6 +1703,9 @@
   @keyframes toast-in { from { opacity: 0; transform: translateY(12px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
   @keyframes toast-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(12px); } }
 
+  /* ===== USER MESSAGES ===== */
+  .message.user-msg { background: rgba(245, 158, 11, 0.04); border-left: 2px solid var(--accent); }
+
   /* Hide old view-tabs (replaced by nav sidebar) */
   .view-tabs { display: none !important; }
 
@@ -4925,10 +4928,12 @@ function renderMessages(messages) {
 
   for (var i = windowStart; i < filtered.length; i++) {
     var m = filtered[i];
-    var color = getColor(m.from);
-    var fromDisplay = (cachedAgents[m.from] && cachedAgents[m.from].display_name) || m.from;
-    var toDisplay = (cachedAgents[m.to] && cachedAgents[m.to].display_name) || m.to;
+    var color = m.from === '__user__' ? 'var(--accent)' : getColor(m.from);
+    var fromDisplay = m.from === '__user__' ? 'You' : (cachedAgents[m.from] && cachedAgents[m.from].display_name) || m.from;
+    var toDisplay = m.to === '__user__' ? 'You' : (cachedAgents[m.to] && cachedAgents[m.to].display_name) || m.to;
     var newClass = (isNew && i >= lastMessageCount) ? ' message-new' : '';
+    var isUserMsg = m.from === '__user__';
+    var isReplyToUser = m.to === '__user__';
     var isSystem = m.system === true;
 
     // Date separator
@@ -5008,7 +5013,9 @@ function renderMessages(messages) {
       lastFrom = m.from;
       lastTo = m.to;
     } else {
-      html += '<div class="message' + newClass + groupClass + '">' +
+      var userMsgClass = isUserMsg ? ' user-msg' : '';
+      var replyBadge = isReplyToUser ? '<span class="badge" style="background:var(--accent-dim);color:var(--accent)">Reply to you</span>' : '';
+      html += '<div class="message' + newClass + groupClass + userMsgClass + '">' +
         buildMsgActions(m.id) +
         msgAvatarHtml +
         '<div class="msg-body">' +
@@ -5017,7 +5024,7 @@ function renderMessages(messages) {
             '<span class="msg-arrow">&rarr;</span>' +
             '<span class="msg-to">' + escapeHtml(toDisplay) + '</span>' +
             '<span class="msg-time" title="' + formatTime(m.timestamp) + '">' + relativeTime(m.timestamp) + '</span>' +
-            '<div class="msg-badges">' + badges + '</div>' +
+            '<div class="msg-badges">' + replyBadge + badges + '</div>' +
           '</div>' +
           '<div class="msg-content">' + renderMarkdown(m.content) + '</div>' +
           buildReactionsHtml(m.id) +

@@ -50,7 +50,7 @@ const DEPS_FILE = path.join(DATA_DIR, 'dependencies.json');
 const REPUTATION_FILE = path.join(DATA_DIR, 'reputation.json');
 const COMPRESSED_FILE = path.join(DATA_DIR, 'compressed.json');
 const RULES_FILE = path.join(DATA_DIR, 'rules.json');
-// Plugins removed in v3.4.3 — unnecessary attack surface, CLIs have their own extension systems
+const AGENT_CARDS_FILE = path.join(DATA_DIR, 'agent-cards.json');
 
 // In-memory state for this process
 let registeredName = null;
@@ -254,7 +254,7 @@ function migrateIfNeeded() {
   try { fs.writeFileSync(DATA_VERSION_FILE, String(CURRENT_DATA_VERSION)); } catch {}
 }
 
-const RESERVED_NAMES = ['__system__', '__all__', '__open__', '__close__', 'system', 'dashboard', 'Dashboard'];
+const RESERVED_NAMES = ['__system__', '__all__', '__open__', '__close__', '__user__', 'system', 'dashboard', 'Dashboard'];
 
 function sanitizeName(name) {
   if (typeof name !== 'string' || !/^[a-zA-Z0-9_-]{1,20}$/.test(name)) {
@@ -845,6 +845,21 @@ function saveWorkflows(workflows) {
   });
 }
 
+// Save a checkpoint after a workflow step completes
+function saveWorkflowCheckpoint(wf, step) {
+  if (!wf.checkpoints) wf.checkpoints = [];
+  wf.checkpoints.push({
+    step_id: step.id,
+    step_description: step.description,
+    completed_at: step.completed_at,
+    completed_by: step.assignee || registeredName,
+    output: step.verification || step.notes || null,
+    files_changed: step.files_changed || [],
+    step_states: wf.steps.map(s => ({ id: s.id, status: s.status, assignee: s.assignee || null })),
+  });
+  if (wf.checkpoints.length > 100) wf.checkpoints = wf.checkpoints.slice(-100);
+}
+
 // --- Autonomous mode detection ---
 function isAutonomousMode() {
   const workflows = getWorkflows();
@@ -902,8 +917,11 @@ function findUnassignedTasks(skills) {
     const words = ((t.title || '') + ' ' + (t.description || '')).toLowerCase().split(/\W+/).filter(w => w.length > 3);
     words.forEach(w => historyKeywords.add(w));
   }
-  // Add explicit skills
+  // Add explicit skills from function param AND agent card
   if (skills) skills.forEach(s => historyKeywords.add(s.toLowerCase()));
+  const cards = readJsonFile(AGENT_CARDS_FILE) || {};
+  const myCard = cards[registeredName];
+  if (myCard && myCard.skills) myCard.skills.forEach(s => historyKeywords.add(s));
 
   // Score each task by affinity (keyword overlap with agent's history + skills)
   // Scale fix: cache task keyword sets to avoid O(N*M) recomputation at 100 agents
@@ -1304,7 +1322,7 @@ function buildGuide(level = 'standard') {
 
 // --- Tool implementations ---
 
-function toolRegister(name, provider = null) {
+function toolRegister(name, provider = null, skills = null) {
   ensureDataDir();
   migrateIfNeeded(); // run data migrations on first register
   sanitizeName(name);
@@ -1340,6 +1358,16 @@ function toolRegister(name, provider = null) {
     profiles[name] = { display_name: name, avatar: '', bio: '', role: '', created_at: now };
     saveProfiles(profiles);
   }
+
+  // Save agent card with skills
+  const cards = readJsonFile(AGENT_CARDS_FILE) || {};
+  cards[name] = {
+    name,
+    provider: provider || 'unknown',
+    skills: Array.isArray(skills) ? skills.map(s => String(s).toLowerCase().substring(0, 30)).slice(0, 20) : [],
+    registered_at: now,
+  };
+  writeJsonFile(AGENT_CARDS_FILE, cards);
 
   // Start heartbeat — updates last_activity every 10s so dashboard knows we're alive
   // Deterministic jitter per agent to spread writes across the interval (prevents lock storms at 10 agents)
@@ -1392,6 +1420,8 @@ function toolRegister(name, provider = null) {
       escalateBlockedTasks();
       // Stand-up meetings: periodic team check-ins
       triggerStandupIfDue();
+      // Auto-reassign stuck workflow steps from dead agents
+      checkStuckWorkflowSteps();
       // Watchdog: nudge idle agents, reassign stuck work (autonomous mode only)
       watchdogCheck();
     } catch (e) { log.warn("heartbeat loop error:", e.message); }
@@ -1693,7 +1723,8 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
     }
   }
 
-  if (!agents[to]) {
+  // Allow sending to __user__ (human via dashboard) even though they're not a registered agent
+  if (to !== '__user__' && !agents[to]) {
     return { error: `Agent "${to}" is not registered` };
   }
 
@@ -1701,8 +1732,8 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
     return { error: 'Cannot send a message to yourself' };
   }
 
-  // Permission check
-  if (!canSendTo(registeredName, to)) {
+  // Permission check (skip for __user__ — human always has read access)
+  if (to !== '__user__' && !canSendTo(registeredName, to)) {
     return { error: `Permission denied: you are not allowed to send messages to "${to}"` };
   }
 
@@ -3413,7 +3444,8 @@ function toolCreateWorkflow(name, steps, autonomous = false, parallel = false) {
       description: step.description.substring(0, 200),
       assignee: step.assignee || null,
       depends_on: Array.isArray(step.depends_on) ? step.depends_on : [],
-      status: 'pending', // all start pending; we'll activate ready ones below
+      requires_approval: !!step.requires_approval,
+      status: 'pending',
       started_at: null,
       completed_at: null,
       notes: '',
@@ -3502,11 +3534,23 @@ function toolAdvanceWorkflow(workflowId, notes) {
   currentStep.completed_at = new Date().toISOString();
   if (notes) currentStep.notes = notes.substring(0, 500);
 
+  // Save checkpoint
+  saveWorkflowCheckpoint(wf, currentStep);
+
   // Find all ready steps (supports parallel via depends_on)
   const nextSteps = findReadySteps(wf);
   if (nextSteps.length > 0) {
     const agents = getAgents();
     for (const step of nextSteps) {
+      // Check if step requires human approval before starting
+      if (step.requires_approval) {
+        step.status = 'awaiting_approval';
+        step.approval_requested_at = new Date().toISOString();
+        sendSystemMessage('__user__',
+          `[APPROVAL NEEDED] Workflow "${wf.name}" — Step ${step.id}: "${step.description}". Approve or reject from the dashboard.`
+        );
+        continue;
+      }
       step.status = 'in_progress';
       step.started_at = new Date().toISOString();
       if (step.assignee && agents[step.assignee] && step.assignee !== registeredName && canSendTo(registeredName, step.assignee)) {
@@ -3537,14 +3581,32 @@ function toolAdvanceWorkflow(workflowId, notes) {
   };
 }
 
-function toolWorkflowStatus(workflowId) {
+function toolWorkflowStatus(workflowId, action, checkpointIndex) {
   const workflows = getWorkflows();
+
+  // Rollback action
+  if (action === 'rollback' && workflowId && checkpointIndex !== undefined) {
+    const wf = workflows.find(w => w.id === workflowId);
+    if (!wf) return { error: `Workflow not found: ${workflowId}` };
+    if (!wf.checkpoints || !wf.checkpoints[checkpointIndex]) return { error: 'Checkpoint not found' };
+    const checkpoint = wf.checkpoints[checkpointIndex];
+    for (const savedStep of checkpoint.step_states) {
+      const step = wf.steps.find(s => s.id === savedStep.id);
+      if (step) { step.status = savedStep.status; step.assignee = savedStep.assignee; }
+    }
+    wf.updated_at = new Date().toISOString();
+    saveWorkflows(workflows);
+    broadcastSystemMessage(`[WORKFLOW] Rolled back "${wf.name}" to checkpoint: step "${checkpoint.step_description}"`);
+    return { success: true, rolled_back_to: checkpoint };
+  }
+
   if (workflowId) {
     const wf = workflows.find(w => w.id === workflowId);
     if (!wf) return { error: `Workflow not found: ${workflowId}` };
     const doneCount = wf.steps.filter(s => s.status === 'done').length;
     const pct = Math.round((doneCount / wf.steps.length) * 100);
     const result = { workflow: wf, progress: `${doneCount}/${wf.steps.length} (${pct}%)` };
+    if (wf.checkpoints) result.checkpoints = wf.checkpoints.length;
     if (wf.status === 'completed') result.report = generateCompletionReport(wf);
     return result;
   }
@@ -3552,7 +3614,7 @@ function toolWorkflowStatus(workflowId) {
     count: workflows.length,
     workflows: workflows.map(w => {
       const doneCount = w.steps.filter(s => s.status === 'done').length;
-      return { id: w.id, name: w.name, status: w.status, steps: w.steps.length, done: doneCount, progress: Math.round((doneCount / w.steps.length) * 100) + '%' };
+      return { id: w.id, name: w.name, status: w.status, steps: w.steps.length, done: doneCount, progress: Math.round((doneCount / w.steps.length) * 100) + '%', checkpoints: w.checkpoints ? w.checkpoints.length : 0 };
     }),
   };
 }
@@ -3882,7 +3944,8 @@ async function toolVerifyAndAdvance(params) {
     // AUTO-ADVANCE
     currentStep.status = 'done';
     currentStep.completed_at = new Date().toISOString();
-    clearCheckpoint(registeredName, workflow_id, currentStep.id); // Item 8: clear checkpoint on completion
+    saveWorkflowCheckpoint(wf, currentStep);
+    clearCheckpoint(registeredName, workflow_id, currentStep.id);
     return advanceToNextSteps(false);
   }
 
@@ -3890,6 +3953,7 @@ async function toolVerifyAndAdvance(params) {
     // ADVANCE BUT FLAG
     currentStep.status = 'done';
     currentStep.completed_at = new Date().toISOString();
+    saveWorkflowCheckpoint(wf, currentStep);
     currentStep.flagged = true;
     currentStep.flag_reason = `Low confidence (${confidence}%). May need review later.`;
     clearCheckpoint(registeredName, workflow_id, currentStep.id); // Item 8: clear checkpoint
@@ -4057,6 +4121,46 @@ function reassignWorkFrom(deadAgentName) {
     saveTasks(tasks);
   }
   return reassignCount;
+}
+
+// Auto-reassign workflow steps from dead agents after timeout
+function checkStuckWorkflowSteps() {
+  if (!registeredName) return;
+  const workflows = getWorkflows();
+  const agents = getAgents();
+  const timeoutMs = (parseInt(process.env.NEOHIVE_STEP_TIMEOUT_MINUTES) || 5) * 60000;
+  let changed = false;
+
+  for (const wf of workflows) {
+    if (wf.status !== 'active') continue;
+    if (wf.paused) continue;
+
+    for (const step of wf.steps) {
+      if (step.status !== 'in_progress') continue;
+      if (!step.assignee) continue;
+      if (!step.started_at) continue;
+
+      const elapsed = Date.now() - new Date(step.started_at).getTime();
+      if (elapsed < timeoutMs) continue;
+
+      const agentInfo = agents[step.assignee];
+      if (agentInfo && isPidAlive(agentInfo.pid, agentInfo.last_activity)) continue;
+
+      log.warn(`Workflow step ${step.id} reassigned: ${step.assignee} offline for ${Math.round(elapsed / 60000)}min`);
+      const deadAgent = step.assignee;
+      step.status = 'pending';
+      step.assignee = null;
+      step.reassigned_from = deadAgent;
+      step.reassigned_at = new Date().toISOString();
+      changed = true;
+
+      broadcastSystemMessage(
+        `[WORKFLOW] Step "${step.description}" reassigned — ${deadAgent} went offline. Next available agent will pick it up via get_work().`
+      );
+    }
+  }
+
+  if (changed) saveWorkflows(workflows);
 }
 
 function watchdogCheck() {
@@ -6120,6 +6224,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'string',
               description: 'AI provider/CLI name (e.g. "Claude", "OpenAI", "Gemini"). Shown in dashboard.',
             },
+            skills: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Skills like "python", "testing", "frontend", "design". Used for smart task routing.',
+            },
           },
           required: ['name'],
         },
@@ -6456,11 +6565,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'workflow_status',
-        description: 'Get status of a specific workflow or all workflows. Shows step progress and completion percentage.',
+        description: 'Get status of a specific workflow or all workflows. Shows step progress, checkpoints, and completion percentage. Use action="rollback" to rollback to a checkpoint.',
         inputSchema: {
           type: 'object',
           properties: {
             workflow_id: { type: 'string', description: 'Workflow ID (optional — omit for all workflows)' },
+            action: { type: 'string', enum: ['status', 'rollback'], description: 'Action (default: status)' },
+            checkpoint_index: { type: 'number', description: 'Checkpoint index to rollback to (for rollback action)' },
           },
         },
       },
@@ -6806,7 +6917,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     switch (name) {
       case 'register':
-        result = toolRegister(args.name, args?.provider);
+        result = toolRegister(args.name, args?.provider, args?.skills);
         break;
       case 'list_agents':
         result = toolListAgents();
@@ -6878,7 +6989,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolAdvanceWorkflow(args.workflow_id, args?.notes);
         break;
       case 'workflow_status':
-        result = toolWorkflowStatus(args?.workflow_id);
+        result = toolWorkflowStatus(args?.workflow_id, args?.action, args?.checkpoint_index);
         break;
       case 'fork_conversation':
         result = toolForkConversation(args?.from_message_id, args.branch_name);

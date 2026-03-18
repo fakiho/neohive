@@ -35,7 +35,7 @@ const CHANNELS_FILE_PATH = path.join(DATA_DIR, 'channels.json');
 // Constants
 const MAX_CONTENT_BYTES = 1000000; // 1 MB max message size
 const CURRENT_DATA_VERSION = 1;
-const RESERVED_NAMES = ['__system__', '__all__', '__open__', '__close__', 'system', 'dashboard', 'Dashboard'];
+const RESERVED_NAMES = ['__system__', '__all__', '__open__', '__close__', '__user__', 'system', 'dashboard', 'Dashboard'];
 
 // Config helpers
 function getConfig() {

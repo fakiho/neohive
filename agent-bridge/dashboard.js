@@ -268,6 +268,7 @@ function apiAgents(query) {
   const projectPath = query.get('project') || null;
   const agents = readJson(filePath('agents.json', projectPath));
   const profiles = readJson(filePath('profiles.json', projectPath));
+  const cards = readJson(filePath('agent-cards.json', projectPath));
   const history = readJsonl(filePath('history.jsonl', projectPath));
 
   // Merge per-agent heartbeat files — agents write these during listen loops
@@ -319,6 +320,7 @@ function apiAgents(query) {
       appearance: profile.appearance || {},
       hostname: info.hostname || null,
       is_remote: !isLocal && alive,
+      skills: (cards && cards[name] && cards[name].skills) || [],
     };
     // Include workspace status for agent intent board
     try {
@@ -843,27 +845,21 @@ function apiInjectMessage(body, query) {
   }
 
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-  const fromName = 'Dashboard';
+  const fromName = '__user__';
   const now = new Date().toISOString();
 
-  // Broadcast to all agents
+  // Broadcast to all agents — single __group__ message instead of per-agent
   if (body.to === '__all__') {
-    const agents = readJson(path.join(dataDir, 'agents.json'));
-    const ids = [];
-    for (const name of Object.keys(agents)) {
-      const msg = {
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-        from: fromName,
-        to: name,
-        content: body.content,
-        timestamp: now,
-        system: true,
-      };
-      fs.appendFileSync(messagesFile, JSON.stringify(msg) + '\n');
-      fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
-      ids.push(msg.id);
-    }
-    return { success: true, messageIds: ids, broadcast: true };
+    const msg = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+      from: fromName,
+      to: '__group__',
+      content: body.content,
+      timestamp: now,
+    };
+    fs.appendFileSync(messagesFile, JSON.stringify(msg) + '\n');
+    fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
+    return { success: true, messageId: msg.id, broadcast: true };
   }
 
   const msg = {
@@ -872,7 +868,6 @@ function apiInjectMessage(body, query) {
     to: body.to,
     content: body.content,
     timestamp: now,
-    system: true,
   };
 
   fs.appendFileSync(messagesFile, JSON.stringify(msg) + '\n');
@@ -2166,6 +2161,34 @@ const server = http.createServer(async (req, res) => {
         const next = wf.steps.find(s => s.status === 'pending');
         if (next && !wf.steps.find(s => s.status === 'in_progress')) { next.status = 'in_progress'; next.started_at = new Date().toISOString(); }
         if (!wf.steps.find(s => s.status === 'pending' || s.status === 'in_progress')) wf.status = 'completed';
+        wf.updated_at = new Date().toISOString();
+        fs.writeFileSync(wfFile, JSON.stringify(workflows, null, 2));
+      } else if (body.action === 'approve' && body.workflow_id && body.step_id !== undefined) {
+        const wf = workflows.find(w => w.id === body.workflow_id);
+        if (!wf) { res.writeHead(404, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Workflow not found' })); return; }
+        const step = wf.steps.find(s => s.id === body.step_id);
+        if (!step || step.status !== 'awaiting_approval') { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Step not awaiting approval' })); return; }
+        if (body.approved) {
+          step.status = 'in_progress';
+          step.started_at = new Date().toISOString();
+          step.approved_at = new Date().toISOString();
+          step.approved_by = '__user__';
+          // Notify assignee via message
+          const messagesFile = filePath('messages.jsonl', projectPath);
+          const historyFile = filePath('history.jsonl', projectPath);
+          const notif = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), from: '__user__', to: step.assignee || '__group__', content: `[APPROVED] Step "${step.description}" in workflow "${wf.name}" has been approved. You may proceed.`, timestamp: new Date().toISOString() };
+          fs.appendFileSync(messagesFile, JSON.stringify(notif) + '\n');
+          fs.appendFileSync(historyFile, JSON.stringify(notif) + '\n');
+        } else {
+          step.status = 'pending';
+          step.rejected_at = new Date().toISOString();
+          step.rejection_feedback = body.feedback || '';
+          const messagesFile = filePath('messages.jsonl', projectPath);
+          const historyFile = filePath('history.jsonl', projectPath);
+          const notif = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), from: '__user__', to: step.assignee || '__group__', content: `[REJECTED] Step "${step.description}" rejected: ${body.feedback || 'No feedback'}`, timestamp: new Date().toISOString() };
+          fs.appendFileSync(messagesFile, JSON.stringify(notif) + '\n');
+          fs.appendFileSync(historyFile, JSON.stringify(notif) + '\n');
+        }
         wf.updated_at = new Date().toISOString();
         fs.writeFileSync(wfFile, JSON.stringify(workflows, null, 2));
       } else {
