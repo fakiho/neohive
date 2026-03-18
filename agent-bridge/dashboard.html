@@ -3616,7 +3616,7 @@
       <span class="rail-icon">&#x2B21;</span>
       <span class="rail-label">Home</span>
     </div>
-    <div class="rail-item" data-view="messages" onclick="switchView('overview')">
+    <div class="rail-item" data-view="messages" onclick="switchView('messages')">
       <span class="rail-icon">&#x1F4AC;</span>
       <span class="rail-label">Messages</span>
     </div>
@@ -3661,7 +3661,7 @@
       <button class="replay-exit" onclick="exitReplay()">Exit Replay</button>
     </div>
     <div class="view-tabs" id="view-tabs">
-      <div class="view-tab active" id="tab-messages" onclick="switchView('overview')">Messages</div>
+      <div class="view-tab active" id="tab-messages" onclick="switchView('messages')">Messages</div>
       <div class="view-tab" id="tab-tasks" onclick="switchView('tasks')">Tasks</div>
       <div class="view-tab" id="tab-workspaces" onclick="switchView('workspaces')">Workspaces</div>
       <div class="view-tab" id="tab-workflows" onclick="switchView('workflows')">Workflows</div>
@@ -5590,7 +5590,7 @@ document.addEventListener('keydown', function(e) {
   }
 
   // 2 — Messages tab
-  if (e.key === '2') { switchView('overview'); return; }
+  if (e.key === '2') { switchView('messages'); return; }
   // 3 — Tasks tab
   if (e.key === '3') { switchView('tasks'); return; }
   // 4 — Workspaces tab
