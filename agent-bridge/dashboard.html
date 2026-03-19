@@ -4520,7 +4520,7 @@ function renderAgents(agents) {
     var respawnHtml = '';
     if (state === 'dead') {
       removeHtml = '<button class="remove-agent-btn" onclick="event.stopPropagation();removeAgent(\'' + escapeHtml(name) + '\')" title="Remove this agent">Remove</button>';
-      respawnHtml = '<button class="respawn-btn" onclick="event.stopPropagation();respawnAgent(\'' + escapeHtml(name) + '\')" title="Generate resume prompt for this agent">&#x1F504; Respawn</button>';
+      respawnHtml = '<button class="respawn-btn" onclick="event.stopPropagation();respawnAgent(\'' + escapeHtml(name) + '\')" title="Generate resume prompt for this agent">Respawn</button>';
     }
 
     // Listening status — simplified: skip for dead (already shown via badge)
@@ -4561,7 +4561,7 @@ function renderAgents(agents) {
             branchHtml +
           '</div>' +
           '<div class="agent-meta"><span>' + getProviderBadge(info.provider) + 'PID ' + info.pid + '</span>' +
-            (info.last_activity ? '<span style="margin-left:8px" title="Last heartbeat: ' + new Date(info.last_activity).toLocaleTimeString() + '">&#x1f493; ' + timeAgo(info.last_activity) + '</span>' : '') +
+            (info.last_activity ? '<span style="margin-left:8px" title="Last heartbeat: ' + new Date(info.last_activity).toLocaleTimeString() + '">' + timeAgo(info.last_activity) + '</span>' : '') +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -4684,12 +4684,12 @@ function showRespawnModal(agentName, prompt) {
 
   overlay.innerHTML =
     '<div class="respawn-modal">' +
-      '<h3>&#x1F504; Respawn ' + escapeHtml(agentName) + '</h3>' +
+      '<h3>Respawn ' + escapeHtml(agentName) + '</h3>' +
       '<p style="color:var(--text-secondary);font-size:12px;margin:0 0 8px">Copy this prompt and paste it into a fresh CLI terminal to respawn the agent:</p>' +
       '<div class="respawn-modal-prompt" id="respawn-prompt-text">' + escapeHtml(prompt) + '</div>' +
       '<div class="respawn-modal-actions">' +
         '<button class="respawn-close-btn" onclick="dismissRespawnModal()">Close</button>' +
-        '<button class="respawn-copy-btn" onclick="copyRespawnPrompt()">&#x1F4CB; Copy to Clipboard</button>' +
+        '<button class="respawn-copy-btn" onclick="copyRespawnPrompt()">Copy to Clipboard</button>' +
       '</div>' +
     '</div>';
 
@@ -4709,7 +4709,7 @@ function copyRespawnPrompt() {
     var btn = document.querySelector('.respawn-copy-btn');
     if (btn) {
       btn.textContent = '\u2705 Copied!';
-      setTimeout(function() { btn.innerHTML = '&#x1F4CB; Copy to Clipboard'; }, 2000);
+      setTimeout(function() { btn.innerHTML = 'Copy to Clipboard'; }, 2000);
     }
   }).catch(function() {
     // Fallback: select all text
@@ -4837,17 +4837,17 @@ function renderMessages(messages) {
         ? '<div class="empty-sub">Select a project above to see agent conversations</div>'
         : '<div class="empty-sub">Waiting for messages in: ' + activeProject.split(/[/\\]/).pop() + '</div>';
       el.innerHTML = '<div class="empty-state">' +
-        '<div class="empty-icon">&#x1f4ac;</div>' +
+        '<div class="empty-icon" style="font-size:40px;opacity:0.2">--</div>' +
         '<div class="empty-text">No messages yet</div>' +
         mobileHint +
       '</div>';
     } else {
       el.innerHTML = '<div class="empty-state">' +
-        '<div class="empty-icon">&#x1f680;</div>' +
+        '<div class="empty-icon" style="font-size:40px;opacity:0.2">--</div>' +
         '<div class="empty-text">Neohive v6.0</div>' +
         '<div class="empty-sub">Autonomous AI agent teams — one command, zero babysitting</div>' +
         '<div class="onboard-steps">' +
-          '<div class="onboard-step" style="margin-bottom:12px"><span class="onboard-num" style="background:var(--accent)">&#x26A1;</span><span style="font-weight:600">Quickest start — one command:</span></div>' +
+          '<div class="onboard-step" style="margin-bottom:12px"><span class="onboard-num" style="background:var(--accent)"></span><span style="font-weight:600">Quickest start — one command:</span></div>' +
           '<div class="copy-block" onclick="copyText(this)" data-text="npx neohive run &quot;build a REST API with auth&quot; --agents 4"><span class="copy-hint">click to copy</span>npx neohive run "build a REST API with auth" --agents 4</div>' +
           '<div style="font-size:11px;color:var(--text-muted);margin:8px 0 16px;text-align:center">Spawns 4 agents, auto-assigns roles, creates autonomous workflow. Walk away, come back to finished work.</div>' +
           '<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"></div>' +
@@ -4981,7 +4981,7 @@ function renderMessages(messages) {
         buildMsgActions(m.id) +
         msgAvatarHtml +
         '<div class="msg-body">' +
-          '<div class="handoff-banner">&#x1f91d; Handoff: ' + escapeHtml(fromDisplay) + ' &rarr; ' + escapeHtml(toDisplay) + '</div>' +
+          '<div class="handoff-banner">Handoff: ' + escapeHtml(fromDisplay) + ' &rarr; ' + escapeHtml(toDisplay) + '</div>' +
           '<div class="msg-header">' +
             '<span class="msg-from" style="color:' + color + '" title="@' + escapeHtml(m.from) + '">' + escapeHtml(fromDisplay) + '</span>' +
             '<span class="msg-time" title="' + formatTime(m.timestamp) + '">' + relativeTime(m.timestamp) + '</span>' +
@@ -5008,7 +5008,7 @@ function renderMessages(messages) {
             '<span class="msg-time" title="' + formatTime(m.timestamp) + '">' + relativeTime(m.timestamp) + '</span>' +
             '<div class="msg-badges">' + badges + '</div>' +
           '</div>' +
-          '<div class="file-meta"><span class="file-icon">&#x1f4c4;</span>' + escapeHtml(fileName) + '<span class="file-size">' + fileSize + '</span></div>' +
+          '<div class="file-meta"><span class="file-icon" style="opacity:0.5">[ ]</span>' + escapeHtml(fileName) + '<span class="file-size">' + fileSize + '</span></div>' +
           '<div class="msg-content">' + renderMarkdown(m.content) + '</div>' +
           buildReactionsHtml(m.id) +
           buildReadReceipts(m.id) +
@@ -5365,7 +5365,7 @@ function deepSearch() {
     lastMessageCount = 0;
     var el = document.getElementById('messages');
     if (!messages.length) {
-      el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#x1f50d;</div><div class="empty-text">No results for "' + escapeHtml(query) + '"</div><div class="empty-sub">Searched full history including channels</div></div>';
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon" style="font-size:40px;opacity:0.2">--</div><div class="empty-text">No results for "' + escapeHtml(query) + '"</div><div class="empty-sub">Searched full history including channels</div></div>';
       return;
     }
     // Render search results directly (don't overwrite cachedHistory)
@@ -5490,14 +5490,14 @@ function buildMsgActions(msgId) {
 
   var msg = cachedHistory.find(function(m) { return m.id === msgId; });
   var isDeletable = msg && (msg.from === 'dashboard' || msg.from === 'Dashboard' || msg.from === 'system' || msg.from === '__system__');
-  var deleteBtn = isDeletable ? '<button class="msg-action-btn" onclick="deleteMessage(\'' + msgId + '\')" title="Delete" style="color:var(--red,#e74c3c)">&#x1f5d1;&#xFE0F;</button>' : '';
+  var deleteBtn = isDeletable ? '<button class="msg-action-btn" onclick="deleteMessage(\'' + msgId + '\')" title="Delete" style="color:var(--red,#e74c3c)">Del</button>' : '';
 
   return '<div class="msg-actions">' +
-    '<button class="msg-action-btn" onclick="toggleReactPicker(\'' + msgId + '\')" title="React">&#x1f600;</button>' +
+    '<button class="msg-action-btn" onclick="toggleReactPicker(\'' + msgId + '\')" title="React">+</button>' +
     '<button class="msg-action-btn' + pinClass + '" onclick="togglePin(\'' + msgId + '\')" title="Pin">\ud83d\udccc</button>' +
     '<button class="msg-action-btn' + starClass + '" onclick="toggleBookmark(\'' + msgId + '\')" title="Bookmark">' + starChar + '</button>' +
-    '<button class="msg-action-btn" onclick="copyMessage(\'' + msgId + '\', this)" title="Copy">&#x1f4cb;</button>' +
-    '<button class="msg-action-btn" onclick="openEditMessage(\'' + msgId + '\')" title="Edit">&#x270F;&#xFE0F;</button>' +
+    '<button class="msg-action-btn" onclick="copyMessage(\'' + msgId + '\', this)" title="Copy">Copy</button>' +
+    '<button class="msg-action-btn" onclick="openEditMessage(\'' + msgId + '\')" title="Edit">Edit</button>' +
     deleteBtn +
     '<div class="react-picker" id="react-' + msgId + '">' +
       REACTION_EMOJIS.map(function(e) { return '<button class="react-emoji" onclick="addReaction(\'' + msgId + '\',\'' + e + '\')">' + e + '</button>'; }).join('') +
@@ -5510,7 +5510,7 @@ function copyMessage(msgId, btn) {
   if (!msg) return;
   navigator.clipboard.writeText(msg.content).then(function() {
     var orig = btn.innerHTML;
-    btn.innerHTML = '&#x2705;';
+    btn.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l3 3 7-7"/></svg>';
     btn.title = 'Copied!';
     setTimeout(function() { btn.innerHTML = orig; btn.title = 'Copy'; }, 1500);
   });
@@ -5614,7 +5614,7 @@ function applyTheme(theme) {
     document.documentElement.removeAttribute('data-theme');
   }
   var themeBtn = document.getElementById('theme-toggle');
-  if (themeBtn) themeBtn.innerHTML = theme === 'light' ? '&#x2600;&#xfe0f;' : '&#x1f319;';
+  if (themeBtn) themeBtn.innerHTML = theme === 'light' ? 'Light' : 'Dark';
   localStorage.setItem('ltt-theme', theme);
 }
 
@@ -5870,7 +5870,7 @@ function renderBookmarksSidebar() {
   var ids = Object.keys(bookmarks);
 
   if (!ids.length) {
-    el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:4px;">No bookmarks yet<br><span style="font-size:10px;opacity:0.7">Hover a message and click &#x2606; to bookmark</span></div>';
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:4px;">No bookmarks yet<br><span style="font-size:10px;opacity:0.7">Hover a message and click star to bookmark</span></div>';
     countEl.style.display = 'none';
     clearEl.style.display = 'none';
     return;
@@ -6949,7 +6949,7 @@ function renderWorkflows(workflows) {
         '<span class="step-num">' + s.id + '</span>' +
         '<span style="font-size:10px;color:' + stepColor + ';font-weight:600;text-transform:uppercase">' + s.status.replace('_', ' ') + '</span>' +
         '<div class="step-desc">' + escapeHtml(s.description) + '</div>' +
-        (s.assignee ? '<div class="step-assignee">&#x1f464; ' + escapeHtml(s.assignee) + '</div>' : '') +
+        (s.assignee ? '<div class="step-assignee">' + escapeHtml(s.assignee) + '</div>' : '') +
         stepTimeHtml +
       '</div>';
     }
@@ -7061,7 +7061,7 @@ function renderPlanView(data) {
     // Step cards
     for (var j = 0; j < steps.length; j++) {
       var s = steps[j];
-      var icon = s.status === 'done' ? '&#x2705;' : s.status === 'in_progress' ? '&#x1f504;' : '&#x23f3;';
+      var icon = s.status === 'done' ? '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l3 3 7-7"/></svg>' : s.status === 'in_progress' ? '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8a6 6 0 0111 0M14 8a6 6 0 01-11 0"/></svg>' : '...';
       var bgColor = s.status === 'done' ? 'rgba(34,197,94,0.08)' : s.status === 'in_progress' ? 'rgba(59,130,246,0.08)' : 'var(--surface-2)';
       var borderColor = s.status === 'done' ? 'var(--green)' : s.status === 'in_progress' ? 'var(--accent)' : 'var(--border)';
 
@@ -7090,15 +7090,15 @@ function renderPlanView(data) {
               confidence +
             '</div>' +
           '</div>' +
-          (s.flagged ? '<div style="font-size:10px;color:var(--orange);margin-top:2px">&#x26a0;&#xfe0f; ' + escapeHtml(s.flag_reason || 'Flagged for review') + '</div>' : '') +
-          (s.verification && s.verification.learnings ? '<div style="font-size:10px;color:var(--purple,#a855f7);margin-top:2px">&#x1f4da; Learned: ' + escapeHtml(s.verification.learnings.substring(0, 100)) + '</div>' : '') +
+          (s.flagged ? '<div style="font-size:10px;color:var(--orange);margin-top:2px">' + escapeHtml(s.flag_reason || 'Flagged for review') + '</div>' : '') +
+          (s.verification && s.verification.learnings ? '<div style="font-size:10px;color:var(--purple,#a855f7);margin-top:2px">Learned: ' + escapeHtml(s.verification.learnings.substring(0, 100)) + '</div>' : '') +
         '</div>';
 
       // Step control buttons (skip/reassign) for in_progress/pending steps
       if (wf.status === 'active' && (s.status === 'in_progress' || s.status === 'pending')) {
         html += '<div style="display:flex;gap:4px">' +
           '<button onclick="planAction(\'skip\',' + s.id + ',\'' + wf.id + '\')" style="font-size:10px;padding:3px 8px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--text-muted)" title="Skip this step">Skip</button>' +
-          '<button onclick="planReassign(' + s.id + ',\'' + wf.id + '\')" style="font-size:10px;padding:3px 8px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--text-muted)" title="Reassign">&#x1f504;</button>' +
+          '<button onclick="planReassign(' + s.id + ',\'' + wf.id + '\')" style="font-size:10px;padding:3px 8px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--text-muted)" title="Reassign">Re</button>' +
           '</div>';
       }
       html += '</div>';
@@ -7106,9 +7106,9 @@ function renderPlanView(data) {
 
     // Stats footer
     html += '<div style="display:flex;gap:16px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted)">';
-    if (retryCount > 0) html += '<span>&#x1f504; Retries: ' + retryCount + '</span>';
-    if (flaggedSteps.length > 0) html += '<span>&#x26a0;&#xfe0f; Flagged: ' + flaggedSteps.length + '</span>';
-    html += '<span>&#x2705; Done: ' + doneCount + '/' + steps.length + '</span>';
+    if (retryCount > 0) html += '<span>Retries: ' + retryCount + '</span>';
+    if (flaggedSteps.length > 0) html += '<span>Flagged: ' + flaggedSteps.length + '</span>';
+    html += '<span>Done: ' + doneCount + '/' + steps.length + '</span>';
     html += '</div>';
 
     // Control buttons
@@ -7348,7 +7348,7 @@ function renderNotifList() {
   var html = '';
   for (var i = notifData.length - 1; i >= 0; i--) {
     var n = notifData[i];
-    var icon = n.type === 'online' ? '&#x1f7e2;' : n.type === 'offline' ? '&#x1f534;' : n.type === 'listening' ? '&#x1f50a;' : '&#x1f515;';
+    var icon = n.type === 'online' ? '+' : n.type === 'offline' ? '-' : n.type === 'listening' ? '~' : 'x';
     var time = new Date(n.timestamp).toLocaleTimeString();
     html += '<div style="padding:8px 16px;border-bottom:1px solid var(--border);font-size:12px;display:flex;gap:8px;align-items:center">' +
       '<span>' + icon + '</span>' +
@@ -7467,7 +7467,7 @@ function renderScores(data, repData) {
     var n = names[i];
     var a = agents[n];
     var agentRep = rep ? rep[n] : null;
-    var medal = i === 0 ? '&#x1f947;' : i === 1 ? '&#x1f948;' : i === 2 ? '&#x1f949;' : '#' + (i + 1);
+    var medal = i === 0 ? '#1' : i === 1 ? '#2' : i === 2 ? '#3' : '#' + (i + 1);
     var scoreColor = a.score >= 80 ? 'var(--green)' : a.score >= 60 ? 'var(--accent)' : a.score >= 40 ? 'var(--orange)' : 'var(--red)';
     html += '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px">' +
       '<div style="font-size:18px;width:28px;text-align:center">' + medal + '</div>' +
@@ -7778,12 +7778,12 @@ function toggleSound() {
   var btn = document.getElementById('sound-toggle') || document.createElement('div');
   if (soundEnabled) {
     btn.classList.add('active');
-    btn.innerHTML = '&#x1f50a;';
+    btn.innerHTML = '~';
     // Init audio context on first user interaction
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   } else {
     btn.classList.remove('active');
-    btn.innerHTML = '&#x1f508;';
+    btn.innerHTML = 'Off';
   }
 }
 
@@ -7983,10 +7983,10 @@ function updateNotifBtn() {
   var btn = document.getElementById('notif-toggle') || document.createElement('div');
   if (notifEnabled) {
     btn.classList.add('active');
-    btn.innerHTML = '&#x1f514;';
+    btn.innerHTML = 'On';
   } else {
     btn.classList.remove('active');
-    btn.innerHTML = '&#x1f515;';
+    btn.innerHTML = 'x';
   }
 }
 
@@ -8766,8 +8766,8 @@ function updateAgentBar(agents) {
     // Toast on state change
     var prevState = prevAgentBarState[name];
     if (prevState !== undefined) {
-      if (!prevState && agent.alive) showToast('&#x1F7E2;', name + ' came online');
-      if (prevState && !agent.alive) showToast('&#x26AA;', name + ' went offline');
+      if (!prevState && agent.alive) showToast('<span style="color:var(--green)">+</span>', name + ' came online');
+      if (prevState && !agent.alive) showToast('<span style="color:var(--text-muted)">-</span>', name + ' went offline');
     }
     prevAgentBarState[name] = agent.alive;
     html += '<div class="agent-pill ' + cls + '" onclick="showAgentPopup(\'' + name + '\')">' +
