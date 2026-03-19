@@ -57,6 +57,13 @@ function getLanIP() {
   return fallback;
 }
 const DEFAULT_DATA_DIR = process.env.NEOHIVE_DATA || path.join(process.cwd(), '.neohive');
+
+// Auto-migrate from .agent-bridge/ to .neohive/ (v5 → v6 rename)
+const _legacyDir = path.join(process.cwd(), '.agent-bridge');
+if (!fs.existsSync(DEFAULT_DATA_DIR) && fs.existsSync(_legacyDir)) {
+  try { fs.renameSync(_legacyDir, DEFAULT_DATA_DIR); } catch {}
+}
+
 const HTML_FILE = path.join(__dirname, 'dashboard.html');
 const LOGO_FILE = path.join(__dirname, 'logo.png');
 const PROJECTS_FILE = path.join(__dirname, 'projects.json');

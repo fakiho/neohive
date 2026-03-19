@@ -31,6 +31,13 @@ const log = {
 
 // Data dir lives in the project where Claude Code runs, not where the package is installed
 const DATA_DIR = process.env.NEOHIVE_DATA_DIR || path.join(process.cwd(), '.neohive');
+
+// Auto-migrate from .agent-bridge/ to .neohive/ (v5 → v6 rename)
+const _legacyDir = path.join(process.cwd(), '.agent-bridge');
+if (!fs.existsSync(DATA_DIR) && fs.existsSync(_legacyDir)) {
+  try { fs.renameSync(_legacyDir, DATA_DIR); } catch {}
+}
+
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.jsonl');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.jsonl');
 const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
