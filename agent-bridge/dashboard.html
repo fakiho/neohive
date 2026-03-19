@@ -363,16 +363,16 @@
     background: var(--surface-2);
     background-image: var(--gradient-surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    margin-bottom: 6px;
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 4px;
     transition: all 0.25s ease;
+    cursor: pointer;
   }
 
   .agent-card:hover { border-color: var(--border-light); box-shadow: var(--shadow-sm); }
 
   .agent-card.sleeping {
-    border-color: var(--orange);
     border-left: 3px solid var(--orange);
   }
 
@@ -384,141 +384,48 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 6px;
   }
 
   .agent-avatar {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    font-size: 12px;
+    font-size: 11px;
     color: #fff;
     flex-shrink: 0;
   }
 
   .agent-info { flex: 1; min-width: 0; }
 
-  .agent-name {
-    font-weight: 600;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .agent-badge {
-    font-size: 9px;
-    padding: 1px 5px;
-    border-radius: 6px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-  }
-
-  .agent-badge.active { background: var(--green-dim); color: var(--green); }
-  .agent-badge.sleeping { background: var(--orange-dim); color: var(--orange); }
-  .agent-badge.dead { background: var(--red-dim); color: var(--red); }
-
-  .agent-status-intent {
-    font-size: 11px;
-    color: var(--text-dim);
-    padding: 3px 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-style: italic;
-  }
-
-  .agent-status-intent::before {
-    content: '\1F4AD';
-    margin-right: 4px;
-    font-style: normal;
-  }
-
-  .listen-badge {
-    font-size: 9px;
-    padding: 2px 6px;
-    border-radius: 6px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    margin-top: 5px;
-  }
-
-  .listen-badge.listening {
-    background: var(--green-dim);
-    color: var(--green);
-    border: 1px solid rgba(63, 185, 80, 0.3);
-  }
-
-  .listen-badge.busy {
-    background: var(--orange-dim);
-    color: var(--yellow);
-    border: 1px solid rgba(227, 179, 65, 0.3);
-  }
-
-  .listen-badge.not-listening {
-    background: var(--red-dim);
-    color: var(--red);
-    border: 1px solid rgba(248, 81, 73, 0.3);
-    animation: pulseAlert 1.5s infinite;
-  }
-
-  .listen-badge.offline {
-    background: var(--surface-3);
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-  }
-
-  .listen-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    display: inline-block;
-  }
-
-  .listen-dot.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
-  .listen-dot.off { background: var(--red); }
-
-  @keyframes pulseAlert {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
-  }
-
-  .agent-meta {
-    font-size: 10px;
-    color: var(--text-muted);
-    display: flex;
-    gap: 8px;
-  }
-
-  .agent-activity {
-    font-size: 10px;
-    color: var(--text-dim);
-    margin-top: 4px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .agent-activity-icon {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
+  .agent-status-dot {
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
   }
+  .agent-status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .agent-status-dot.sleeping { background: var(--orange); animation: pulse 2s infinite; }
+  .agent-status-dot.dead { background: var(--red); }
 
-  .agent-activity-icon.active { background: var(--green); box-shadow: 0 0 4px var(--green); }
-  .agent-activity-icon.sleeping { background: var(--orange); animation: pulse 2s infinite; }
-  .agent-activity-icon.dead { background: var(--red); }
+  .agent-name {
+    font-weight: 600;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .agent-subtitle {
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   .nudge-btn {
     background: var(--orange-dim);
@@ -4491,90 +4398,44 @@ function renderAgents(agents) {
     for (var i = 0; i < agentNames.length; i++) {
       var name = agentNames[i];
       var info = agents[name];
-    var color = getColor(name);
-    // Use server-provided status if available, fallback to client-side detection
-    var state = info.status || (info.alive ? 'active' : 'dead');
-    if (state === 'sleeping') sleepCount++;
+      var color = getColor(name);
+      var state = info.status || (info.alive ? 'active' : 'dead');
+      if (state === 'sleeping') sleepCount++;
 
-    var activityText = '';
-    if (state === 'dead') {
-      activityText = 'Process not running';
-    } else if (info.idle_seconds != null) {
-      if (info.idle_seconds < 5) activityText = 'Active just now';
-      else if (info.idle_seconds < 60) activityText = 'Active ' + info.idle_seconds + 's ago';
-      else activityText = 'Idle ' + Math.floor(info.idle_seconds / 60) + 'm ' + (info.idle_seconds % 60) + 's';
-    } else if (info.last_message) {
-      activityText = 'Last msg ' + timeAgo(info.last_message);
-    } else {
-      activityText = 'Registered ' + timeAgo(info.registered_at);
-    }
-
-    var stateLabel = state.charAt(0).toUpperCase() + state.slice(1);
-    var cardClass = 'agent-card' + (state !== 'active' ? ' ' + state : '');
-
-    var nudgeHtml = '';
-    if (state === 'sleeping' || (state === 'active' && !info.is_listening && info.idle_seconds > 30)) {
-      nudgeHtml = '<button class="nudge-btn" onclick="sendNudge(\'' + escapeHtml(name) + '\')">Send Nudge</button>';
-    }
-    var removeHtml = '';
-    var respawnHtml = '';
-    if (state === 'dead') {
-      removeHtml = '<button class="remove-agent-btn" onclick="event.stopPropagation();removeAgent(\'' + escapeHtml(name) + '\')" title="Remove this agent">Remove</button>';
-      respawnHtml = '<button class="respawn-btn" onclick="event.stopPropagation();respawnAgent(\'' + escapeHtml(name) + '\')" title="Generate resume prompt for this agent">Respawn</button>';
-    }
-
-    // Listening status — simplified: skip for dead (already shown via badge)
-    var listenHtml = '';
-    if (state !== 'dead') {
-      if (info.is_listening) {
-        var sinceTxt = info.listening_since ? ' since ' + formatTime(info.listening_since) : '';
-        listenHtml = '<div class="listen-badge listening" title="Agent is waiting for messages — can receive dashboard injections"><span class="listen-dot on"></span>Listening' + sinceTxt + '</div>';
-      } else if (state === 'active') {
-        listenHtml = '<div class="listen-badge busy" title="Agent is working, not currently listening for messages"><span class="listen-dot off"></span>Busy</div>';
-      } else {
-        listenHtml = '<div class="listen-badge not-listening" title="Agent is not listening. Send a nudge or type \'listen\' in the terminal."><span class="listen-dot off"></span>Not Listening</div>';
+      // Compact activity text
+      var activityText = '';
+      if (state === 'dead') {
+        activityText = 'offline';
+      } else if (info.idle_seconds != null) {
+        if (info.idle_seconds < 5) activityText = 'just now';
+        else if (info.idle_seconds < 60) activityText = info.idle_seconds + 's ago';
+        else activityText = Math.floor(info.idle_seconds / 60) + 'm ago';
+      } else if (info.last_activity) {
+        activityText = timeAgo(info.last_activity);
       }
-    }
 
-    var avatarHtml = info.avatar
-      ? '<img class="agent-avatar-img" src="' + escapeHtml(info.avatar) + '" alt="' + escapeHtml(name) + '" onerror="this.style.display=\'none\'">'
-      : '<div class="agent-avatar" style="background:' + color + '">' + initial(name) + '</div>';
-    var displayName = info.display_name || name;
-    var roleHtml = '';
-    if (info.role) {
-      var roleBg = info.role === 'quality' ? 'background:rgba(34,197,94,0.15);color:var(--green)' :
-        info.role === 'monitor' ? 'background:rgba(239,68,68,0.15);color:var(--red,#ef4444)' :
-        info.role === 'advisor' ? 'background:rgba(168,85,247,0.15);color:var(--purple,#a855f7)' :
-        info.role === 'lead' ? 'background:rgba(59,130,246,0.15);color:var(--accent)' : '';
-      roleHtml = '<span class="role-badge" style="' + roleBg + '">' + escapeHtml(info.role) + '</span>';
-    }
-    var branchHtml = info.branch && info.branch !== 'main' ? ' <span style="font-size:9px;color:var(--text-muted)">[' + escapeHtml(info.branch) + ']</span>' : '';
+      var cardClass = 'agent-card' + (state !== 'active' ? ' ' + state : '');
+      var avatarHtml = info.avatar
+        ? '<img class="agent-avatar-img" src="' + escapeHtml(info.avatar) + '" alt="' + escapeHtml(name) + '" onerror="this.style.display=\'none\'">'
+        : '<div class="agent-avatar" style="background:' + color + '">' + initial(name) + '</div>';
+      var displayName = info.display_name || name;
 
-    cardHtml += '<div class="' + cardClass + '">' +
-      '<div class="agent-top" onclick="showProfilePopup(\'' + escapeHtml(name) + '\', event)" style="cursor:pointer">' +
-        avatarHtml +
-        '<div class="agent-info">' +
-          '<div class="agent-name" style="color:' + color + '">' +
-            escapeHtml(displayName) +
-            roleHtml +
-            ' <span class="agent-badge ' + state + '">' + stateLabel + '</span>' +
-            branchHtml +
+      // Subtitle: role + activity
+      var subtitleParts = [];
+      if (info.role) subtitleParts.push(info.role);
+      if (activityText) subtitleParts.push(activityText);
+      var subtitleText = subtitleParts.join(' \u00B7 ');
+
+      cardHtml += '<div class="' + cardClass + '" onclick="showProfilePopup(\'' + escapeHtml(name) + '\', event)">' +
+        '<div class="agent-top">' +
+          avatarHtml +
+          '<div class="agent-info">' +
+            '<div class="agent-name" style="color:' + color + '">' + escapeHtml(displayName) + '</div>' +
+            '<div class="agent-subtitle">' + escapeHtml(subtitleText) + '</div>' +
           '</div>' +
-          '<div class="agent-meta"><span>' + getProviderBadge(info.provider) + 'PID ' + info.pid + '</span>' +
-            (info.last_activity ? '<span style="margin-left:8px" title="Last heartbeat: ' + new Date(info.last_activity).toLocaleTimeString() + '">' + timeAgo(info.last_activity) + '</span>' : '') +
-          '</div>' +
+          '<span class="agent-status-dot ' + state + '" title="' + state + '"></span>' +
         '</div>' +
-      '</div>' +
-      '<div class="agent-activity">' +
-        '<span class="agent-activity-icon ' + state + '"></span>' +
-        activityText +
-      '</div>' +
-      (info.current_status ? '<div class="agent-status-intent" title="' + escapeHtml(info.current_status) + '">' + escapeHtml(info.current_status) + '</div>' : '') +
-      listenHtml +
-      nudgeHtml +
-      respawnHtml +
-      removeHtml +
-    '</div>';
+      '</div>';
     }
     return cardHtml;
   }
