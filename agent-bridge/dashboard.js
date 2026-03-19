@@ -146,7 +146,7 @@ function readJson(file) {
 }
 
 function isPidAlive(pid, lastActivity) {
-  const STALE_THRESHOLD = 60000; // 60s — if heartbeat updated within this, agent is alive
+  const STALE_THRESHOLD = 30000; // 30s — 3x heartbeat interval, catches dead agents faster
 
   // PRIORITY 1: Trust heartbeat freshness over PID status
   // Heartbeats are written by the actual running process — if fresh, agent is alive
@@ -315,7 +315,7 @@ function apiAgents(query) {
       last_activity: lastActivity,
       last_message: lastMessageTime[name] || null,
       idle_seconds: alive ? idleSeconds : null,
-      status: !alive ? 'dead' : idleSeconds > 60 ? 'sleeping' : 'active',
+      status: !alive ? 'offline' : (info.listening_since && alive) ? 'listening' : idleSeconds > 30 ? 'idle' : 'working',
       listening_since: info.listening_since || null,
       is_listening: !!(info.listening_since && alive),
       provider: info.provider || 'unknown',
@@ -354,7 +354,7 @@ function apiStatus(query) {
     if (!isPidAlive(a.pid, a.last_activity)) return false;
     const lastActivity = a.last_activity || a.timestamp;
     const idleSeconds = Math.floor((Date.now() - new Date(lastActivity).getTime()) / 1000);
-    return idleSeconds > 60;
+    return idleSeconds > 30;
   }).length;
 
   // Include managed mode status if active

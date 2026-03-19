@@ -359,11 +359,11 @@
 
   .agent-card:hover { border-color: var(--border-light); box-shadow: var(--shadow-sm); }
 
-  .agent-card.sleeping {
+  .agent-card.sleeping, .agent-card.idle {
     border-left: 3px solid var(--orange);
   }
 
-  .agent-card.dead {
+  .agent-card.dead, .agent-card.offline {
     opacity: 0.5;
   }
 
@@ -394,9 +394,10 @@
     border-radius: 50%;
     flex-shrink: 0;
   }
-  .agent-status-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .agent-status-dot.sleeping { background: var(--orange); animation: pulse 2s infinite; }
-  .agent-status-dot.dead { background: var(--red); }
+  .agent-status-dot.active, .agent-status-dot.working { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .agent-status-dot.listening { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 2s infinite; }
+  .agent-status-dot.sleeping, .agent-status-dot.idle { background: var(--orange); animation: pulse 2s infinite; }
+  .agent-status-dot.dead, .agent-status-dot.offline { background: var(--red); }
 
   .agent-name {
     font-weight: 600;
@@ -4361,7 +4362,7 @@ function renderAgents(agents) {
   for (var f = 0; f < keys.length; f++) {
     var fname = keys[f];
     var finfo = agents[fname];
-    var fstate = finfo.status || (finfo.alive ? 'active' : 'dead');
+    var fstate = finfo.status || (finfo.alive ? 'working' : 'offline');
     if (agentFilterSearch && fname.toLowerCase().indexOf(agentFilterSearch) === -1 &&
         (!finfo.display_name || finfo.display_name.toLowerCase().indexOf(agentFilterSearch) === -1)) continue;
     if (agentFilterRole && finfo.role !== agentFilterRole) continue;
@@ -4398,12 +4399,12 @@ function renderAgents(agents) {
       var name = agentNames[i];
       var info = agents[name];
       var color = getColor(name);
-      var state = info.status || (info.alive ? 'active' : 'dead');
-      if (state === 'sleeping') sleepCount++;
+      var state = info.status || (info.alive ? 'working' : 'offline');
+      if (state === 'idle' || state === 'sleeping') sleepCount++;
 
       // Compact activity text
       var activityText = '';
-      if (state === 'dead') {
+      if (state === 'offline' || state === 'dead') {
         activityText = 'offline';
       } else if (info.idle_seconds != null) {
         if (info.idle_seconds < 5) activityText = 'just now';
@@ -8619,9 +8620,9 @@ function updateAgentBar(agents) {
     var cls = 'offline';
     var activity = 'offline';
     if (agent.alive) {
-      if (agent.is_listening) { cls = 'listening'; activity = 'listening'; }
-      else if (agent.status === 'active') { cls = 'online'; activity = 'active'; }
-      else { cls = 'online'; activity = agent.idle_seconds > 60 ? 'idle' : 'active'; }
+      if (agent.is_listening || agent.status === 'listening') { cls = 'listening'; activity = 'listening'; }
+      else if (agent.status === 'idle') { cls = 'online'; activity = 'idle'; }
+      else { cls = 'online'; activity = agent.status === 'working' ? 'working' : 'active'; }
     }
     // Toast on state change
     var prevState = prevAgentBarState[name];

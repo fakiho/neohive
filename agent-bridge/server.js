@@ -475,8 +475,8 @@ function isPidAlive(pid, lastActivity) {
   const cached = _pidAliveCache[cacheKey];
   if (cached && Date.now() - cached.ts < 5000) return cached.alive;
 
-  // Faster stale detection in autonomous mode (30s vs 60s) for quicker dead agent recovery
-  const STALE_THRESHOLD = isAutonomousMode() ? 30000 : 60000;
+  // 30s stale threshold — 3x the 10s heartbeat interval, catches dead agents faster
+  const STALE_THRESHOLD = 30000;
   let alive = false;
 
   // PRIORITY 1: Trust heartbeat freshness over PID status
@@ -1102,6 +1102,7 @@ function buildGuide(level = 'standard') {
   const isQualityLead = myRole === 'quality';
   const isMonitor = myRole === 'monitor';
   const isAdvisor = myRole === 'advisor';
+  const isLeadRole = myRole === 'lead' || myRole === 'manager' || myRole === 'coordinator';
   let qualityLeadName = null;
   for (const [pName, prof] of Object.entries(profiles)) {
     if (prof.role && prof.role.toLowerCase() === 'quality' && pName !== registeredName) { qualityLeadName = pName; break; }
@@ -1200,7 +1201,7 @@ function buildGuide(level = 'standard') {
       quality_lead: qualityLeadName || undefined,
       tool_categories: {
         'WORK LOOP': 'get_work, verify_and_advance, retry_with_improvement',
-        'MESSAGING': 'send_message, broadcast, check_messages, get_history, handoff, share_file',
+        'MESSAGING': 'send_message, broadcast, check_messages, consume_messages, get_history, handoff, share_file',
         'COORDINATION': 'get_briefing, log_decision, get_decisions, kb_write, kb_read, kb_list',
         'TASKS': 'create_task, update_task, list_tasks, suggest_task',
         'QUALITY': 'request_review, submit_review',
@@ -1217,6 +1218,11 @@ function buildGuide(level = 'standard') {
     } else if (qualityLeadName) {
       rules.push('SELF-CONTINUATION: After completing work, report to ' + qualityLeadName + ' (Quality Lead). After approval, find next work. NEVER ask the user what to do next.');
     }
+  }
+
+  // Lead/Coordinator pattern: use consume_messages() instead of blocking listen()
+  if (isLeadRole && aliveCount >= 2) {
+    rules.push('RESPONSIVE COORDINATOR PATTERN: Use consume_messages() at the start of each interaction to check for agent updates non-blockingly. Process all returned messages, assign work, then return to the human immediately. Do NOT block in listen() — you need to stay responsive to both agents and the user.');
   }
 
   // Tier 0 — THE one rule (always included at every level)
@@ -1296,7 +1302,7 @@ function buildGuide(level = 'standard') {
       ? '1. Call list_agents() to see who is online. 2. Send a message or call listen() to wait.'
       : '1. Call get_briefing() for project context. 2. Call listen_group() to join. 3. Respond and listen_group() again.',
     tool_categories: {
-      'MESSAGING': 'send_message, broadcast, listen_group, listen, check_messages, get_history, get_summary, search_messages, handoff, share_file',
+      'MESSAGING': 'send_message, broadcast, listen_group, listen, check_messages, consume_messages, get_history, get_summary, search_messages, handoff, share_file',
       'COORDINATION': 'get_briefing, log_decision, get_decisions, kb_write, kb_read, kb_list, call_vote, cast_vote, vote_status',
       'TASKS': 'create_task, update_task, list_tasks, declare_dependency, check_dependencies, suggest_task',
       'QUALITY': 'update_progress, get_progress, request_review, submit_review, get_reputation',
@@ -1418,6 +1424,17 @@ function toolRegister(name, provider = null, skills = null) {
           }
         }
       }
+      // Clean stale listening_since flags (listen times out at 5min, clear after 6min)
+      for (const [aName, aInfo] of Object.entries(agents)) {
+        if (aInfo.listening_since) {
+          const listenAge = Date.now() - new Date(aInfo.listening_since).getTime();
+          if (listenAge > 360000) {
+            aInfo.listening_since = null;
+          }
+        }
+      }
+      // Agent status change notifications — detect agents going offline/online
+      detectAgentStatusChanges(agents);
       // Snapshot dead agents BEFORE cleanup (for auto-recovery)
       snapshotDeadAgents(agents);
       // Clean up file locks held by dead agents
@@ -1558,7 +1575,7 @@ function toolListAgents() {
       registered_at: info.timestamp,
       last_activity: lastActivity,
       idle_seconds: alive ? idleSeconds : null,
-      status: !alive ? 'dead' : idleSeconds > 60 ? 'sleeping' : 'active',
+      status: !alive ? 'offline' : (info.listening_since && alive) ? 'listening' : idleSeconds > 30 ? 'idle' : 'working',
       listening_since: info.listening_since || null,
       is_listening: !!(info.listening_since && alive),
       last_listened_at: info.last_listened_at || null,
@@ -2106,6 +2123,59 @@ function toolCheckMessages(from = null) {
   }
 
   return result;
+}
+
+function toolConsumeMessages(from = null, limit = null) {
+  if (!registeredName) {
+    return { error: 'You must call register() first' };
+  }
+
+  let unconsumed = getUnconsumedMessages(registeredName, from);
+  if (limit && limit > 0 && unconsumed.length > limit) {
+    unconsumed = unconsumed.slice(0, limit);
+  }
+
+  if (unconsumed.length === 0) {
+    return { success: true, count: 0, messages: [] };
+  }
+
+  // Mark all as consumed
+  const consumed = getConsumedIds(registeredName);
+  for (const msg of unconsumed) {
+    consumed.add(msg.id);
+    markAsRead(registeredName, msg.id);
+  }
+  saveConsumedIds(registeredName, consumed);
+
+  // Update read offset
+  const msgFile = getMessagesFile(currentBranch);
+  if (fs.existsSync(msgFile)) {
+    lastReadOffset = fs.statSync(msgFile).size;
+  }
+
+  touchActivity();
+
+  // Count remaining unconsumed after this batch
+  const remaining = getUnconsumedMessages(registeredName, null);
+
+  const agents = getAgents();
+  const agentsOnline = Object.entries(agents).filter(([, info]) => isPidAlive(info.pid, info.last_activity)).length;
+
+  return {
+    success: true,
+    count: unconsumed.length,
+    messages: unconsumed.map(m => ({
+      id: m.id,
+      from: m.from,
+      content: m.content,
+      timestamp: m.timestamp,
+      ...(m.reply_to && { reply_to: m.reply_to }),
+      ...(m.thread_id && { thread_id: m.thread_id }),
+      ...(m.addressed_to && { addressed_to: m.addressed_to }),
+    })),
+    remaining: remaining.length,
+    agents_online: agentsOnline,
+  };
 }
 
 function toolAckMessage(messageId) {
@@ -5323,6 +5393,24 @@ function triggerStandupIfDue() {
   } catch (e) { log.warn("standup trigger failed:", e.message); }
 }
 
+// --- Agent status change detection (heartbeat-driven) ---
+const _prevAgentAlive = {};
+function detectAgentStatusChanges(agents) {
+  for (const [name, info] of Object.entries(agents)) {
+    if (name === registeredName) continue;
+    const alive = isPidAlive(info.pid, info.last_activity);
+    const wasAlive = _prevAgentAlive[name];
+    if (wasAlive !== undefined && wasAlive !== alive) {
+      if (!alive) {
+        broadcastSystemMessage(`[STATUS] ${name} is unreachable`, name);
+      } else {
+        broadcastSystemMessage(`[STATUS] ${name} is back online`, null);
+      }
+    }
+    _prevAgentAlive[name] = alive;
+  }
+}
+
 // Auto-recovery: snapshot dead agent state before cleanup
 // Creates recovery-{name}.json so replacement agent can resume
 function snapshotDeadAgents(agents) {
@@ -6345,6 +6433,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: 'consume_messages',
+        description: 'Non-blocking check that returns ALL unconsumed messages with full content AND marks them as consumed. Unlike check_messages (peek-only) or listen (blocking), this is a one-shot "grab everything and mark it read" call. Ideal for agents that need to process a batch of messages without blocking.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            from: {
+              type: 'string',
+              description: 'Only consume messages from this specific agent (optional)',
+            },
+            limit: {
+              type: 'number',
+              description: 'Max number of messages to consume (default: all)',
+            },
+          },
+        },
+      },
+      {
         name: 'ack_message',
         description: 'Acknowledge that you have processed a message. Lets the sender verify delivery via get_history.',
         inputSchema: {
@@ -6947,6 +7052,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'check_messages':
         result = toolCheckMessages(args?.from);
         break;
+      case 'consume_messages':
+        result = toolConsumeMessages(args?.from, args?.limit);
+        break;
       case 'ack_message':
         result = toolAckMessage(args.message_id);
         break;
@@ -7148,7 +7256,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // Global hook: on non-listen tools, check for pending messages and nudge with escalating urgency
     // Enhanced nudge: includes sender names, addressed count, and message preview
-    const listenTools = ['listen', 'listen_group', 'listen_codex', 'wait_for_reply', 'check_messages'];
+    const listenTools = ['listen', 'listen_group', 'listen_codex', 'wait_for_reply', 'check_messages', 'consume_messages'];
     if (registeredName && !listenTools.includes(name) && (isGroupMode() || isManagedMode())) {
       try {
         const pending = getUnconsumedMessages(registeredName);
