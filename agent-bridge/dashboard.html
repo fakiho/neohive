@@ -39,7 +39,7 @@
     --text-lg: 16px;
     --text-xl: 24px;
     --sidebar-w: 220px;
-    --header-h: 56px;
+    --header-h: 48px;
     --glow: 0 0 24px rgba(245, 158, 11, 0.06);
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
@@ -117,12 +117,10 @@
 
   /* ===== HEADER ===== */
   .header {
-    background: rgba(9, 9, 11, 0.85);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background: var(--bg);
     border-bottom: 1px solid var(--border);
-    padding: 0 20px;
-    height: var(--header-h);
+    padding: 0 16px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -134,50 +132,39 @@
   }
 
   [data-theme="light"] .header {
-    background: rgba(250, 250, 249, 0.88);
+    background: var(--bg);
   }
 
   .header-left {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
   }
 
   .logo {
-    font-size: 20px;
-    font-weight: 800;
-    background: var(--gradient-accent);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
     white-space: nowrap;
     letter-spacing: -0.3px;
   }
 
   .header-stats {
-    display: flex;
-    gap: 16px;
-    align-items: center;
+    display: none;
   }
 
   .h-stat {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 13px;
-    color: var(--text-dim);
+    display: none;
   }
 
   .h-stat-val {
-    font-weight: 700;
-    color: var(--accent);
-    font-size: 14px;
+    display: none;
   }
 
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
   }
 
   .connection {
@@ -186,12 +173,12 @@
     gap: 5px;
     font-size: 12px;
     color: var(--text-dim);
-    margin-right: 8px;
+    margin-right: 4px;
   }
 
   .conn-dot {
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: var(--green);
     box-shadow: 0 0 6px var(--green);
@@ -1428,15 +1415,16 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 14px 10px;
+    padding: 16px 16px 12px;
     flex-shrink: 0;
   }
   .nav-sidebar-logo {
-    font-size: 14px;
-    font-weight: 800;
-    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-dim);
     white-space: nowrap;
     overflow: hidden;
+    letter-spacing: 0.02em;
   }
   .nav-sidebar.collapsed .nav-sidebar-logo { display: none; }
   .nav-sidebar-toggle {
@@ -1454,17 +1442,18 @@
   .nav-sidebar-toggle:hover { background: rgba(255,255,255,0.06); color: var(--text); }
   .nav-sidebar.collapsed .nav-sidebar-header { justify-content: center; padding: 14px 8px 10px; }
   .nav-sidebar.collapsed .nav-sidebar-toggle { margin: 0; }
-  .nav-sidebar-section { padding: 4px 8px; }
-  .nav-section-main { display: flex; flex-direction: column; gap: 2px; }
-  .nav-sidebar-divider { height: 1px; background: var(--border); margin: 8px 12px; flex-shrink: 0; }
+  .nav-sidebar-section { padding: 4px 6px; }
+  .nav-section-main { display: flex; flex-direction: column; gap: 1px; }
+  .nav-sidebar-divider { height: 1px; background: var(--border); margin: 10px 14px; flex-shrink: 0; }
   .nav-sidebar-label {
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text-muted);
-    letter-spacing: 0.06em;
-    padding: 8px 12px 4px;
+    letter-spacing: 0.08em;
+    padding: 8px 14px 6px;
     white-space: nowrap;
     overflow: hidden;
+    text-transform: uppercase;
   }
   .nav-sidebar.collapsed .nav-sidebar-label { display: none; }
   .nav-sidebar.collapsed .nav-sidebar-project { display: none; }
@@ -1477,22 +1466,23 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 9px 12px;
+    padding: 8px 12px;
     cursor: pointer;
     border-radius: 8px;
-    border-left: 3px solid transparent;
     transition: all 0.15s;
     white-space: nowrap;
     overflow: hidden;
-    margin: 0 2px;
+    margin: 1px 6px;
+    position: relative;
   }
   .nav-item:hover { background: rgba(255,255,255,0.04); }
-  .nav-item.active { border-left-color: var(--accent); background: var(--accent-dim); }
-  .nav-item .nav-icon { line-height: 0; flex-shrink: 0; width: 20px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+  .nav-item.active { background: var(--accent-dim); }
+  .nav-item .nav-icon { line-height: 0; flex-shrink: 0; width: 20px; min-width: 20px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+  .nav-item .nav-icon svg { flex-shrink: 0; width: 16px; height: 16px; }
   .nav-item.active .nav-icon { color: var(--accent); }
   .nav-item:hover .nav-icon { color: var(--text); }
-  .nav-item .nav-text { font-size: 14px; font-weight: 600; color: var(--text-muted); }
-  .nav-item.active .nav-text { color: var(--accent); }
+  .nav-item .nav-text { font-size: 13px; font-weight: 500; color: var(--text-dim); }
+  .nav-item.active .nav-text { color: var(--accent); font-weight: 600; }
   .nav-item:hover .nav-text { color: var(--text); }
   .nav-sidebar.collapsed .nav-item { justify-content: center; padding: 10px 4px; margin: 0; }
   .nav-sidebar.collapsed .nav-item .nav-text { display: none; }
@@ -1536,33 +1526,59 @@
   .agent-pill.offline .agent-name { color: var(--text-muted); opacity: 0.6; }
 
   /* ===== OVERVIEW PAGE ===== */
-  .overview-area { display: none; flex-direction: column; gap: 16px; padding: 20px; overflow-y: auto; }
+  .overview-area { display: none; flex-direction: column; gap: 24px; padding: 28px 32px; overflow-y: auto; }
   .overview-area.visible { display: flex; }
+
+  .overview-welcome {
+    margin-bottom: 4px;
+  }
+  .overview-welcome h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+    letter-spacing: -0.3px;
+  }
+  .overview-welcome p {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
   .overview-metrics {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;
   }
   .metric-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    padding: 16px; display: flex; flex-direction: column; gap: 4px;
+    padding: 20px 22px; display: flex; flex-direction: column; gap: 6px;
+    position: relative; overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
   }
-  .metric-card .metric-label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
-  .metric-card .metric-value { font-size: 28px; font-weight: 800; color: var(--text); line-height: 1.2; }
-  .metric-card .metric-sub { font-size: 12px; color: var(--text-muted); }
+  .metric-card:hover { border-color: var(--border-light); box-shadow: var(--shadow-sm); }
+  .metric-card .metric-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 4px; flex-shrink: 0;
+  }
+  .metric-card .metric-label { font-size: 12px; color: var(--text-muted); font-weight: 500; letter-spacing: 0.02em; }
+  .metric-card .metric-value { font-size: 32px; font-weight: 800; color: var(--text); line-height: 1.1; letter-spacing: -0.5px; }
+  .metric-card .metric-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
   .overview-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
   }
   .overview-panel {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px;
+    transition: border-color 0.2s;
   }
+  .overview-panel:hover { border-color: var(--border-light); }
   .overview-panel h3 {
-    font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 12px;
+    font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 14px;
     display: flex; align-items: center; justify-content: space-between;
   }
-  .overview-panel h3 a { font-size: 12px; font-weight: 500; color: var(--accent); cursor: pointer; text-decoration: none; }
-  .overview-panel h3 a:hover { text-decoration: underline; }
+  .overview-panel h3 a { font-size: 12px; font-weight: 500; color: var(--text-muted); cursor: pointer; text-decoration: none; transition: color 0.15s; }
+  .overview-panel h3 a:hover { color: var(--accent); }
   .overview-agent-row {
-    display: flex; align-items: center; gap: 8px; padding: 6px 0;
+    display: flex; align-items: center; gap: 10px; padding: 8px 0;
     border-bottom: 1px solid var(--border);
   }
   .overview-agent-row:last-child { border-bottom: none; }
@@ -1570,27 +1586,27 @@
   .overview-agent-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
   .overview-agent-status { font-size: 12px; color: var(--text-muted); }
   .overview-msg-row {
-    display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+    display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; align-items: baseline;
   }
   .overview-msg-row:last-child { border-bottom: none; }
-  .overview-msg-from { font-weight: 600; color: var(--accent); min-width: 70px; }
-  .overview-msg-text { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .overview-msg-from { font-weight: 600; color: var(--text); min-width: 80px; font-size: 13px; }
+  .overview-msg-text { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; font-size: 13px; }
   .overview-msg-time { color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
   .overview-full-width { grid-column: 1 / -1; }
-  .overview-task-summary { display: flex; gap: 12px; flex-wrap: wrap; }
+  .overview-task-summary { display: flex; gap: 10px; flex-wrap: wrap; }
   .overview-task-badge {
-    padding: 4px 12px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
   }
-  .overview-task-badge.pending { background: rgba(234, 179, 8, 0.15); color: var(--yellow); }
-  .overview-task-badge.active { background: rgba(245, 158, 11, 0.15); color: var(--accent); }
-  .overview-task-badge.done { background: rgba(63, 185, 80, 0.15); color: var(--green); }
+  .overview-task-badge.pending { background: rgba(234, 179, 8, 0.1); color: var(--yellow); }
+  .overview-task-badge.active { background: rgba(245, 158, 11, 0.1); color: var(--accent); }
+  .overview-task-badge.done { background: rgba(63, 185, 80, 0.1); color: var(--green); }
   .overview-launch-btn {
-    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
-    background: var(--gradient-accent); color: #fff; border: none; border-radius: 8px;
-    font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; margin-top: 8px;
-    transition: opacity 0.15s;
+    display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px;
+    background: var(--gradient-accent); color: #fff; border: none; border-radius: 10px;
+    font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; margin-top: 12px;
+    transition: all 0.2s; box-shadow: 0 2px 8px var(--accent-glow);
   }
-  .overview-launch-btn:hover { opacity: 0.9; }
+  .overview-launch-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px var(--accent-glow); }
 
   /* ===== TOAST NOTIFICATIONS ===== */
   .toast-container {
@@ -1631,24 +1647,7 @@
   .settings-item.settings-danger { color: var(--red); }
   .settings-item.settings-danger:hover { background: var(--red-dim); }
 
-  /* ===== UPDATED METRIC CARDS ===== */
-  .metric-card {
-    position: relative;
-    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    padding: 20px; display: flex; flex-direction: column; gap: 4px;
-    overflow: hidden;
-  }
-  .metric-card::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 3px;
-    background: var(--accent);
-    border-radius: 3px 0 0 3px;
-  }
-  .metric-card .metric-label { font-size: var(--text-sm); color: var(--text-muted); font-weight: 500; }
-  .metric-card .metric-value { font-size: 28px; font-weight: 800; color: var(--text); line-height: 1.2; }
-  .metric-card .metric-sub { font-size: var(--text-xs); color: var(--text-muted); }
+  /* (metric-card styles consolidated in overview section above) */
 
   /* ===== BUTTON SYSTEM ===== */
   .btn-primary { background: var(--gradient-accent); color: #fff; border: none; }
@@ -2240,7 +2239,7 @@
   @media (max-width: 768px) {
     :root {
       --sidebar-w: 280px;
-      --header-h: 50px;
+      --header-h: 48px;
     }
 
     .mobile-toggle { display: block; }
@@ -2364,7 +2363,7 @@
   /* ===== MOBILE: PHONE (480px) ===== */
   @media (max-width: 480px) {
     :root {
-      --header-h: 46px;
+      --header-h: 44px;
     }
 
     .header { padding: 0 8px; }
@@ -3484,7 +3483,7 @@
 <div class="header">
   <div class="header-left">
     <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
-    <svg width="24" height="24" viewBox="0 0 32 32" style="margin-right:6px;vertical-align:middle"><defs><linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#f97316"/></linearGradient></defs><path d="M16 2L27.6 9v14L16 30 4.4 23V9z" fill="url(#hg)" opacity="0.9"/><path d="M16 7L23 11v8l-7 4-7-4v-8z" fill="#09090b" opacity="0.6"/><circle cx="16" cy="15.5" r="3" fill="#fff" opacity="0.9"/></svg>
+    <svg width="18" height="18" viewBox="0 0 32 32" style="flex-shrink:0"><defs><linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#f97316"/></linearGradient></defs><path d="M16 2L27.6 9v14L16 30 4.4 23V9z" fill="url(#hg)" opacity="0.9"/><path d="M16 7L23 11v8l-7 4-7-4v-8z" fill="#09090b" opacity="0.6"/><circle cx="16" cy="15.5" r="3" fill="#fff" opacity="0.9"/></svg>
     <div class="logo">Neohive</div>
     <!-- Hidden stat elements for JS compatibility -->
     <span id="stat-messages" style="display:none">0</span>
@@ -3495,11 +3494,11 @@
     <div id="managed-badge" style="display:none"><span id="managed-phase"></span><span id="managed-floor-info"></span></div>
   </div>
   <div class="header-actions">
-    <span class="conn-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 2s infinite" title="Connected"></span>
+    <span class="conn-dot" title="Connected"></span>
     <!-- Settings dropdown -->
     <div style="position:relative;display:inline-block">
       <button class="header-settings-btn" onclick="toggleSettingsMenu()" title="Settings">
-        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"/></svg>
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"/></svg>
       </button>
       <div id="settings-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:6px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;z-index:300;min-width:180px;box-shadow:var(--shadow-lg)">
         <div class="settings-item" onclick="toggleTheme();toggleSettingsMenu()"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="4"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/></svg> Theme</div>
@@ -3586,7 +3585,7 @@
     <!-- Project -->
     <div class="nav-sidebar-section nav-sidebar-project">
       <div class="nav-sidebar-label">PROJECT</div>
-      <select class="project-select" id="project-select" onchange="switchProject()" style="width:100%;margin-top:4px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px">
+      <select class="project-select" id="project-select" onchange="switchProject()" style="width:100%;margin-top:4px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px">
         <option value="">Default (local)</option>
       </select>
     </div>
@@ -8645,7 +8644,7 @@ function updateAgentBar(agents) {
 function renderOverview() {
   var area = document.getElementById('overview-area');
   if (!area) return;
-  area.innerHTML = '<div style="padding:20px;color:var(--text-muted);font-size:12px">Loading...</div>';
+  area.innerHTML = '<div style="padding:28px 32px;color:var(--text-muted);font-size:13px">Loading...</div>';
   var pq = projectParam();
   Promise.all([
     lttFetch('/api/status' + pq).then(function(r) { return r.json(); }),
@@ -8664,16 +8663,6 @@ function renderOverview() {
     var inProgress = tasks.filter(function(t) { return t.status === 'in_progress'; }).length;
     var done = tasks.filter(function(t) { return t.status === 'done'; }).length;
     var taskPct = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0;
-
-    var html = '';
-    // Metric cards
-    html += '<div class="overview-metrics">';
-    html += '<div class="metric-card"><div class="metric-label">Agents</div><div class="metric-value">' + (status.aliveCount || 0) + '</div><div class="metric-sub">' + (status.agentCount || 0) + ' registered, ' + (status.sleepingCount || 0) + ' sleeping</div></div>';
-    html += '<div class="metric-card"><div class="metric-label">Messages</div><div class="metric-value">' + (status.messageCount || 0) + '</div><div class="metric-sub">' + (status.threadCount || 0) + ' threads, ' + (status.conversation_mode || 'direct') + ' mode</div></div>';
-    html += '<div class="metric-card"><div class="metric-label">Tasks</div><div class="metric-value">' + taskPct + '%</div><div class="metric-sub">' + done + ' done, ' + inProgress + ' active, ' + pending + ' pending</div></div>';
-    html += '</div>';
-
-    // Check if everything is empty
     var agentEntries = Object.entries(agents).filter(function(e) { return e[0] !== '__system__'; });
     var activeWfs = workflows.filter(function(w) { return w.status === 'active'; });
     var hasAgents = agentEntries.length > 0;
@@ -8681,27 +8670,58 @@ function renderOverview() {
     var hasWorkflows = activeWfs.length > 0;
     var hasTasks = tasks.length > 0;
 
+    var html = '';
+
+    // Welcome header
+    html += '<div class="overview-welcome">';
+    html += '<h2>Dashboard</h2>';
+    html += '<p>' + (status.conversation_mode === 'managed' ? 'Managed mode' : 'Direct mode') + ' &middot; ' + (status.agentCount || 0) + ' agents registered</p>';
+    html += '</div>';
+
+    // Metric cards with icons
+    html += '<div class="overview-metrics">';
+    html += '<div class="metric-card">';
+    html += '<div class="metric-icon" style="background:var(--green-dim)"><svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="var(--green)" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg></div>';
+    html += '<div class="metric-label">Active Agents</div>';
+    html += '<div class="metric-value">' + (status.aliveCount || 0) + '</div>';
+    html += '<div class="metric-sub">' + (status.sleepingCount || 0) + ' sleeping</div>';
+    html += '</div>';
+
+    html += '<div class="metric-card">';
+    html += '<div class="metric-icon" style="background:var(--accent-dim)"><svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M2 3h12v8H6l-3 2.5V11H2z" stroke-linejoin="round"/></svg></div>';
+    html += '<div class="metric-label">Messages</div>';
+    html += '<div class="metric-value">' + (status.messageCount || 0) + '</div>';
+    html += '<div class="metric-sub">' + (status.threadCount || 0) + ' threads</div>';
+    html += '</div>';
+
+    html += '<div class="metric-card">';
+    html += '<div class="metric-icon" style="background:' + (taskPct === 100 ? 'var(--green-dim)' : 'var(--purple-dim)') + '"><svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="' + (taskPct === 100 ? 'var(--green)' : 'var(--purple)') + '" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8l2 2 4-4"/></svg></div>';
+    html += '<div class="metric-label">Task Progress</div>';
+    html += '<div class="metric-value">' + taskPct + '<span style="font-size:18px;font-weight:600;color:var(--text-muted)">%</span></div>';
+    html += '<div class="metric-sub">' + done + ' done, ' + inProgress + ' active, ' + pending + ' pending</div>';
+    html += '</div>';
+    html += '</div>';
+
     if (!hasAgents && !hasMessages && !hasWorkflows && !hasTasks) {
-      // Unified empty state
-      html += '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center">';
-      html += '<svg viewBox="0 0 16 16" width="48" height="48" fill="none" stroke="var(--text-muted)" stroke-width="1" style="opacity:0.3;margin-bottom:16px"><path d="M8 1.5L14 5v6l-6 3.5L2 11V5z"/></svg>';
-      html += '<div style="font-size:var(--text-lg);font-weight:600;color:var(--text);margin-bottom:8px">No agents online</div>';
-      html += '<div style="font-size:var(--text-sm);color:var(--text-muted);max-width:360px;line-height:1.6">Open a CLI terminal and register an agent to get started.</div>';
-      html += '<button class="overview-launch-btn" onclick="switchView(\'launch\')" style="margin-top:16px">Launch Agents</button>';
+      // Empty state with branded feel
+      html += '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:16px">';
+      html += '<div style="width:64px;height:64px;border-radius:16px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;margin-bottom:20px"><svg viewBox="0 0 16 16" width="28" height="28" fill="none" stroke="var(--accent)" stroke-width="1.2"><path d="M8 1.5L14 5v6l-6 3.5L2 11V5z"/></svg></div>';
+      html += '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px">No agents online yet</div>';
+      html += '<div style="font-size:13px;color:var(--text-muted);max-width:360px;line-height:1.6;margin-bottom:4px">Open a CLI terminal and register an agent to start collaborating.</div>';
+      html += '<button class="overview-launch-btn" onclick="switchView(\'launch\')"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v12M2 8h12"/></svg> Launch Agents</button>';
       html += '</div>';
     } else {
-      // Grid: only show sections with data
       html += '<div class="overview-grid">';
 
       // Active agents panel
       if (hasAgents) {
-        html += '<div class="overview-panel"><h3>Active Agents <a onclick="switchView(\'messages\')">View messages &rarr;</a></h3>';
+        html += '<div class="overview-panel"><h3>Agents <a onclick="switchView(\'messages\')">View messages &rarr;</a></h3>';
         for (var i = 0; i < agentEntries.length; i++) {
           var aName = agentEntries[i][0];
           var aInfo = agentEntries[i][1];
           var dotColor = aInfo.alive ? (aInfo.is_listening ? 'var(--accent)' : 'var(--green)') : 'var(--text-muted)';
           var statusText = !aInfo.alive ? 'offline' : aInfo.is_listening ? 'listening' : aInfo.status || 'active';
-          html += '<div class="overview-agent-row"><span class="overview-agent-dot" style="background:' + dotColor + '"></span><span class="overview-agent-name">' + aName + '</span><span class="overview-agent-status">' + statusText + ' &middot; ' + (aInfo.provider || '?') + '</span></div>';
+          html += '<div class="overview-agent-row"><span class="overview-agent-dot" style="background:' + dotColor + (aInfo.alive && aInfo.is_listening ? ';box-shadow:0 0 6px var(--accent)' : aInfo.alive ? ';box-shadow:0 0 6px var(--green)' : '') + '"></span><span class="overview-agent-name">' + aName + '</span><span class="overview-agent-status">' + statusText + ' &middot; ' + (aInfo.provider || '?') + '</span></div>';
         }
         html += '</div>';
       }
@@ -8714,40 +8734,52 @@ function renderOverview() {
           var wfDone = wf.steps ? wf.steps.filter(function(s) { return s.status === 'done'; }).length : 0;
           var wfTotal = wf.steps ? wf.steps.length : 1;
           var wfPct = Math.round((wfDone / wfTotal) * 100);
-          html += '<div style="margin-bottom:10px"><div style="font-size:var(--text-sm);font-weight:600;color:var(--text);margin-bottom:4px">' + (wf.name || 'Workflow') + ' <span style="color:var(--text-muted);font-weight:400">' + wfPct + '%</span></div>';
+          html += '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span style="font-size:13px;font-weight:600;color:var(--text)">' + (wf.name || 'Workflow') + '</span><span style="font-size:12px;color:var(--text-muted)">' + wfPct + '%</span></div>';
           html += '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + wfPct + '%;background:var(--gradient-accent);border-radius:3px;transition:width 0.3s"></div></div></div>';
         }
         html += '</div>';
       }
 
+      // Task summary
+      if (hasTasks && !hasWorkflows) {
+        html += '<div class="overview-panel"><h3>Tasks <a onclick="switchView(\'tasks\')">View board &rarr;</a></h3>';
+        html += '<div class="overview-task-summary">';
+        if (pending > 0) html += '<span class="overview-task-badge pending">' + pending + ' pending</span>';
+        if (inProgress > 0) html += '<span class="overview-task-badge active">' + inProgress + ' active</span>';
+        if (done > 0) html += '<span class="overview-task-badge done">' + done + ' done</span>';
+        html += '</div>';
+        html += '</div>';
+      }
+
       // Recent messages
       if (hasMessages) {
-        html += '<div class="overview-panel overview-full-width"><h3>Recent Messages <a onclick="switchView(\'messages\')">View all &rarr;</a></h3>';
+        html += '<div class="overview-panel overview-full-width"><h3>Recent Activity <a onclick="switchView(\'messages\')">View all &rarr;</a></h3>';
         for (var m = 0; m < history.length; m++) {
           var msg = history[m];
           var time = new Date(msg.timestamp);
           var timeStr = time.getHours() + ':' + String(time.getMinutes()).padStart(2, '0');
-          html += '<div class="overview-msg-row"><span class="overview-msg-from">' + (msg.from || '?') + '</span><span class="overview-msg-text">' + ((msg.content || '').substring(0, 120)) + '</span><span class="overview-msg-time">' + timeStr + '</span></div>';
+          var preview = (msg.content || '').replace(/[#*`_~\[\]]/g, '').substring(0, 100);
+          html += '<div class="overview-msg-row"><span class="overview-msg-from">' + (msg.from || '?') + '</span><span class="overview-msg-text">' + preview + '</span><span class="overview-msg-time">' + timeStr + '</span></div>';
         }
         html += '</div>';
       }
 
-      // Task summary (only if tasks exist)
-      if (hasTasks) {
-        html += '<div class="overview-panel overview-full-width"><h3>Tasks <a onclick="switchView(\'tasks\')">View all &rarr;</a></h3>';
+      // Task summary (if workflows already shown, put tasks as full width)
+      if (hasTasks && hasWorkflows) {
+        html += '<div class="overview-panel overview-full-width"><h3>Tasks <a onclick="switchView(\'tasks\')">View board &rarr;</a></h3>';
         html += '<div class="overview-task-summary">';
-        html += '<span class="overview-task-badge pending">' + pending + ' pending</span>';
-        html += '<span class="overview-task-badge active">' + inProgress + ' active</span>';
-        html += '<span class="overview-task-badge done">' + done + ' done</span>';
+        if (pending > 0) html += '<span class="overview-task-badge pending">' + pending + ' pending</span>';
+        if (inProgress > 0) html += '<span class="overview-task-badge active">' + inProgress + ' active</span>';
+        if (done > 0) html += '<span class="overview-task-badge done">' + done + ' done</span>';
         html += '</div>';
         html += '</div>';
       }
 
-      html += '</div>'; // close overview-grid
-    } // close else
+      html += '</div>';
+    }
     area.innerHTML = html;
   }).catch(function(e) {
-    area.innerHTML = '<div style="padding:20px;color:var(--text-muted)">Failed to load overview: ' + e.message + '</div>';
+    area.innerHTML = '<div style="padding:28px 32px;color:var(--text-muted)">Failed to load overview: ' + e.message + '</div>';
   });
 }
 
