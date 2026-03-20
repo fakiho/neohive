@@ -20,6 +20,8 @@ function printUsage() {
     npx neohive init --all          Configure for all detected CLIs
     npx neohive init --ollama       Setup Ollama local LLM bridge
     npx neohive init --template T   Initialize with a team template
+    npx neohive serve               Run MCP server in HTTP mode (port 4321)
+    npx neohive serve --port 8080   Custom port for HTTP server
     npx neohive dashboard           Launch web dashboard (http://localhost:3000)
     npx neohive dashboard --lan     Dashboard accessible on LAN
     npx neohive status              Show active agents and tasks
@@ -502,6 +504,17 @@ function showTemplate(templateName) {
   }
 }
 
+function serve() {
+  // Parse --port flag
+  const portIdx = process.argv.indexOf('--port');
+  if (portIdx !== -1 && process.argv[portIdx + 1]) {
+    process.env.NEOHIVE_SERVER_PORT = process.argv[portIdx + 1];
+  }
+  // Signal server.js to use HTTP transport
+  process.env.NEOHIVE_TRANSPORT = 'http';
+  require('./server.js');
+}
+
 function dashboard() {
   if (process.argv.includes('--lan')) {
     process.env.NEOHIVE_LAN = 'true';
@@ -886,6 +899,9 @@ switch (command) {
     break;
   case 'templates':
     listTemplates();
+    break;
+  case 'serve':
+    serve();
     break;
   case 'dashboard':
     dashboard();

@@ -394,10 +394,10 @@
     border-radius: 50%;
     flex-shrink: 0;
   }
-  .agent-status-dot.active, .agent-status-dot.working { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .agent-status-dot.listening { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 2s infinite; }
-  .agent-status-dot.sleeping, .agent-status-dot.idle { background: var(--orange); animation: pulse 2s infinite; }
-  .agent-status-dot.dead, .agent-status-dot.offline { background: var(--red); }
+  .agent-status-dot.active, .agent-status-dot.working { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+  .agent-status-dot.listening { background: #3b82f6; box-shadow: 0 0 6px #3b82f6; animation: pulse 2s infinite; }
+  .agent-status-dot.sleeping, .agent-status-dot.idle { background: #f59e0b; animation: pulse 2s infinite; }
+  .agent-status-dot.dead, .agent-status-dot.offline { background: #6b7280; }
 
   .agent-name {
     font-weight: 600;
@@ -1519,9 +1519,10 @@
   .agent-pill .status-dot {
     width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
   }
-  .agent-pill.online .status-dot { background: var(--green); }
-  .agent-pill.listening .status-dot { background: var(--accent); animation: pulse 2s infinite; }
-  .agent-pill.offline .status-dot { background: var(--text-muted); opacity: 0.4; }
+  .agent-pill.online .status-dot, .agent-pill.working .status-dot { background: #22c55e; }
+  .agent-pill.listening .status-dot { background: #3b82f6; animation: pulse 2s infinite; }
+  .agent-pill.idle .status-dot { background: #f59e0b; }
+  .agent-pill.offline .status-dot { background: #6b7280; opacity: 0.6; }
   .agent-pill .agent-name { font-weight: 600; color: var(--text); }
   .agent-pill .agent-activity { color: var(--text-muted); font-size: 12px; }
   .agent-pill.offline .agent-name { color: var(--text-muted); opacity: 0.6; }
@@ -5803,10 +5804,11 @@ function exportJSON() {
 
 // ==================== VIEW SWITCHING ====================
 
-var activeView = 'overview';
+var activeView = localStorage.getItem('neohive_activeView') || 'overview';
 
 function switchView(view) {
   activeView = view;
+  try { localStorage.setItem('neohive_activeView', view); } catch {}
   // Update nav sidebar active state
   var navItems = document.querySelectorAll('.nav-item');
   for (var i = 0; i < navItems.length; i++) {
@@ -8621,8 +8623,8 @@ function updateAgentBar(agents) {
     var activity = 'offline';
     if (agent.alive) {
       if (agent.is_listening || agent.status === 'listening') { cls = 'listening'; activity = 'listening'; }
-      else if (agent.status === 'idle') { cls = 'online'; activity = 'idle'; }
-      else { cls = 'online'; activity = agent.status === 'working' ? 'working' : 'active'; }
+      else if (agent.status === 'idle') { cls = 'idle'; activity = 'idle'; }
+      else { cls = 'working'; activity = agent.status === 'working' ? 'working' : 'active'; }
     }
     // Toast on state change
     var prevState = prevAgentBarState[name];
@@ -8652,13 +8654,15 @@ function renderOverview() {
     lttFetch('/api/agents' + pq).then(function(r) { return r.json(); }),
     lttFetch('/api/history' + pq + (pq ? '&' : '?') + 'limit=5').then(function(r) { return r.json(); }),
     lttFetch('/api/tasks' + pq).then(function(r) { return r.json(); }),
-    lttFetch('/api/workflows' + pq).then(function(r) { return r.json(); })
+    lttFetch('/api/workflows' + pq).then(function(r) { return r.json(); }),
+    lttFetch('/api/notifications' + pq + (pq ? '&' : '?') + 'limit=10').then(function(r) { return r.json(); }).catch(function() { return []; })
   ]).then(function(results) {
     var status = results[0];
     var agents = results[1];
     var history = Array.isArray(results[2]) ? results[2] : (results[2].messages || []);
     var tasks = Array.isArray(results[3]) ? results[3] : [];
     var workflows = Array.isArray(results[4]) ? results[4] : [];
+    var notifications = Array.isArray(results[5]) ? results[5] : [];
 
     var pending = tasks.filter(function(t) { return t.status === 'pending'; }).length;
     var inProgress = tasks.filter(function(t) { return t.status === 'in_progress'; }).length;
@@ -8720,9 +8724,10 @@ function renderOverview() {
         for (var i = 0; i < agentEntries.length; i++) {
           var aName = agentEntries[i][0];
           var aInfo = agentEntries[i][1];
-          var dotColor = aInfo.alive ? (aInfo.is_listening ? 'var(--accent)' : 'var(--green)') : 'var(--text-muted)';
-          var statusText = !aInfo.alive ? 'offline' : aInfo.is_listening ? 'listening' : aInfo.status || 'active';
-          html += '<div class="overview-agent-row"><span class="overview-agent-dot" style="background:' + dotColor + (aInfo.alive && aInfo.is_listening ? ';box-shadow:0 0 6px var(--accent)' : aInfo.alive ? ';box-shadow:0 0 6px var(--green)' : '') + '"></span><span class="overview-agent-name">' + aName + '</span><span class="overview-agent-status">' + statusText + ' &middot; ' + (aInfo.provider || '?') + '</span></div>';
+          var dotColor = !aInfo.alive ? '#6b7280' : aInfo.is_listening ? '#3b82f6' : aInfo.status === 'idle' ? '#f59e0b' : '#22c55e';
+          var dotGlow = !aInfo.alive ? '' : ';box-shadow:0 0 6px ' + dotColor;
+          var statusText = !aInfo.alive ? 'offline' : aInfo.is_listening ? 'listening' : aInfo.status === 'idle' ? 'idle' : 'working';
+          html += '<div class="overview-agent-row"><span class="overview-agent-dot" style="background:' + dotColor + dotGlow + '"></span><span class="overview-agent-name">' + aName + '</span><span class="overview-agent-status">' + statusText + ' &middot; ' + (aInfo.provider || '?') + '</span></div>';
         }
         html += '</div>';
       }
@@ -8778,6 +8783,29 @@ function renderOverview() {
 
       html += '</div>';
     }
+
+    // Notifications feed (always show if there are recent notifications)
+    if (notifications.length > 0) {
+      var NOTIF_ICONS = { task_done: '&#x2713;', workflow_advanced: '&#x25B6;', agent_online: '+', agent_offline: '-', approval_needed: '!' };
+      var NOTIF_COLORS = { task_done: 'var(--green)', workflow_advanced: 'var(--accent)', agent_online: 'var(--green)', agent_offline: 'var(--text-muted)', approval_needed: 'var(--orange)' };
+      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 20px">';
+      html += '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px">Recent Notifications</div>';
+      var recent = notifications.slice(-8).reverse();
+      for (var ni = 0; ni < recent.length; ni++) {
+        var n = recent[ni];
+        var ntime = new Date(n.timestamp);
+        var ntimeStr = ntime.getHours() + ':' + String(ntime.getMinutes()).padStart(2, '0');
+        var ncolor = NOTIF_COLORS[n.type] || 'var(--text-muted)';
+        var nicon = NOTIF_ICONS[n.type] || '&#x2022;';
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">';
+        html += '<span style="width:22px;height:22px;border-radius:6px;background:' + ncolor + '15;color:' + ncolor + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">' + nicon + '</span>';
+        html += '<span style="flex:1;color:var(--text-dim)">' + (n.summary || n.type) + '</span>';
+        html += '<span style="font-size:11px;color:var(--text-muted);flex-shrink:0">' + ntimeStr + '</span>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+
     area.innerHTML = html;
   }).catch(function(e) {
     area.innerHTML = '<div style="padding:28px 32px;color:var(--text-muted)">Failed to load overview: ' + e.message + '</div>';
@@ -8841,10 +8869,17 @@ function initSSE() {
       if (needMessages || needAgents) {
         // Full poll for messages/agents (they're coupled in rendering)
         poll();
-      } else {
-        // Targeted fetch for tasks/workflows only — no full poll needed
-        if (needTasks && activeView === 'tasks') fetchTasks();
-        if (needWorkflows && activeView === 'workflows') fetchWorkflows();
+        // Also refresh overview if currently viewing it
+        if (activeView === 'overview') renderOverview();
+      }
+      // Targeted fetch for tasks/workflows — refresh on any view that needs them
+      if (needTasks) {
+        if (activeView === 'tasks') fetchTasks();
+        else if (activeView === 'overview') renderOverview();
+      }
+      if (needWorkflows) {
+        if (activeView === 'workflows') fetchWorkflows();
+        else if (activeView === 'overview') renderOverview();
       }
     };
     eventSource.onopen = function() {
@@ -8896,12 +8931,12 @@ loadProjects().then(function() {
   loadConversationList();
   poll();
   initSSE();
-  switchView('overview');
+  switchView(activeView);
 }).catch(function(e) {
   console.error('[LTT] init: loadProjects failed, polling anyway:', e);
   poll();
   initSSE();
-  switchView('overview');
+  switchView(activeView);
 });
 // Safety-net poll at 10s (SSE handles real-time, this catches any missed updates)
 setInterval(poll, 10000);

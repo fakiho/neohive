@@ -53,6 +53,7 @@ const LOCKS_FILE = path.join(DATA_DIR, 'locks.json');
 const PROGRESS_FILE = path.join(DATA_DIR, 'progress.json');
 const VOTES_FILE = path.join(DATA_DIR, 'votes.json');
 const REVIEWS_FILE = path.join(DATA_DIR, 'reviews.json');
+const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
 const DEPS_FILE = path.join(DATA_DIR, 'dependencies.json');
 const REPUTATION_FILE = path.join(DATA_DIR, 'reputation.json');
 const COMPRESSED_FILE = path.join(DATA_DIR, 'compressed.json');
@@ -602,6 +603,7 @@ function buildMessageResponse(msg, consumedIds) {
       from: msg.from,
       content: msg.content,
       timestamp: msg.timestamp,
+      priority: classifyPriority(msg),
       ...(msg.reply_to && { reply_to: msg.reply_to }),
       ...(msg.thread_id && { thread_id: msg.thread_id }),
     },
@@ -648,9 +650,11 @@ function autoCompact() {
     // For direct messages: consumed when the recipient has consumed it
     const active = messages.filter(m => {
       if (m.to === '__group__') {
-        // Time-based retention: messages older than retention period can be compacted regardless
+        // Time-based retention: critical messages get 2x retention
         const msgTime = new Date(m.timestamp).getTime();
-        if (msgTime < Date.now() - retentionMs) return false;
+        const msgPriority = classifyPriority(m);
+        const effectiveRetention = msgPriority === 'critical' ? retentionMs * 2 : retentionMs;
+        if (msgTime < Date.now() - effectiveRetention) return false;
         // Check ALL registered agents (alive + dead) to prevent loss on reconnect
         return !allAgentNames.every(n => n === m.from || (perAgentConsumed[n] && perAgentConsumed[n].has(m.id)));
       }
@@ -1595,7 +1599,7 @@ function toolListAgents() {
   return { agents: result };
 }
 
-async function toolSendMessage(content, to = null, reply_to = null, channel = null) {
+async function toolSendMessage(content, to = null, reply_to = null, channel = null, priority = null) {
   if (!registeredName) {
     return { error: 'You must call register() first' };
   }
@@ -1798,6 +1802,7 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
     to: isGroup ? '__group__' : to,
     content,
     timestamp: new Date().toISOString(),
+    ...(priority && ['critical', 'normal', 'low'].includes(priority) && { priority }),
     ...(isGroup && to && { addressed_to: [to] }),
     ...(channel && { channel }),
     ...(reply_to && { reply_to }),
@@ -2100,8 +2105,13 @@ function toolCheckMessages(from = null) {
     if (m.addressed_to && m.addressed_to.includes(registeredName)) addressedCount++;
   }
 
+  // Include pending notification count
+  const allNotifs = getNotifications();
+  const unreadNotifs = allNotifs.filter(n => !n.read_by.includes(registeredName));
+
   const result = {
     count: unconsumed.length,
+    pending_notifications: unreadNotifs.length,
     // Scale fix: return previews not full content — agent gets full content via listen_group()
     messages: unconsumed.map(m => ({
       id: m.id,
@@ -2748,6 +2758,72 @@ async function toolListenGroup() {
   });
 }
 
+// Auto speaker selection for group messages — determines who should respond
+// Priority: 1) @mentioned agents, 2) skill match, 3) round-robin fallback
+let _lastSpeakerIndex = 0;
+function selectSpeaker(msg, agentName, aliveAgentNames) {
+  // 1. If explicitly addressed, those agents respond
+  if (msg.addressed_to && msg.addressed_to.length > 0) {
+    return msg.addressed_to.includes(agentName);
+  }
+
+  // 2. Direct messages — always respond
+  if (msg.to === agentName) return true;
+
+  // 3. System messages — everyone sees, nobody needs to respond
+  if (msg.system || msg.from === '__system__') return false;
+
+  // 4. Skill-based matching — check if message content matches agent's skills
+  const cards = readJsonFile(AGENT_CARDS_FILE) || {};
+  const myCard = cards[agentName];
+  if (myCard && myCard.skills && myCard.skills.length > 0 && msg.content) {
+    const contentLower = msg.content.toLowerCase();
+    const hasSkillMatch = myCard.skills.some(skill => contentLower.includes(skill));
+    if (hasSkillMatch) {
+      // Check if OTHER agents also match — if multiple match, pick the best
+      const otherMatchers = aliveAgentNames.filter(n => {
+        if (n === agentName || n === msg.from) return false;
+        const card = cards[n];
+        return card && card.skills && card.skills.some(skill => contentLower.includes(skill));
+      });
+      // If this agent matches and has fewest other matchers, respond
+      if (otherMatchers.length === 0) return true;
+      // Multiple skill matches — first alphabetically gets priority (deterministic)
+      const allMatchers = [agentName, ...otherMatchers].sort();
+      return allMatchers[0] === agentName;
+    }
+  }
+
+  // 5. Round-robin fallback for unaddressed group messages
+  const eligible = aliveAgentNames.filter(n => n !== msg.from).sort();
+  if (eligible.length === 0) return false;
+  const selectedIndex = _lastSpeakerIndex % eligible.length;
+  const selected = eligible[selectedIndex] === agentName;
+  if (selected) _lastSpeakerIndex++;
+  return selected;
+}
+
+// Message priority classification: critical > normal > low
+// Critical: task assignments, human messages, workflow handoffs, system events
+// Normal: regular agent-to-agent chat
+// Low: status updates, acknowledgements
+function classifyPriority(msg) {
+  if (msg.priority) return msg.priority; // explicit priority wins
+  if (msg.from === '__user__') return 'critical';
+  if (msg.system || msg.from === '__system__') {
+    // System events about workflow/task are critical, others are normal
+    if (msg.content && (msg.content.includes('[Workflow') || msg.content.includes('[TASK') || msg.content.includes('[APPROVAL'))) return 'critical';
+    return 'normal';
+  }
+  if (msg.content) {
+    const c = msg.content;
+    if (c.includes('[Workflow') || c.includes('[HANDOFF]') || c.includes('[PLAN')) return 'critical';
+    if (c.startsWith('[STATUS]') || c.startsWith('[ACK]') || c.startsWith('[PROGRESS]')) return 'low';
+  }
+  if (msg.type === 'handoff') return 'critical';
+  return 'normal';
+}
+
 // Build the response for listen_group — kept lean to reduce context accumulation
 // Context/history removed: agents should call get_history() when they need it
 function buildListenGroupResponse(batch, consumed, agentName, listenStart) {
@@ -2758,12 +2834,16 @@ function buildListenGroupResponse(batch, consumed, agentName, listenStart) {
   const wasAddressed = batch.some(m => m.addressed_to && m.addressed_to.includes(agentName));
   sendLimit = wasAddressed ? 2 : 1;
 
-  // Sort batch by priority: system > threaded replies > direct > broadcast
+  // Sort batch by priority: critical(0) > normal(1) > low(2), then by type
+  const PRIORITY_ORDER = { critical: 0, normal: 1, low: 2 };
   function messagePriority(m) {
-    if (m.system || m.from === '__system__') return 0;
-    if (m.reply_to || m.thread_id) return 1;
-    if (!m.broadcast) return 2;
-    return 3;
+    const prio = PRIORITY_ORDER[classifyPriority(m)] || 1;
+    // Sub-sort within same priority: system > threaded > direct > broadcast
+    let subPrio = 3;
+    if (m.system || m.from === '__system__') subPrio = 0;
+    else if (m.reply_to || m.thread_id) subPrio = 1;
+    else if (!m.broadcast) subPrio = 2;
+    return prio * 10 + subPrio;
   }
   batch.sort((a, b) => {
     const pa = messagePriority(a), pb = messagePriority(b);
@@ -2807,6 +2887,7 @@ function buildListenGroupResponse(batch, consumed, agentName, listenStart) {
       return {
         id: m.id, from: m.from, to: m.to, content: m.content,
         timestamp: m.timestamp,
+        priority: classifyPriority(m),
         age_seconds: ageSec,
         ...(ageSec > 30 && { delayed: true }),
         ...(m.reply_to && { reply_to: m.reply_to }),
@@ -2814,7 +2895,7 @@ function buildListenGroupResponse(batch, consumed, agentName, listenStart) {
         ...(m.addressed_to && { addressed_to: m.addressed_to }),
         ...(m.to === '__group__' && {
           addressed_to_you: !m.addressed_to || m.addressed_to.includes(agentName),
-          should_respond: !m.addressed_to || m.addressed_to.includes(agentName),
+          should_respond: selectSpeaker(m, agentName, agentNames),
         }),
       };
     }),
@@ -3210,6 +3291,7 @@ function toolUpdateTask(taskId, status, notes = null) {
   // Event hooks: task completion
   if (status === 'done') {
     fireEvent('task_complete', { title: task.title, created_by: task.created_by });
+    appendNotification('task_done', registeredName, `Task "${task.title}" completed by ${registeredName}`, task.id);
     // Check if this resolves any dependencies
     const deps = getDeps();
     for (const dep of deps) {
@@ -3238,6 +3320,50 @@ function toolUpdateTask(taskId, status, notes = null) {
     if (aliveOthers.length > 0) {
       broadcastSystemMessage(`[REVIEW NEEDED] ${registeredName} completed task "${task.title}". Team: please review the work and call submit_review() if applicable.`, registeredName);
     }
+
+    // Auto-sync: advance matching workflow step when task is done
+    try {
+      const workflows = getWorkflows();
+      let wfChanged = false;
+      for (const wf of workflows) {
+        if (wf.status !== 'active') continue;
+        for (const step of wf.steps) {
+          if (step.status !== 'in_progress') continue;
+          if (step.assignee !== registeredName) continue;
+          // Match by assignee — the agent who completed the task also has an in_progress step
+          step.status = 'done';
+          step.completed_at = new Date().toISOString();
+          step.notes = `Auto-completed via task "${task.title}"`;
+          saveWorkflowCheckpoint(wf, step);
+          // Start next ready steps
+          const nextSteps = findReadySteps(wf);
+          for (const ns of nextSteps) {
+            if (ns.requires_approval) {
+              ns.status = 'awaiting_approval';
+              ns.approval_requested_at = new Date().toISOString();
+              sendSystemMessage('__user__', `[APPROVAL NEEDED] Workflow "${wf.name}" — Step ${ns.id}: "${ns.description}". Approve or reject from the dashboard.`);
+            } else {
+              ns.status = 'in_progress';
+              ns.started_at = new Date().toISOString();
+              if (ns.assignee && ns.assignee !== registeredName) {
+                const handoffContent = `[Workflow "${wf.name}"] Step ${ns.id} assigned to you: ${ns.description}`;
+                messageSeq++;
+                const hMsg = { id: generateId(), seq: messageSeq, from: registeredName, to: ns.assignee, content: handoffContent, timestamp: new Date().toISOString(), type: 'handoff' };
+                fs.appendFileSync(getMessagesFile(currentBranch), JSON.stringify(hMsg) + '\n');
+                fs.appendFileSync(getHistoryFile(currentBranch), JSON.stringify(hMsg) + '\n');
+              }
+            }
+          }
+          if (wf.steps.every(s => s.status === 'done')) wf.status = 'completed';
+          wf.updated_at = new Date().toISOString();
+          wfChanged = true;
+          broadcastSystemMessage(`[WORKFLOW] Step "${step.description}" auto-advanced via task completion by ${registeredName}`);
+          break; // one step per task completion
+        }
+        if (wfChanged) break;
+      }
+      if (wfChanged) saveWorkflows(workflows);
+    } catch (e) { log.warn('auto-advance workflow on task done failed:', e.message); }
   }
 
   return { success: true, task_id: task.id, status: task.status, title: task.title };
@@ -3614,6 +3740,20 @@ function toolAdvanceWorkflow(workflowId, notes) {
   // Save checkpoint
   saveWorkflowCheckpoint(wf, currentStep);
 
+  // Auto-sync: mark matching in_progress tasks as done
+  try {
+    const tasks = getTasks();
+    const matchingTask = tasks.find(t =>
+      t.status === 'in_progress' && t.assignee === registeredName
+    );
+    if (matchingTask) {
+      matchingTask.status = 'done';
+      matchingTask.updated_at = new Date().toISOString();
+      matchingTask.notes.push({ by: '__system__', text: `Auto-completed via workflow step "${currentStep.description}"`, at: new Date().toISOString() });
+      saveTasks(tasks);
+    }
+  } catch (e) { log.warn('auto-complete task on workflow advance failed:', e.message); }
+
   // Find all ready steps (supports parallel via depends_on)
   const nextSteps = findReadySteps(wf);
   if (nextSteps.length > 0) {
@@ -3647,6 +3787,7 @@ function toolAdvanceWorkflow(workflowId, notes) {
 
   const doneCount = wf.steps.filter(s => s.status === 'done').length;
   const pct = Math.round((doneCount / wf.steps.length) * 100);
+  appendNotification('workflow_advanced', registeredName, `Workflow "${wf.name}" step ${currentStep.id} done (${pct}%)`, wf.id);
 
   return {
     success: true,
@@ -5212,6 +5353,71 @@ function getReviews() { return cachedRead('reviews', () => readJsonFile(REVIEWS_
 function getDeps() { return cachedRead('deps', () => readJsonFile(DEPS_FILE) || [], 2000); }
 function getRules() { return cachedRead('rules', () => readJsonFile(RULES_FILE) || [], 2000); }
 
+// --- Notification system ---
+const MAX_NOTIFICATIONS = 500;
+
+function getNotifications() {
+  return readJsonFile(NOTIFICATIONS_FILE) || [];
+}
+
+function saveNotifications(notifs) {
+  // Prune to max cap
+  if (notifs.length > MAX_NOTIFICATIONS) {
+    notifs = notifs.slice(notifs.length - MAX_NOTIFICATIONS);
+  }
+  writeJsonFile(NOTIFICATIONS_FILE, notifs);
+}
+
+function appendNotification(type, sourceAgent, summary, relatedId) {
+  const notifs = getNotifications();
+  notifs.push({
+    id: 'notif_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    type: type,
+    source_agent: sourceAgent || registeredName || '__system__',
+    related_id: relatedId || null,
+    summary: summary,
+    timestamp: new Date().toISOString(),
+    read_by: [],
+  });
+  saveNotifications(notifs);
+}
+
+function toolGetNotifications(since, type) {
+  if (!registeredName) return { error: 'You must call register() first' };
+  let notifs = getNotifications();
+  // Filter unread for this agent
+  notifs = notifs.filter(n => !n.read_by.includes(registeredName));
+  if (since) {
+    const sinceTs = new Date(since).getTime();
+    notifs = notifs.filter(n => new Date(n.timestamp).getTime() > sinceTs);
+  }
+  if (type) {
+    notifs = notifs.filter(n => n.type === type);
+  }
+  // Mark as read
+  if (notifs.length > 0) {
+    const allNotifs = getNotifications();
+    const readIds = new Set(notifs.map(n => n.id));
+    for (const n of allNotifs) {
+      if (readIds.has(n.id) && !n.read_by.includes(registeredName)) {
+        n.read_by.push(registeredName);
+      }
+    }
+    saveNotifications(allNotifs);
+  }
+  return {
+    count: notifs.length,
+    notifications: notifs.map(n => ({
+      id: n.id,
+      type: n.type,
+      source_agent: n.source_agent,
+      related_id: n.related_id,
+      summary: n.summary,
+      timestamp: n.timestamp,
+    })),
+  };
+}
+
 // --- Channel helpers ---
 const CHANNELS_FILE_PATH = path.join(DATA_DIR, 'channels.json');
 
@@ -5403,8 +5609,10 @@ function detectAgentStatusChanges(agents) {
     if (wasAlive !== undefined && wasAlive !== alive) {
       if (!alive) {
         broadcastSystemMessage(`[STATUS] ${name} is unreachable`, name);
+        appendNotification('agent_offline', name, `${name} went offline`, null);
       } else {
         broadcastSystemMessage(`[STATUS] ${name} is back online`, null);
+        appendNotification('agent_online', name, `${name} came back online`, null);
       }
     }
     _prevAgentAlive[name] = alive;
@@ -6358,6 +6566,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'string',
               description: 'Channel to send to (optional — omit for #general). Use join_channel() first to create channels.',
             },
+            priority: {
+              type: 'string',
+              enum: ['critical', 'normal', 'low'],
+              description: 'Message priority (optional — auto-classified if omitted). Critical messages are delivered first and retained longer.',
+            },
           },
           required: ['content'],
         },
@@ -6445,6 +6658,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             limit: {
               type: 'number',
               description: 'Max number of messages to consume (default: all)',
+            },
+          },
+        },
+      },
+      {
+        name: 'get_notifications',
+        description: 'Get unread notifications (task completions, workflow advances, agent status changes). Returns and marks as read. Non-blocking — use this instead of listen() when you need a quick status update without waiting.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            since: {
+              type: 'string',
+              description: 'Only return notifications after this ISO timestamp (optional)',
+            },
+            type: {
+              type: 'string',
+              description: 'Filter by type: task_done, workflow_advanced, agent_online, agent_offline, approval_needed (optional)',
             },
           },
         },
@@ -7035,7 +7265,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolListAgents();
         break;
       case 'send_message':
-        result = await toolSendMessage(args.content, args?.to, args?.reply_to, args?.channel);
+        result = await toolSendMessage(args.content, args?.to, args?.reply_to, args?.channel, args?.priority);
         break;
       case 'wait_for_reply':
         result = await toolWaitForReply(args?.timeout_seconds, args?.from);
@@ -7054,6 +7284,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case 'consume_messages':
         result = toolConsumeMessages(args?.from, args?.limit);
+        break;
+      case 'get_notifications':
+        result = toolGetNotifications(args?.since, args?.type);
         break;
       case 'ack_message':
         result = toolAckMessage(args.message_id);
@@ -7389,14 +7622,142 @@ async function main() {
     console.error('Fix: Run "npx neohive doctor" to diagnose the issue.');
     process.exit(1);
   }
-  try {
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-    console.error('Neohive MCP server v6.0.0 running (66 tools)');
-  } catch (e) {
-    console.error('ERROR: MCP server failed to start: ' + e.message);
-    console.error('Fix: Run "npx neohive doctor" to check your setup.');
-    process.exit(1);
+
+  // HTTP persistent server mode: --http flag or NEOHIVE_TRANSPORT=http
+  const useHttp = process.argv.includes('--http') || process.env.NEOHIVE_TRANSPORT === 'http';
+
+  if (useHttp) {
+    try {
+      const http = require('http');
+      const { randomUUID } = require('crypto');
+      const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
+      const { isInitializeRequest } = require('@modelcontextprotocol/sdk/types.js');
+
+      const PORT = parseInt(process.env.NEOHIVE_SERVER_PORT || '4321', 10);
+      const sessions = {};
+
+      const httpServer = http.createServer(async (req, res) => {
+        // CORS headers for local dev
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id');
+        res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id');
+
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+
+        // Health check endpoint
+        if (req.url === '/health') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok', sessions: Object.keys(sessions).length }));
+          return;
+        }
+
+        if (req.url === '/mcp') {
+          if (req.method === 'POST') {
+            // Parse JSON body
+            let body = '';
+            for await (const chunk of req) body += chunk;
+            let parsed;
+            try { parsed = JSON.parse(body); } catch {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32700, message: 'Parse error' }, id: null }));
+              return;
+            }
+
+            const sessionId = req.headers['mcp-session-id'];
+
+            if (sessionId && sessions[sessionId]) {
+              // Existing session — route to its transport
+              await sessions[sessionId].transport.handleRequest(req, res, parsed);
+            } else if (!sessionId && isInitializeRequest(parsed)) {
+              // New session initialization
+              const transport = new StreamableHTTPServerTransport({
+                sessionIdGenerator: () => randomUUID(),
+                onsessioninitialized: (sid) => {
+                  sessions[sid] = { transport, createdAt: Date.now() };
+                  console.error(`[HTTP] Session created: ${sid}`);
+                },
+              });
+
+              transport.onclose = () => {
+                const sid = transport.sessionId;
+                if (sid && sessions[sid]) {
+                  delete sessions[sid];
+                  console.error(`[HTTP] Session closed: ${sid}`);
+                }
+              };
+
+              await server.connect(transport);
+              await transport.handleRequest(req, res, parsed);
+            } else {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'Bad Request: No valid session ID' }, id: null }));
+            }
+          } else if (req.method === 'GET') {
+            // SSE stream for server-initiated notifications
+            const sessionId = req.headers['mcp-session-id'];
+            if (sessionId && sessions[sessionId]) {
+              await sessions[sessionId].transport.handleRequest(req, res);
+            } else {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Missing or invalid session ID' }));
+            }
+          } else if (req.method === 'DELETE') {
+            // Session termination
+            const sessionId = req.headers['mcp-session-id'];
+            if (sessionId && sessions[sessionId]) {
+              await sessions[sessionId].transport.close();
+              delete sessions[sessionId];
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ success: true }));
+            } else {
+              res.writeHead(404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Session not found' }));
+            }
+          } else {
+            res.writeHead(405, { Allow: 'GET, POST, DELETE' });
+            res.end('Method Not Allowed');
+          }
+        } else {
+          res.writeHead(404);
+          res.end('Not Found');
+        }
+      });
+
+      httpServer.listen(PORT, () => {
+        console.error(`Neohive MCP server v6.0.0 running in HTTP mode on port ${PORT}`);
+        console.error(`Endpoint: http://localhost:${PORT}/mcp`);
+        console.error(`Health: http://localhost:${PORT}/health`);
+      });
+
+      // Graceful shutdown
+      process.on('SIGINT', () => {
+        console.error('\n[HTTP] Shutting down...');
+        for (const sid of Object.keys(sessions)) {
+          try { sessions[sid].transport.close(); } catch {}
+        }
+        httpServer.close(() => process.exit(0));
+      });
+    } catch (e) {
+      console.error('ERROR: HTTP server failed to start: ' + e.message);
+      console.error('Fix: Ensure @modelcontextprotocol/sdk is up to date.');
+      process.exit(1);
+    }
+  } else {
+    // Default: stdio transport (one agent per process)
+    try {
+      const transport = new StdioServerTransport();
+      await server.connect(transport);
+      console.error('Neohive MCP server v6.0.0 running (66 tools)');
+    } catch (e) {
+      console.error('ERROR: MCP server failed to start: ' + e.message);
+      console.error('Fix: Run "npx neohive doctor" to check your setup.');
+      process.exit(1);
+    }
   }
 }
 

@@ -15,6 +15,7 @@ function withFileLock(filePath, fn) {
 }
 
 const PORT = parseInt(process.env.NEOHIVE_PORT || '3000', 10);
+const SERVER_START_TIME = Date.now();
 const LAN_STATE_FILE = path.join(__dirname, '.lan-mode');
 let LAN_MODE = process.env.NEOHIVE_LAN === 'true' || (fs.existsSync(LAN_STATE_FILE) && fs.readFileSync(LAN_STATE_FILE, 'utf8').trim() === 'true');
 
@@ -1700,6 +1701,37 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Health check — lightweight, no auth required
+    if (url.pathname === '/health' && req.method === 'GET') {
+      const pkg = readJson(path.join(__dirname, 'package.json')) || {};
+      const defaultDataDir = resolveDataDir(null);
+      const agents = readJson(filePath('agents.json', null));
+      const agentEntries = Object.entries(agents);
+      const aliveCount = agentEntries.filter(([, a]) => isPidAlive(a.pid, a.last_activity)).length;
+      let messageCount = 0;
+      const histFile = filePath('history.jsonl', null);
+      if (fs.existsSync(histFile)) {
+        try { messageCount = Math.round(fs.statSync(histFile).size / 300); } catch {}
+      }
+      let activeWorkflows = 0;
+      const wfFile = filePath('workflows.json', null);
+      if (fs.existsSync(wfFile)) {
+        try { activeWorkflows = JSON.parse(fs.readFileSync(wfFile, 'utf8')).filter(w => w.status === 'active').length; } catch {}
+      }
+      const uptimeMs = Date.now() - SERVER_START_TIME;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'ok',
+        version: pkg.version || 'unknown',
+        uptime_seconds: Math.floor(uptimeMs / 1000),
+        agents: { alive: aliveCount, total: agentEntries.length },
+        messages: messageCount,
+        active_workflows: activeWorkflows,
+        timestamp: new Date().toISOString(),
+      }));
+      return;
+    }
+
     // Serve logo image
     if (url.pathname === '/logo.png') {
       if (fs.existsSync(LOGO_FILE)) {
@@ -2138,6 +2170,14 @@ const server = http.createServer(async (req, res) => {
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
+    }
+    else if (url.pathname === '/api/notifications' && req.method === 'GET') {
+      const projectPath = url.searchParams.get('project') || null;
+      const notifFile = filePath('notifications.json', projectPath);
+      const notifs = fs.existsSync(notifFile) ? JSON.parse(fs.readFileSync(notifFile, 'utf8')) : [];
+      const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(notifs.slice(-limit)));
     }
     else if (url.pathname === '/api/workflows' && req.method === 'GET') {
       const projectPath = url.searchParams.get('project') || null;
