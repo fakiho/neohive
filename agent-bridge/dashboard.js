@@ -494,6 +494,95 @@ function generateNotifications(currentAgents) {
   }
 }
 
+// --- Token Usage Tracking ---
+// Pricing per 1M tokens (USD)
+const TOKEN_PRICING = {
+  'claude-opus-4-6': { input: 15.00, output: 75.00, cache_write: 18.75, cache_read: 1.50 },
+  'claude-sonnet-4-6': { input: 3.00, output: 15.00, cache_write: 3.75, cache_read: 0.30 },
+  'claude-haiku-4-5': { input: 0.80, output: 4.00, cache_write: 1.00, cache_read: 0.08 },
+};
+
+function parseSessionUsage(sessionFile, maxBytes) {
+  const usage = { input_tokens: 0, output_tokens: 0, cache_creation_tokens: 0, cache_read_tokens: 0, messages: 0, model: null };
+  try {
+    const stat = fs.statSync(sessionFile);
+    // For huge files, only read the last portion to avoid memory issues
+    const readSize = Math.min(stat.size, maxBytes || 5 * 1024 * 1024); // 5MB max
+    const fd = fs.openSync(sessionFile, 'r');
+    const buf = Buffer.alloc(readSize);
+    fs.readSync(fd, buf, 0, readSize, Math.max(0, stat.size - readSize));
+    fs.closeSync(fd);
+    const content = buf.toString('utf8');
+    // Find complete lines (skip partial first line if we started mid-file)
+    const lines = content.split('\n');
+    if (stat.size > readSize) lines.shift(); // skip potentially partial first line
+    for (const line of lines) {
+      if (!line.trim() || !line.includes('"usage"')) continue;
+      try {
+        const entry = JSON.parse(line);
+        if (entry.type === 'assistant' && entry.message && entry.message.usage) {
+          const u = entry.message.usage;
+          usage.input_tokens += u.input_tokens || 0;
+          usage.output_tokens += u.output_tokens || 0;
+          usage.cache_creation_tokens += u.cache_creation_input_tokens || 0;
+          usage.cache_read_tokens += u.cache_read_input_tokens || 0;
+          usage.messages++;
+          if (entry.message.model) usage.model = entry.message.model;
+        }
+      } catch { /* skip unparseable lines */ }
+    }
+  } catch (e) { /* session file unreadable */ }
+  return usage;
+}
+
+function apiTokenUsage(query) {
+  const projectPath = query.get('project') || null;
+  const dataDir = resolveDataDir(projectPath);
+  const agents = readJson(filePath('agents.json', projectPath));
+  const home = os.homedir();
+  const sessionsDir = path.join(home, '.claude', 'sessions');
+  // Build project slug matching Claude Code's format
+  const projectAbsPath = projectPath ? path.resolve(projectPath) : path.resolve(process.cwd());
+  const projectSlug = projectAbsPath.replace(/\//g, '-');
+  const projectSessionDir = path.join(home, '.claude', 'projects', projectSlug);
+
+  const result = { agents: {}, total_cost_usd: 0, total_tokens: 0 };
+
+  for (const [name, info] of Object.entries(agents)) {
+    if (!info.pid) continue;
+    try {
+      // Map PID → session ID → session file
+      const pidFile = path.join(sessionsDir, info.pid + '.json');
+      if (!fs.existsSync(pidFile)) continue;
+      const session = readJson(pidFile);
+      if (!session || !session.sessionId) continue;
+      const sessionFile = path.join(projectSessionDir, session.sessionId + '.jsonl');
+      if (!fs.existsSync(sessionFile)) continue;
+
+      const usage = parseSessionUsage(sessionFile);
+      // Calculate cost
+      const pricing = TOKEN_PRICING[usage.model] || TOKEN_PRICING['claude-opus-4-6'];
+      const cost = (usage.input_tokens * pricing.input + usage.output_tokens * pricing.output + usage.cache_creation_tokens * pricing.cache_write + usage.cache_read_tokens * pricing.cache_read) / 1000000;
+
+      result.agents[name] = {
+        model: usage.model,
+        input_tokens: usage.input_tokens,
+        output_tokens: usage.output_tokens,
+        cache_creation_tokens: usage.cache_creation_tokens,
+        cache_read_tokens: usage.cache_read_tokens,
+        total_tokens: usage.input_tokens + usage.output_tokens + usage.cache_creation_tokens + usage.cache_read_tokens,
+        estimated_cost_usd: Math.round(cost * 100) / 100,
+        messages: usage.messages,
+        pid: info.pid,
+      };
+      result.total_cost_usd += cost;
+      result.total_tokens += result.agents[name].total_tokens;
+    } catch { /* skip agents without session data */ }
+  }
+  result.total_cost_usd = Math.round(result.total_cost_usd * 100) / 100;
+  return result;
+}
+
 function apiNotifications() {
   return notificationHistory;
 }
@@ -1951,6 +2040,10 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(apiStats(url.searchParams)));
     }
+    else if (url.pathname === '/api/token-usage' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(apiTokenUsage(url.searchParams)));
+    }
     else if (url.pathname === '/api/coordinator-mode' && req.method === 'GET') {
       const projectPath = url.searchParams.get('project') || null;
       const config = readJson(filePath('config.json', projectPath));
@@ -2896,6 +2989,91 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(result.error ? 400 : 200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
     }
+    // --- Custom Templates CRUD ---
+    else if (url.pathname === '/api/custom-templates' && req.method === 'GET') {
+      const projectPath = url.searchParams.get('project') || null;
+      const templates = readJson(filePath('custom-templates.json', projectPath));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(Array.isArray(templates) ? templates : []));
+    }
+    else if (url.pathname === '/api/custom-templates' && req.method === 'POST') {
+      try {
+        const body = await parseBody(req);
+        const projectPath = url.searchParams.get('project') || null;
+        const ctFile = filePath('custom-templates.json', projectPath);
+        const dataDir = resolveDataDir(projectPath);
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        await withFileLock(ctFile, () => {
+          const templates = readJson(ctFile);
+          const list = Array.isArray(templates) ? templates : [];
+          const id = body.id || ('custom-' + (body.name || 'template').toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 30) + '-' + Date.now().toString(36).slice(-4));
+          if (list.find(t => t.id === id)) {
+            throw new Error('Template with this ID already exists. Use PUT to update.');
+          }
+          const template = {
+            id,
+            name: (body.name || 'Custom Template').substring(0, 100),
+            description: (body.description || '').substring(0, 500),
+            category: body.category || 'custom',
+            conversation_mode: body.conversation_mode || 'direct',
+            source: 'custom',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            agents: Array.isArray(body.agents) ? body.agents.slice(0, 10) : [],
+            ...(body.workflow && { workflow: body.workflow }),
+          };
+          list.push(template);
+          fs.writeFileSync(ctFile, JSON.stringify(list, null, 2));
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    else if (url.pathname === '/api/custom-templates' && req.method === 'PUT') {
+      try {
+        const body = await parseBody(req);
+        if (!body.id) throw new Error('id required');
+        const projectPath = url.searchParams.get('project') || null;
+        const ctFile = filePath('custom-templates.json', projectPath);
+        await withFileLock(ctFile, () => {
+          const list = readJson(ctFile);
+          if (!Array.isArray(list)) throw new Error('No custom templates found');
+          const idx = list.findIndex(t => t.id === body.id);
+          if (idx === -1) throw new Error('Template not found: ' + body.id);
+          list[idx] = { ...list[idx], ...body, updated_at: new Date().toISOString(), source: 'custom' };
+          fs.writeFileSync(ctFile, JSON.stringify(list, null, 2));
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+    else if (url.pathname === '/api/custom-templates' && req.method === 'DELETE') {
+      try {
+        const body = await parseBody(req);
+        if (!body.id) throw new Error('id required');
+        const projectPath = url.searchParams.get('project') || null;
+        const ctFile = filePath('custom-templates.json', projectPath);
+        await withFileLock(ctFile, () => {
+          const list = readJson(ctFile);
+          if (!Array.isArray(list)) throw new Error('No custom templates found');
+          const idx = list.findIndex(t => t.id === body.id);
+          if (idx === -1) throw new Error('Template not found: ' + body.id);
+          list.splice(idx, 1);
+          fs.writeFileSync(ctFile, JSON.stringify(list, null, 2));
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    }
     // --- v3.4: Agent Permissions ---
     else if (url.pathname === '/api/permissions' && req.method === 'GET') {
       const projectPath = url.searchParams.get('project') || null;
@@ -2967,6 +3145,12 @@ const server = http.createServer(async (req, res) => {
           .map(f => { try { const t = JSON.parse(fs.readFileSync(path.join(convDir, f), 'utf8')); t.source = 'conversation-templates'; return t; } catch { return null; } })
           .filter(Boolean);
         templates = templates.concat(conv);
+      }
+      // Merge custom templates from project data dir
+      const projectPath = url.searchParams.get('project') || null;
+      const customTemplates = readJson(filePath('custom-templates.json', projectPath));
+      if (Array.isArray(customTemplates) && customTemplates.length > 0) {
+        templates = templates.concat(customTemplates);
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(templates));
