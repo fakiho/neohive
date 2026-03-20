@@ -596,6 +596,15 @@ function buildMessageResponse(msg, consumedIds) {
     }
   } catch (e) { log.debug('total message estimate failed:', e.message); }
 
+  // Task nudge: remind agent of their outstanding tasks
+  let taskReminder;
+  try {
+    const myTasks = getTasks().filter(t => t.assignee === registeredName && (t.status === 'pending' || t.status === 'in_progress'));
+    if (myTasks.length > 0) {
+      taskReminder = { pending: myTasks.filter(t => t.status === 'pending').length, in_progress: myTasks.filter(t => t.status === 'in_progress').length, tasks: myTasks.map(t => ({ id: t.id, title: t.title, status: t.status })) };
+    }
+  } catch (e) { log.debug('task reminder in listen failed:', e.message); }
+
   return {
     success: true,
     message: {
@@ -609,6 +618,7 @@ function buildMessageResponse(msg, consumedIds) {
     },
     pending_count: pendingCount,
     agents_online: agentsOnline,
+    ...(taskReminder && { task_reminder: taskReminder }),
   };
 }
 
@@ -1224,9 +1234,14 @@ function buildGuide(level = 'standard') {
     }
   }
 
-  // Lead/Coordinator pattern: use consume_messages() instead of blocking listen()
+  // Lead/Coordinator mode: responsive (stay with human) vs autonomous (run in listen loop)
   if (isLeadRole && aliveCount >= 2) {
-    rules.push('RESPONSIVE COORDINATOR PATTERN: Use consume_messages() at the start of each interaction to check for agent updates non-blockingly. Process all returned messages, assign work, then return to the human immediately. Do NOT block in listen() — you need to stay responsive to both agents and the user.');
+    const coordinatorMode = getConfig().coordinator_mode || 'responsive';
+    if (coordinatorMode === 'responsive') {
+      rules.push('RESPONSIVE COORDINATOR PATTERN: Use consume_messages() at the start of each interaction to check for agent updates non-blockingly. Process all returned messages, assign work, then return to the human immediately. Do NOT block in listen() — you need to stay responsive to both agents and the user.');
+    } else {
+      rules.push('AUTONOMOUS COORDINATOR PATTERN: Use listen() to wait for agent results. Process responses, delegate follow-up work, and continue the listen loop. Only return to the human when all tasks are complete or when you hit a blocker that requires human input.');
+    }
     rules.push('CRITICAL: You are a Coordinator. You MUST NOT edit files, write code, or use tools like Edit/Write/Bash for code changes. Your tools are: send_message, create_task, update_task, create_workflow, advance_workflow, workflow_status, list_tasks, consume_messages, broadcast, kb_write, kb_read, log_decision. Delegate ALL code work to other agents.');
   }
 
@@ -1331,6 +1346,17 @@ function buildGuide(level = 'standard') {
       'declare_dependency': 'Block a task until another completes. Auto-notifies on resolution.',
       'get_compressed_history': 'Summarized history for catching up without context overflow.',
     };
+  }
+
+  // Task reminder: show agent's pending/in_progress tasks so they remember to update them
+  if (registeredName) {
+    try {
+      const myTasks = getTasks().filter(t => t.assignee === registeredName && (t.status === 'pending' || t.status === 'in_progress'));
+      if (myTasks.length > 0) {
+        result.your_tasks = myTasks.map(t => ({ id: t.id, title: t.title, status: t.status }));
+        rules.push(`TASK STATUS: You have ${myTasks.length} task(s). Use update_task(task_id, "in_progress") when starting and update_task(task_id, "done") when complete. Your tasks: ${myTasks.map(t => t.id + ' "' + t.title.substring(0, 40) + '" (' + t.status + ')').join('; ')}`);
+      }
+    } catch (e) { log.debug('task reminder in guide failed:', e.message); }
   }
 
   // Cache the result for subsequent calls with same params
@@ -2936,6 +2962,15 @@ function buildListenGroupResponse(batch, consumed, agentName, listenStart) {
   result.next_action = isAutonomousMode()
     ? 'Process these messages, then call get_work() to continue the proactive work loop. Do NOT call listen_group() — use get_work() instead.'
     : 'After processing these messages and sending your response, call listen_group() again immediately. Never stop listening.';
+
+  // Task nudge: remind agent of their outstanding tasks
+  try {
+    const myTasks = getTasks().filter(t => t.assignee === agentName && (t.status === 'pending' || t.status === 'in_progress'));
+    if (myTasks.length > 0) {
+      result.task_reminder = { pending: myTasks.filter(t => t.status === 'pending').length, in_progress: myTasks.filter(t => t.status === 'in_progress').length, tasks: myTasks.map(t => ({ id: t.id, title: t.title, status: t.status })) };
+    }
+  } catch (e) { log.debug('task reminder in listen_group failed:', e.message); }
+
   return result;
 }
 

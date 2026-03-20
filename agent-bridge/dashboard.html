@@ -3622,10 +3622,11 @@
     <div class="nav-sidebar-divider"></div>
     <!-- Project -->
     <div class="nav-sidebar-section nav-sidebar-project">
-      <div class="nav-sidebar-label">PROJECT</div>
+      <div class="nav-sidebar-label" style="display:flex;align-items:center;justify-content:space-between">PROJECT <button onclick="showAddProject()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:0 2px;line-height:1" title="Add project">+</button></div>
       <select class="project-select" id="project-select" onchange="switchProject()" style="width:100%;margin-top:4px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px">
         <option value="">Default (local)</option>
       </select>
+      <input class="project-input" id="project-path-input" placeholder="Project path..." onkeydown="if(event.key==='Enter')addProject();if(event.key==='Escape')this.classList.remove('visible');" style="margin-top:4px">
     </div>
     <div class="nav-sidebar-spacer"></div>
     <!-- Bottom nav -->
@@ -3729,6 +3730,7 @@
   <div class="profile-popup-bio" id="pp-bio"></div>
   <div class="profile-popup-stats" id="pp-stats"></div>
   <button class="btn btn-primary" style="width:100%;margin-top:10px" id="pp-edit-btn" onclick="openProfileEditor()">Edit Profile</button>
+  <button class="btn btn-danger" style="width:100%;margin-top:6px" id="pp-delete-btn" onclick="confirmDeleteAgent()">Delete Agent</button>
 </div>
 
 <!-- Character Designer Panel -->
@@ -6418,7 +6420,59 @@ function showProfilePopup(agentName, event) {
 
 document.addEventListener('click', function() {
   document.getElementById('profile-popup').classList.remove('open');
+  // Reset delete button if popup closes
+  var delBtn = document.getElementById('pp-delete-btn');
+  if (delBtn) { delBtn.textContent = 'Delete Agent'; delBtn._confirming = false; }
 });
+
+var _deleteConfirmTimer = null;
+function confirmDeleteAgent() {
+  var btn = document.getElementById('pp-delete-btn');
+  if (!editingAgent) return;
+  if (!btn._confirming) {
+    // First click: change to confirm state
+    btn._confirming = true;
+    btn.textContent = 'Confirm Delete';
+    btn.style.background = 'var(--red-dim)';
+    // Reset after 3s if not confirmed
+    _deleteConfirmTimer = setTimeout(function() {
+      btn.textContent = 'Delete Agent';
+      btn.style.background = '';
+      btn._confirming = false;
+    }, 3000);
+  } else {
+    // Second click: actually delete
+    if (_deleteConfirmTimer) clearTimeout(_deleteConfirmTimer);
+    btn.textContent = 'Deleting...';
+    btn.disabled = true;
+    var agentName = editingAgent;
+    var pq = projectParam();
+    lttFetch('/api/agents' + pq, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: agentName })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.error) {
+        showToast('!', 'Delete failed: ' + data.error);
+        btn.textContent = 'Delete Agent';
+        btn.disabled = false;
+        btn._confirming = false;
+      } else {
+        showToast('&#x2713;', agentName + ' removed');
+        document.getElementById('profile-popup').classList.remove('open');
+        btn.textContent = 'Delete Agent';
+        btn.disabled = false;
+        btn._confirming = false;
+        poll(); // Refresh agents
+      }
+    }).catch(function() {
+      showToast('!', 'Delete failed');
+      btn.textContent = 'Delete Agent';
+      btn.disabled = false;
+      btn._confirming = false;
+    });
+  }
+}
 
 // ==================== v3.0: PROFILE EDITOR ====================
 
@@ -7600,7 +7654,7 @@ function addProject() {
         switchProject();
       }, 200);
     } else {
-      alert(res.error || 'Failed to add project');
+      showToast('!', res.error || 'Failed to add project');
     }
   }).catch(function(e) { console.error('Add project failed:', e); });
 }
@@ -8039,11 +8093,18 @@ var _launchWatchers = []; // [{name, cli, prompt, state}] for tracking launch st
 var _launchWatchInterval = null;
 
 var ROLE_SKILLS = {
-  lead: ['project-management', 'architecture', 'code-review'],
-  backend: ['node.js', 'python', 'databases', 'api-design'],
-  frontend: ['html', 'css', 'javascript', 'ui-design', 'responsive-design'],
-  quality: ['testing', 'code-review', 'debugging', 'documentation'],
+  lead: ['planning', 'delegation', 'tracking', 'review'],
+  backend: ['javascript', 'typescript', 'nodejs', 'coding', 'debugging'],
+  frontend: ['ui', 'ux', 'css', 'html', 'frontend', 'design'],
+  quality: ['review', 'testing', 'quality', 'security', 'standards'],
   monitor: ['observability', 'logging', 'performance', 'health-checks']
+};
+var ROLE_PROMPTS = {
+  lead: function(name) { return 'You are ' + name + ', the Coordinator in a multi-agent team. Register as "' + name + '".\n\nYour job is to:\n1. Break the user\'s request into tasks and delegate to team agents via send_message\n2. Use create_task() and create_workflow() to formally track work\n3. Monitor progress with workflow_status() and list_tasks()\n4. Use consume_messages() to check agent updates without blocking\n5. Synthesize results and present to the user\n\nYou MUST NOT edit files or write code. Delegate ALL code work to other agents. Your tools: send_message, create_task, create_workflow, advance_workflow, workflow_status, list_tasks, consume_messages, broadcast.'; },
+  backend: function(name) { return 'You are ' + name + ', a Developer in a multi-agent team. Register as "' + name + '". Call listen() to wait for tasks.\n\nWhen you receive a task:\n1. Use lock_file() before editing shared code\n2. Implement the requested changes with clean, tested code\n3. Use unlock_file() when done editing\n4. Update your task with update_task(status="done")\n5. Send a summary to the Coordinator with file paths and key decisions\n6. Call listen() again for the next task\n\nFocus on production-quality code. Include file paths in reports.'; },
+  frontend: function(name) { return 'You are ' + name + ', a Frontend Developer in a multi-agent team. Register as "' + name + '". Call listen() to wait for tasks.\n\nWhen you receive a task:\n1. Use lock_file() before editing shared frontend code\n2. Implement UI/UX changes following design conventions\n3. Use unlock_file() when done\n4. Update your task with update_task(status="done")\n5. Send a summary to the Coordinator with file paths and screenshots if relevant\n6. Call listen() again for the next task\n\nFocus on clean UI, accessibility, and responsive design.'; },
+  quality: function(name) { return 'You are ' + name + ', a Reviewer in a multi-agent team. Register as "' + name + '". Call listen() to wait for review requests.\n\nWhen you receive work to review:\n1. Read the actual files that were changed\n2. Check for bugs, security issues, code style, edge cases\n3. Use submit_review() to formally approve or request changes\n4. Send structured feedback: blockers vs suggestions\n5. Call listen() again\n\nBe constructive and specific. Reference line numbers. Never let mediocre work pass.'; },
+  monitor: function(name) { return 'You are ' + name + ', a System Monitor in a multi-agent team. Register as "' + name + '". Call listen() to wait for events.\n\nYour job:\n1. Watch for idle agents, stuck tasks, and circular escalations\n2. Use send_message to nudge idle agents\n3. Use update_task to reassign stuck tasks\n4. Log interventions to your workspace via workspace_write\n5. Call listen() again\n\nNever stop monitoring. You ARE the system intelligence.'; }
 };
 
 function renderLaunchPanel() {
@@ -8099,7 +8160,9 @@ function renderLaunchPanel() {
         html += '<div class="template-card-agents">';
         if (agents.length > 0) {
           for (var a = 0; a < agents.length; a++) {
-            html += '<span class="template-agent-chip">' + escapeHtml(agents[a].name || agents[a].role || 'Agent') + '</span>';
+            var chipLabel = agents[a].display_name || agents[a].name || 'Agent';
+            if (agents[a].role) chipLabel += ' (' + agents[a].role + ')';
+            html += '<span class="template-agent-chip">' + escapeHtml(chipLabel) + '</span>';
           }
         } else if (tpl.roles) {
           var roleNames = Object.keys(tpl.roles);
@@ -8151,12 +8214,16 @@ function generateAgentPrompt() {
   if (!name) { showToast('!', 'Enter an agent name'); return; }
   if (!/^[a-zA-Z0-9_-]{1,20}$/.test(name)) { showToast('!', 'Invalid agent name'); return; }
 
-  var prompt = 'You are ' + name + (role ? ', the ' + role + ' specialist' : '') + ' in a team. Register as "' + name + '". Call listen() to wait for tasks from the Coordinator. When you receive a coding task:\n1. Implement the requested changes\n2. Write clean, tested code\n3. Send a summary of what you built back to the Coordinator (use send_message with to="Coordinator")\n4. Call listen() again for the next task\n\nFocus on writing production-quality code. Include file paths and key decisions in your reports.';
+  var prompt;
+  if (role && ROLE_PROMPTS[role]) {
+    prompt = ROLE_PROMPTS[role](name);
+  } else {
+    prompt = 'You are ' + name + ' in a multi-agent team. Register as "' + name + '". Call listen() to wait for tasks. When you receive a task, implement it, report what you did, and call listen() again.';
+  }
 
   var outputEl = document.getElementById('launch-prompt-output');
   outputEl.style.display = 'block';
-  outputEl.innerHTML = '<div class="launch-prompt-output" onclick="copyGeneratedPrompt()">' + escapeHtml(prompt) + '</div>';
-  // Also set for legacy doLaunch()
+  outputEl.innerHTML = '<div class="launch-prompt-output" onclick="copyGeneratedPrompt()"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Click to copy</div>' + escapeHtml(prompt) + '</div>';
   window._generatedLaunchPrompt = prompt;
 }
 
@@ -8184,10 +8251,20 @@ function expandTemplate(index) {
       var ag = agents[i];
       var agPrompt = ag.prompt || 'You are ' + (ag.name || 'Agent') + '. Register as "' + (ag.name || 'Agent') + '". Call listen() for tasks.';
       html += '<div style="margin-bottom:10px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px">';
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
-      html += '<span style="font-weight:600;font-size:13px">' + escapeHtml(ag.name || ag.role || 'Agent') + '</span>';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+      html += '<span style="font-weight:600;font-size:13px">' + escapeHtml(ag.display_name || ag.name || 'Agent') + '</span>';
       html += '<span style="font-size:11px;color:var(--text-muted)">' + escapeHtml(ag.role || '') + '</span>';
       html += '</div>';
+      if (ag.skills && ag.skills.length) {
+        html += '<div style="margin-bottom:4px;display:flex;gap:4px;flex-wrap:wrap">';
+        for (var s = 0; s < ag.skills.length; s++) {
+          html += '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--accent-dim);color:var(--accent)">' + escapeHtml(ag.skills[s]) + '</span>';
+        }
+        html += '</div>';
+      }
+      if (ag.responsibilities && ag.responsibilities.length) {
+        html += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">' + ag.responsibilities.map(function(r) { return escapeHtml(r); }).join(' / ') + '</div>';
+      }
       html += '<div class="launch-prompt-output" style="font-size:11px;max-height:100px" onclick="navigator.clipboard.writeText(this.textContent).then(function(){showToast(\'&#x2713;\',\'Copied!\')})">' + escapeHtml(agPrompt) + '</div>';
       html += '</div>';
     }
@@ -8800,10 +8877,17 @@ function renderOverview() {
 
     var html = '';
 
-    // Welcome header
-    html += '<div class="overview-welcome">';
-    html += '<h2>Dashboard</h2>';
-    html += '<p>' + (status.conversation_mode === 'managed' ? 'Managed mode' : 'Direct mode') + ' &middot; ' + (status.agentCount || 0) + ' agents registered</p>';
+    // Welcome header with coordinator mode toggle
+    var coordMode = status.coordinator_mode || 'responsive';
+    html += '<div class="overview-welcome" style="display:flex;justify-content:space-between;align-items:flex-start">';
+    html += '<div><h2>Dashboard</h2>';
+    html += '<p>' + (status.conversation_mode === 'managed' ? 'Managed mode' : 'Direct mode') + ' &middot; ' + (status.agentCount || 0) + ' agents registered</p></div>';
+    html += '<div style="display:flex;align-items:center;gap:8px;padding-top:4px">';
+    html += '<span style="font-size:12px;color:var(--text-muted)">Coordinator</span>';
+    html += '<div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:12px">';
+    html += '<button onclick="setCoordinatorMode(\'responsive\')" style="padding:5px 12px;border:none;cursor:pointer;font-size:12px;font-weight:' + (coordMode === 'responsive' ? '600' : '400') + ';background:' + (coordMode === 'responsive' ? 'var(--accent-dim)' : 'var(--surface-2)') + ';color:' + (coordMode === 'responsive' ? 'var(--accent)' : 'var(--text-muted)') + ';transition:all 0.15s">Stay with me</button>';
+    html += '<button onclick="setCoordinatorMode(\'autonomous\')" style="padding:5px 12px;border:none;border-left:1px solid var(--border);cursor:pointer;font-size:12px;font-weight:' + (coordMode === 'autonomous' ? '600' : '400') + ';background:' + (coordMode === 'autonomous' ? 'var(--green-dim)' : 'var(--surface-2)') + ';color:' + (coordMode === 'autonomous' ? 'var(--green)' : 'var(--text-muted)') + ';transition:all 0.15s">Run autonomously</button>';
+    html += '</div></div>';
     html += '</div>';
 
     // Metric cards with icons
@@ -8932,6 +9016,25 @@ function renderOverview() {
     area.innerHTML = html;
   }).catch(function(e) {
     area.innerHTML = '<div style="padding:28px 32px;color:var(--text-muted)">Failed to load overview: ' + e.message + '</div>';
+  });
+}
+
+// ==================== COORDINATOR MODE ====================
+
+function setCoordinatorMode(mode) {
+  lttFetch('/api/coordinator-mode', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: mode })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.error) {
+      showToast('!', 'Failed: ' + data.error);
+    } else {
+      showToast('&#x2713;', 'Coordinator mode: ' + (mode === 'responsive' ? 'Stay with me' : 'Run autonomously'));
+      renderOverview();
+    }
+  }).catch(function() {
+    showToast('!', 'Failed to change coordinator mode');
   });
 }
 

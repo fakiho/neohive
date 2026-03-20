@@ -367,6 +367,7 @@ function apiStatus(query) {
     sleepingCount,
     threadCount: threads.size,
     conversation_mode: config.conversation_mode || 'direct',
+    coordinator_mode: config.coordinator_mode || 'responsive',
   };
 
   if (config.conversation_mode === 'managed' && config.managed) {
@@ -1950,6 +1951,36 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(apiStats(url.searchParams)));
     }
+    else if (url.pathname === '/api/coordinator-mode' && req.method === 'GET') {
+      const projectPath = url.searchParams.get('project') || null;
+      const config = readJson(filePath('config.json', projectPath));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ mode: config.coordinator_mode || 'responsive' }));
+    }
+    else if (url.pathname === '/api/coordinator-mode' && req.method === 'POST') {
+      const body = await parseBody(req).catch(() => ({}));
+      const newMode = body.mode;
+      if (!newMode || !['responsive', 'autonomous'].includes(newMode)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'mode must be "responsive" or "autonomous"' }));
+        return;
+      }
+      const projectPath = url.searchParams.get('project') || null;
+      const configFile = filePath('config.json', projectPath);
+      await withFileLock(configFile, () => {
+        const config = readJson(configFile);
+        config.coordinator_mode = newMode;
+        fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
+      });
+      // Broadcast mode change to all agents
+      const messagesFile = filePath('messages.jsonl', projectPath);
+      const historyFile = filePath('history.jsonl', projectPath);
+      const sysMsg = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), from: '__system__', to: '__group__', content: `[MODE] Coordinator mode changed to "${newMode}". ${newMode === 'responsive' ? 'Coordinator stays with human, uses consume_messages().' : 'Coordinator runs autonomously in listen() loop.'}`, timestamp: new Date().toISOString(), system: true };
+      fs.appendFileSync(messagesFile, JSON.stringify(sysMsg) + '\n');
+      fs.appendFileSync(historyFile, JSON.stringify(sysMsg) + '\n');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, mode: newMode }));
+    }
     else if (url.pathname === '/api/reset' && req.method === 'POST') {
       const body = await parseBody(req).catch(() => ({}));
       if (!body.confirm) {
@@ -2843,13 +2874,21 @@ const server = http.createServer(async (req, res) => {
     }
     // Templates API
     else if (url.pathname === '/api/templates' && req.method === 'GET') {
-      const templatesDir = path.join(__dirname, 'templates');
       let templates = [];
+      const templatesDir = path.join(__dirname, 'templates');
       if (fs.existsSync(templatesDir)) {
         templates = fs.readdirSync(templatesDir)
           .filter(f => f.endsWith('.json'))
-          .map(f => { try { return JSON.parse(fs.readFileSync(path.join(templatesDir, f), 'utf8')); } catch { return null; } })
+          .map(f => { try { const t = JSON.parse(fs.readFileSync(path.join(templatesDir, f), 'utf8')); t.source = 'templates'; return t; } catch { return null; } })
           .filter(Boolean);
+      }
+      const convDir = path.join(__dirname, 'conversation-templates');
+      if (fs.existsSync(convDir)) {
+        const conv = fs.readdirSync(convDir)
+          .filter(f => f.endsWith('.json'))
+          .map(f => { try { const t = JSON.parse(fs.readFileSync(path.join(convDir, f), 'utf8')); t.source = 'conversation-templates'; return t; } catch { return null; } })
+          .filter(Boolean);
+        templates = templates.concat(conv);
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(templates));
