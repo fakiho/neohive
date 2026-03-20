@@ -1958,28 +1958,37 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ mode: config.coordinator_mode || 'responsive' }));
     }
     else if (url.pathname === '/api/coordinator-mode' && req.method === 'POST') {
-      const body = await parseBody(req).catch(() => ({}));
-      const newMode = body.mode;
-      if (!newMode || !['responsive', 'autonomous'].includes(newMode)) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'mode must be "responsive" or "autonomous"' }));
-        return;
+      try {
+        const body = await parseBody(req).catch(() => ({}));
+        const newMode = body.mode;
+        if (!newMode || !['responsive', 'autonomous'].includes(newMode)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'mode must be "responsive" or "autonomous"' }));
+          return;
+        }
+        const projectPath = url.searchParams.get('project') || null;
+        const dataDir = resolveDataDir(projectPath);
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        const configFile = filePath('config.json', projectPath);
+        await withFileLock(configFile, () => {
+          const config = readJson(configFile);
+          config.coordinator_mode = newMode;
+          fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
+        });
+        // Broadcast mode change to all agents
+        try {
+          const messagesFile = filePath('messages.jsonl', projectPath);
+          const historyFile = filePath('history.jsonl', projectPath);
+          const sysMsg = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), from: '__system__', to: '__group__', content: `[MODE] Coordinator mode changed to "${newMode}". ${newMode === 'responsive' ? 'Coordinator stays with human, uses consume_messages().' : 'Coordinator runs autonomously in listen() loop.'}`, timestamp: new Date().toISOString(), system: true };
+          fs.appendFileSync(messagesFile, JSON.stringify(sysMsg) + '\n');
+          fs.appendFileSync(historyFile, JSON.stringify(sysMsg) + '\n');
+        } catch (e) { /* broadcast is best-effort */ }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, mode: newMode }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to set coordinator mode: ' + e.message }));
       }
-      const projectPath = url.searchParams.get('project') || null;
-      const configFile = filePath('config.json', projectPath);
-      await withFileLock(configFile, () => {
-        const config = readJson(configFile);
-        config.coordinator_mode = newMode;
-        fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
-      });
-      // Broadcast mode change to all agents
-      const messagesFile = filePath('messages.jsonl', projectPath);
-      const historyFile = filePath('history.jsonl', projectPath);
-      const sysMsg = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), from: '__system__', to: '__group__', content: `[MODE] Coordinator mode changed to "${newMode}". ${newMode === 'responsive' ? 'Coordinator stays with human, uses consume_messages().' : 'Coordinator runs autonomously in listen() loop.'}`, timestamp: new Date().toISOString(), system: true };
-      fs.appendFileSync(messagesFile, JSON.stringify(sysMsg) + '\n');
-      fs.appendFileSync(historyFile, JSON.stringify(sysMsg) + '\n');
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, mode: newMode }));
     }
     else if (url.pathname === '/api/reset' && req.method === 'POST') {
       const body = await parseBody(req).catch(() => ({}));
@@ -2051,6 +2060,75 @@ const server = http.createServer(async (req, res) => {
       const result = apiUpdateTask(body, url.searchParams);
       res.writeHead(result.error ? 400 : 200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
+    }
+    else if (url.pathname === '/api/tasks' && req.method === 'PUT') {
+      const body = await parseBody(req);
+      if (!body.task_id) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Missing task_id' }));
+        return;
+      }
+      const projectPath = url.searchParams.get('project') || null;
+      const dataDir = resolveDataDir(projectPath);
+      const tasksFile = path.join(dataDir, 'tasks.json');
+      let tasks = [];
+      if (fs.existsSync(tasksFile)) try { tasks = JSON.parse(fs.readFileSync(tasksFile, 'utf8')); } catch {}
+      const task = tasks.find(t => t.id === body.task_id);
+      if (!task) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Task not found' }));
+        return;
+      }
+      const oldAssignee = task.assignee;
+      const msgFile = path.join(dataDir, 'messages.jsonl');
+      const histFile = path.join(dataDir, 'history.jsonl');
+      // Apply edits
+      if (body.title !== undefined) task.title = body.title;
+      if (body.description !== undefined) task.description = body.description;
+      if (body.assignee !== undefined) task.assignee = body.assignee;
+      task.updated_at = new Date().toISOString();
+      fs.writeFileSync(tasksFile, JSON.stringify(tasks, null, 2));
+      // Notify agents on changes
+      const writeMsg = (to, content) => {
+        const msg = JSON.stringify({ id: 'sys_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5), from: '__system__', to, content, timestamp: new Date().toISOString(), system: true }) + '\n';
+        try { fs.appendFileSync(msgFile, msg); fs.appendFileSync(histFile, msg); } catch {}
+      };
+      if (body.assignee !== undefined && body.assignee !== oldAssignee) {
+        if (body.assignee) writeMsg(body.assignee, '[TASK ASSIGNED] Task "' + task.title + '" assigned to you');
+        if (oldAssignee) writeMsg(oldAssignee, '[TASK REASSIGNED] Task "' + task.title + '" reassigned to ' + (body.assignee || 'unassigned'));
+      } else if (body.description !== undefined && task.assignee) {
+        writeMsg(task.assignee, '[TASK UPDATED] Task "' + task.title + '" description updated');
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, task_id: task.id }));
+    }
+    else if (url.pathname === '/api/tasks' && req.method === 'DELETE') {
+      const body = await parseBody(req);
+      if (!body.task_id) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Missing task_id' }));
+        return;
+      }
+      const projectPath = url.searchParams.get('project') || null;
+      const dataDir = resolveDataDir(projectPath);
+      const tasksFile = path.join(dataDir, 'tasks.json');
+      let tasks = [];
+      if (fs.existsSync(tasksFile)) try { tasks = JSON.parse(fs.readFileSync(tasksFile, 'utf8')); } catch {}
+      const idx = tasks.findIndex(t => t.id === body.task_id);
+      if (idx === -1) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Task not found' }));
+        return;
+      }
+      const removed = tasks.splice(idx, 1)[0];
+      fs.writeFileSync(tasksFile, JSON.stringify(tasks, null, 2));
+      // Write system message about deletion
+      const msgFile = path.join(dataDir, 'messages.jsonl');
+      const histFile = path.join(dataDir, 'history.jsonl');
+      const sysMsg = JSON.stringify({ id: 'sys_' + Date.now().toString(36), from: '__system__', to: '__all__', content: '[TASK DELETED] Task "' + (removed.title || '') + '" was removed', timestamp: new Date().toISOString(), system: true }) + '\n';
+      try { fs.appendFileSync(msgFile, sysMsg); fs.appendFileSync(histFile, sysMsg); } catch {}
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, removed: removed.title }));
     }
     else if (url.pathname === '/api/rules' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });

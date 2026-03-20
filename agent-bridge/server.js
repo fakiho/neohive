@@ -1477,6 +1477,8 @@ function toolRegister(name, provider = null, skills = null) {
       triggerStandupIfDue();
       // Auto-reassign stuck workflow steps from dead agents
       checkStuckWorkflowSteps();
+      // Stale task detection: warn about tasks in_progress for >30 minutes without update
+      checkStaleTasks();
       // Watchdog: nudge idle agents, reassign stuck work (autonomous mode only)
       watchdogCheck();
     } catch (e) { log.warn("heartbeat loop error:", e.message); }
@@ -1951,6 +1953,25 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
     result.you_have_messages = myPending.length;
     result.urgent = `You have ${myPending.length} unread message(s) waiting. Call listen_group() after this to read them.`;
   }
+
+  // Coordinator enforcement: warn if sending work assignment without creating a task first
+  const senderProfile = getProfiles()[registeredName];
+  const senderRole = senderProfile && senderProfile.role ? senderProfile.role.toLowerCase() : '';
+  const isSenderLead = senderRole === 'lead' || senderRole === 'manager' || senderRole === 'coordinator';
+  if (isSenderLead && to && to !== '__user__' && to !== '__all__' && to !== '__group__') {
+    const assignmentKeywords = /\b(implement|fix|build|add|create|update|redesign|refactor|write|deploy|test|review|research|investigate)\b/i;
+    if (assignmentKeywords.test(content)) {
+      const recentTasks = getTasks().filter(t => {
+        if (t.assignee !== to) return false;
+        const age = Date.now() - new Date(t.created_at).getTime();
+        return age < 60000; // created in last 60 seconds
+      });
+      if (recentTasks.length === 0) {
+        result.task_warning = `No task created for this assignment to ${to}. Use create_task(title, description, "${to}") to formally track this work.`;
+      }
+    }
+  }
+
   return result;
 }
 
@@ -4415,6 +4436,27 @@ function checkStuckWorkflowSteps() {
   }
 
   if (changed) saveWorkflows(workflows);
+}
+
+// Stale task detection: warn about tasks in_progress for >30 minutes without update
+const _staleTaskWarned = new Set();
+function checkStaleTasks() {
+  try {
+    const tasks = getTasks();
+    const staleThresholdMs = 30 * 60 * 1000; // 30 minutes
+    const now = Date.now();
+    for (const task of tasks) {
+      if (task.status !== 'in_progress') continue;
+      if (!task.updated_at) continue;
+      const elapsed = now - new Date(task.updated_at).getTime();
+      if (elapsed < staleThresholdMs) continue;
+      if (_staleTaskWarned.has(task.id)) continue;
+      _staleTaskWarned.add(task.id);
+      const mins = Math.round(elapsed / 60000);
+      broadcastSystemMessage(`[WARNING] Stale task: "${task.title}" assigned to ${task.assignee || 'unassigned'} — in_progress for ${mins}min without update. Agent should call update_task("${task.id}", "done") or report a blocker.`);
+      log.warn(`Stale task detected: ${task.id} "${task.title}" (${mins}min)`);
+    }
+  } catch (e) { log.debug('stale task check failed:', e.message); }
 }
 
 function watchdogCheck() {

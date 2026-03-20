@@ -5985,7 +5985,7 @@ function buildTaskCard(t) {
     notesHtml = '<div style="font-size:10px;color:var(--text-muted);margin-top:4px;font-style:italic">' + escapeHtml(lastNote.by) + ': ' + escapeHtml((lastNote.text || '').substring(0, 80)) + '</div>';
   }
 
-  return '<div class="task-card" draggable="true" data-task-id="' + t.id + '" ondragstart="onTaskDragStart(event)" ondragend="onTaskDragEnd(event)">' +
+  return '<div class="task-card" draggable="true" data-task-id="' + t.id + '" ondragstart="onTaskDragStart(event)" ondragend="onTaskDragEnd(event)" onclick="showTaskDetail(\'' + t.id + '\')">' +
     '<div class="task-title">' + escapeHtml(t.title || 'Untitled') + (badgesHtml ? ' ' + badgesHtml : '') + '</div>' +
     (t.description ? '<div class="task-desc">' + escapeHtml(t.description) + '</div>' : '') +
     notesHtml +
@@ -6005,6 +6005,148 @@ function updateTaskStatus(taskId, newStatus) {
   }).then(function(r) { return r.json(); }).then(function() {
     fetchTasks();
   }).catch(function(e) { console.error('Task update failed:', e); });
+}
+
+// ==================== TASK DETAIL VIEW ====================
+
+function showTaskDetail(taskId) {
+  var task = cachedTasks.find(function(t) { return t.id === taskId; });
+  if (!task) return;
+  var el = document.getElementById('task-detail-content');
+  var statusColors = { pending: 'var(--yellow)', in_progress: 'var(--accent)', in_review: 'var(--purple)', done: 'var(--green)', blocked: 'var(--red)' };
+  var statusColor = statusColors[task.status] || 'var(--text-muted)';
+
+  var html = '';
+  html += '<div style="margin-bottom:16px"><div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px">' + escapeHtml(task.title || 'Untitled') + '</div>';
+  html += '<span style="font-size:11px;padding:3px 8px;border-radius:6px;font-weight:600;background:' + statusColor + '20;color:' + statusColor + '">' + escapeHtml(task.status || 'pending') + '</span></div>';
+
+  if (task.description) {
+    html += '<div style="font-size:13px;color:var(--text-dim);line-height:1.6;margin-bottom:16px;padding:12px;background:var(--surface-2);border-radius:8px">' + escapeHtml(task.description) + '</div>';
+  }
+
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">';
+  html += '<div style="color:var(--text-muted)">Assignee <div style="color:var(--text);font-weight:600;margin-top:2px">' + escapeHtml(task.assignee || 'Unassigned') + '</div></div>';
+  html += '<div style="color:var(--text-muted)">Created by <div style="color:var(--text);font-weight:600;margin-top:2px">' + escapeHtml(task.created_by || '?') + '</div></div>';
+  html += '<div style="color:var(--text-muted)">Created <div style="color:var(--text);margin-top:2px">' + (task.created_at ? new Date(task.created_at).toLocaleString() : '?') + '</div></div>';
+  html += '<div style="color:var(--text-muted)">Updated <div style="color:var(--text);margin-top:2px">' + (task.updated_at ? new Date(task.updated_at).toLocaleString() : '?') + '</div></div>';
+  html += '</div>';
+
+  // Notes
+  if (task.notes && task.notes.length) {
+    html += '<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px">Notes (' + task.notes.length + ')</div>';
+    for (var n = 0; n < task.notes.length; n++) {
+      var note = task.notes[n];
+      html += '<div style="font-size:12px;padding:6px 8px;background:var(--surface-2);border-radius:6px;margin-bottom:4px"><span style="font-weight:600;color:var(--text)">' + escapeHtml(note.by || '?') + '</span> <span style="color:var(--text-muted);font-size:10px">' + (note.at ? timeAgo(note.at) : '') + '</span><div style="color:var(--text-dim);margin-top:2px">' + escapeHtml(note.text || '') + '</div></div>';
+    }
+    html += '</div>';
+  }
+
+  // Action buttons
+  var canEdit = task.status === 'pending';
+  var canDelete = task.status !== 'in_progress';
+  html += '<div style="border-top:1px solid var(--border);padding-top:12px;display:flex;justify-content:flex-end;gap:8px">';
+  if (canEdit) {
+    html += '<button class="btn btn-primary" onclick="editTask(\'' + task.id + '\')" style="font-size:12px">Edit</button>';
+  } else {
+    html += '<button class="btn" disabled style="font-size:12px;opacity:0.3;cursor:not-allowed" title="Only pending tasks can be edited">Edit</button>';
+  }
+  if (canDelete) {
+    html += '<button class="btn btn-danger" id="task-delete-btn" onclick="confirmDeleteTask(\'' + task.id + '\')" style="font-size:12px">Delete Task</button>';
+  } else {
+    html += '<button class="btn btn-danger" disabled style="font-size:12px;opacity:0.4;cursor:not-allowed" title="Cannot delete active task">Delete Task</button>';
+  }
+  html += '</div>';
+
+  el.innerHTML = html;
+  document.getElementById('task-detail-overlay').classList.add('open');
+}
+
+function closeTaskDetail() {
+  document.getElementById('task-detail-overlay').classList.remove('open');
+  var btn = document.getElementById('task-delete-btn');
+  if (btn) { btn.textContent = 'Delete Task'; btn._confirming = false; }
+}
+
+function editTask(taskId) {
+  var task = cachedTasks.find(function(t) { return t.id === taskId; });
+  if (!task) return;
+  var el = document.getElementById('task-detail-content');
+  var html = '';
+  html += '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:16px">Edit Task</div>';
+  html += '<div style="margin-bottom:12px"><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Title</label>';
+  html += '<input type="text" id="task-edit-title" value="' + escapeHtml(task.title || '') + '" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);outline:none"></div>';
+  html += '<div style="margin-bottom:12px"><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Description</label>';
+  html += '<textarea id="task-edit-desc" style="width:100%;min-height:80px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);outline:none;resize:vertical;font-family:inherit">' + escapeHtml(task.description || '') + '</textarea></div>';
+  html += '<div style="margin-bottom:16px"><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Assignee</label>';
+  html += '<input type="text" id="task-edit-assignee" value="' + escapeHtml(task.assignee || '') + '" placeholder="Agent name" style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);outline:none"></div>';
+  html += '<div style="display:flex;gap:8px;justify-content:flex-end">';
+  html += '<button class="btn" onclick="showTaskDetail(\'' + taskId + '\')" style="font-size:12px">Cancel</button>';
+  html += '<button class="btn btn-primary" onclick="saveTaskEdit(\'' + taskId + '\')" style="font-size:12px">Save Changes</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function saveTaskEdit(taskId) {
+  var title = document.getElementById('task-edit-title').value.trim();
+  var desc = document.getElementById('task-edit-desc').value.trim();
+  var assignee = document.getElementById('task-edit-assignee').value.trim();
+  if (!title) { showToast('!', 'Title is required'); return; }
+  lttFetch('/api/tasks' + projectParam(), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_id: taskId, title: title, description: desc, assignee: assignee || null })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.error) {
+      showToast('!', data.error);
+    } else {
+      showToast('&#x2713;', 'Task updated');
+      closeTaskDetail();
+      fetchTasks();
+    }
+  }).catch(function() {
+    showToast('!', 'Save failed');
+  });
+}
+
+var _taskDeleteTimer = null;
+function confirmDeleteTask(taskId) {
+  var btn = document.getElementById('task-delete-btn');
+  if (!btn) return;
+  if (!btn._confirming) {
+    btn._confirming = true;
+    btn.textContent = 'Confirm Delete';
+    btn.style.background = 'var(--red-dim)';
+    _taskDeleteTimer = setTimeout(function() {
+      btn.textContent = 'Delete Task';
+      btn.style.background = '';
+      btn._confirming = false;
+    }, 3000);
+  } else {
+    if (_taskDeleteTimer) clearTimeout(_taskDeleteTimer);
+    btn.textContent = 'Deleting...';
+    btn.disabled = true;
+    lttFetch('/api/tasks' + projectParam(), {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.error) {
+        showToast('!', 'Delete failed: ' + data.error);
+        btn.textContent = 'Delete Task';
+        btn.disabled = false;
+        btn._confirming = false;
+      } else {
+        showToast('&#x2713;', 'Task deleted');
+        closeTaskDetail();
+        fetchTasks();
+      }
+    }).catch(function() {
+      showToast('!', 'Delete failed');
+      btn.textContent = 'Delete Task';
+      btn.disabled = false;
+      btn._confirming = false;
+    });
+  }
 }
 
 // ==================== KANBAN DRAG-AND-DROP ====================
@@ -9168,6 +9310,13 @@ loadProjects().then(function() {
 setInterval(poll, 10000);
 </script>
 
+<!-- Task Detail Popup -->
+<div class="phone-modal-overlay" id="task-detail-overlay" onclick="if(event.target===this)closeTaskDetail()">
+  <div class="phone-modal" style="width:520px;text-align:left;max-height:80vh;overflow-y:auto">
+    <button class="phone-modal-close" onclick="closeTaskDetail()">&times;</button>
+    <div id="task-detail-content"></div>
+  </div>
+</div>
 <div class="toast-container" id="toast-container"></div>
 </body>
 </html>
