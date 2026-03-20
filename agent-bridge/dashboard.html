@@ -8287,9 +8287,9 @@ function renderLaunchPanel() {
     html += '</div>';
 
     // Section 2: Team Templates
+    html += '<div class="launch-section">';
+    html += '<h3 style="display:flex;justify-content:space-between;align-items:center">Team Templates <button class="btn btn-primary" onclick="showTemplateBuilder()" style="font-size:12px;padding:5px 12px">+ Create Template</button></h3>';
     if (allTemplates.length > 0) {
-      html += '<div class="launch-section">';
-      html += '<h3>Team Templates</h3>';
       html += '<div class="template-grid">';
       var allTpls = simpleTemplates.concat(convTemplates);
       for (var t = 0; t < allTpls.length; t++) {
@@ -8316,8 +8316,11 @@ function renderLaunchPanel() {
       }
       html += '</div>';
       html += '<div id="template-expanded" style="display:none;margin-top:16px"></div>';
-      html += '</div>';
+    } else {
+      html += '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No templates yet. Create one to get started.</div>';
     }
+    html += '<div id="template-builder" style="display:none;margin-top:16px"></div>';
+    html += '</div>';
 
     // Store data for JS functions
     window._launchExistingNames = existingNames;
@@ -8425,6 +8428,143 @@ function expandTemplate(index) {
   expanded.innerHTML = html;
   expanded.style.display = 'block';
   expanded.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ==================== CUSTOM TEMPLATE BUILDER ====================
+
+var _tplBuilderAgents = [];
+
+function showTemplateBuilder(prefill) {
+  var el = document.getElementById('template-builder');
+  if (!el) return;
+  _tplBuilderAgents = prefill && prefill.agents ? prefill.agents.map(function(a) { return Object.assign({}, a); }) : [
+    { name: 'Coordinator', role: 'lead', skills: 'planning, delegation', prompt: '' },
+    { name: 'Developer', role: 'backend', skills: 'javascript, coding', prompt: '' }
+  ];
+
+  renderBuilderForm(el, prefill);
+  el.style.display = 'block';
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderBuilderForm(el, prefill) {
+  var html = '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:20px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><span style="font-size:16px;font-weight:700;color:var(--text)">' + (prefill ? 'Edit Template' : 'Create Template') + '</span><button class="btn" onclick="hideTemplateBuilder()" style="font-size:11px;padding:4px 10px">Cancel</button></div>';
+
+  // Template info
+  html += '<div class="launch-form-row">';
+  html += '<div class="launch-form-field"><label>Template Name</label><input type="text" id="tpl-name" value="' + escapeHtml(prefill ? prefill.name || '' : '') + '" placeholder="e.g. My Dev Team"></div>';
+  html += '<div class="launch-form-field"><label>Category</label><select id="tpl-category"><option value="development"' + (prefill && prefill.category === 'development' ? ' selected' : '') + '>Development</option><option value="research"' + (prefill && prefill.category === 'research' ? ' selected' : '') + '>Research</option><option value="review"' + (prefill && prefill.category === 'review' ? ' selected' : '') + '>Review</option><option value="custom"' + (prefill && prefill.category === 'custom' ? ' selected' : '') + '>Custom</option></select></div>';
+  html += '</div>';
+  html += '<div class="launch-form-field" style="margin-bottom:16px"><label>Description</label><input type="text" id="tpl-desc" value="' + escapeHtml(prefill ? prefill.description || '' : '') + '" placeholder="Brief description of this team template"></div>';
+  html += '<div class="launch-form-field" style="margin-bottom:16px"><label>Mode</label><select id="tpl-mode"><option value="direct"' + (prefill && prefill.conversation_mode === 'direct' ? ' selected' : '') + '>Direct</option><option value="group"' + (prefill && prefill.conversation_mode === 'group' ? ' selected' : '') + '>Group</option><option value="managed"' + (prefill && prefill.conversation_mode === 'managed' ? ' selected' : '') + '>Managed</option></select></div>';
+
+  // Agents
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">Agents</div>';
+  for (var i = 0; i < _tplBuilderAgents.length; i++) {
+    var ag = _tplBuilderAgents[i];
+    html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">';
+    html += '<div class="launch-form-row">';
+    html += '<div class="launch-form-field"><label>Name</label><input type="text" data-tpl-agent="' + i + '" data-field="name" value="' + escapeHtml(ag.name || '') + '" oninput="updateTplAgent(' + i + ',\'name\',this.value)"></div>';
+    html += '<div class="launch-form-field"><label>Role</label><select data-tpl-agent="' + i + '" data-field="role" onchange="updateTplAgent(' + i + ',\'role\',this.value);autoFillTplSkills(' + i + ',this.value)"><option value="">Select...</option><option value="lead"' + (ag.role === 'lead' ? ' selected' : '') + '>Lead</option><option value="backend"' + (ag.role === 'backend' ? ' selected' : '') + '>Backend</option><option value="frontend"' + (ag.role === 'frontend' ? ' selected' : '') + '>Frontend</option><option value="quality"' + (ag.role === 'quality' ? ' selected' : '') + '>Quality</option><option value="monitor"' + (ag.role === 'monitor' ? ' selected' : '') + '>Monitor</option></select></div>';
+    html += '</div>';
+    html += '<div class="launch-form-field" style="margin-bottom:6px"><label>Skills</label><input type="text" data-tpl-agent="' + i + '" data-field="skills" value="' + escapeHtml(ag.skills || '') + '" oninput="updateTplAgent(' + i + ',\'skills\',this.value)" placeholder="comma-separated skills"></div>';
+    html += '<div class="launch-form-field"><label>Prompt</label><textarea data-tpl-agent="' + i + '" data-field="prompt" oninput="updateTplAgent(' + i + ',\'prompt\',this.value)" style="min-height:60px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text);font-family:inherit;resize:vertical;outline:none;width:100%">' + escapeHtml(ag.prompt || '') + '</textarea></div>';
+    if (_tplBuilderAgents.length > 1) {
+      html += '<button class="btn btn-danger" onclick="removeTplAgent(' + i + ')" style="font-size:11px;padding:3px 8px;margin-top:6px">Remove</button>';
+    }
+    html += '</div>';
+  }
+  html += '<button class="btn" onclick="addTplAgent()" style="font-size:12px;margin-bottom:16px">+ Add Agent</button>';
+
+  // Save
+  html += '<div style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px">';
+  if (prefill && prefill.id) {
+    html += '<button class="btn btn-primary" onclick="saveCustomTemplate(\'' + escapeHtml(prefill.id) + '\')" style="font-size:12px">Update Template</button>';
+  } else {
+    html += '<button class="btn btn-primary" onclick="saveCustomTemplate()" style="font-size:12px">Save Template</button>';
+  }
+  html += '</div>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function hideTemplateBuilder() {
+  var el = document.getElementById('template-builder');
+  if (el) el.style.display = 'none';
+}
+
+function updateTplAgent(idx, field, value) {
+  if (_tplBuilderAgents[idx]) _tplBuilderAgents[idx][field] = value;
+}
+
+function autoFillTplSkills(idx, role) {
+  if (ROLE_SKILLS[role]) {
+    _tplBuilderAgents[idx].skills = ROLE_SKILLS[role].join(', ');
+    var el = document.getElementById('template-builder');
+    if (el) renderBuilderForm(el);
+  }
+}
+
+function addTplAgent() {
+  _tplBuilderAgents.push({ name: '', role: '', skills: '', prompt: '' });
+  var el = document.getElementById('template-builder');
+  if (el) renderBuilderForm(el);
+}
+
+function removeTplAgent(idx) {
+  _tplBuilderAgents.splice(idx, 1);
+  var el = document.getElementById('template-builder');
+  if (el) renderBuilderForm(el);
+}
+
+function saveCustomTemplate(existingId) {
+  var name = (document.getElementById('tpl-name').value || '').trim();
+  var desc = (document.getElementById('tpl-desc').value || '').trim();
+  var category = document.getElementById('tpl-category').value;
+  var mode = document.getElementById('tpl-mode').value;
+
+  if (!name) { showToast('!', 'Template name is required'); return; }
+  if (_tplBuilderAgents.length < 1) { showToast('!', 'Add at least one agent'); return; }
+  var hasEmptyName = _tplBuilderAgents.some(function(a) { return !a.name || !a.name.trim(); });
+  if (hasEmptyName) { showToast('!', 'All agents must have a name'); return; }
+
+  var agents = _tplBuilderAgents.map(function(a) {
+    return {
+      name: a.name.trim(),
+      role: a.role || '',
+      display_name: a.name.trim(),
+      skills: (a.skills || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean),
+      prompt: a.prompt || 'You are ' + a.name.trim() + '. Register as "' + a.name.trim() + '" and call listen() for tasks.'
+    };
+  });
+
+  var body = {
+    name: name,
+    description: desc,
+    category: category,
+    conversation_mode: mode,
+    agents: agents
+  };
+
+  var method = existingId ? 'PUT' : 'POST';
+  if (existingId) body.id = existingId;
+
+  lttFetch('/api/custom-templates' + projectParam(), {
+    method: method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.error) {
+      showToast('!', data.error);
+    } else {
+      showToast('&#x2713;', 'Template saved');
+      hideTemplateBuilder();
+      renderLaunchPanel();
+    }
+  }).catch(function() {
+    showToast('!', 'Failed to save template');
+  });
 }
 
 // ==================== v4.4: UNIFIED TEMPLATE PREVIEW ====================

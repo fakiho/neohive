@@ -618,6 +618,7 @@ function buildMessageResponse(msg, consumedIds) {
     },
     pending_count: pendingCount,
     agents_online: agentsOnline,
+    coordinator_mode: getConfig().coordinator_mode || 'responsive',
     ...(taskReminder && { task_reminder: taskReminder }),
   };
 }
@@ -1098,12 +1099,14 @@ let _guideCache = { key: null, result: null };
 function buildGuide(level = 'standard') {
   const agents = getAgents();
   const aliveCount = Object.values(agents).filter(a => isPidAlive(a.pid, a.last_activity)).length;
-  const mode = getConfig().conversation_mode || 'direct';
+  const config = getConfig();
+  const mode = config.conversation_mode || 'direct';
+  const coordMode = config.coordinator_mode || 'responsive';
 
   // Cache check: reuse cached guide if nothing changed (saves rebuilding 20-50 rules)
   let rulesMtime = 0;
   try { rulesMtime = fs.existsSync(RULES_FILE) ? fs.statSync(RULES_FILE).mtimeMs : 0; } catch {}
-  const cacheKey = `${level}:${aliveCount}:${mode}:${registeredName}:${rulesMtime}`;
+  const cacheKey = `${level}:${aliveCount}:${mode}:${coordMode}:${registeredName}:${rulesMtime}`;
   if (_guideCache.key === cacheKey && _guideCache.result) return _guideCache.result;
 
   const channels = getChannelsData();
@@ -2233,6 +2236,7 @@ function toolConsumeMessages(from = null, limit = null) {
     })),
     remaining: remaining.length,
     agents_online: agentsOnline,
+    coordinator_mode: getConfig().coordinator_mode || 'responsive',
   };
 }
 
@@ -2983,6 +2987,7 @@ function buildListenGroupResponse(batch, consumed, agentName, listenStart) {
   result.next_action = isAutonomousMode()
     ? 'Process these messages, then call get_work() to continue the proactive work loop. Do NOT call listen_group() — use get_work() instead.'
     : 'After processing these messages and sending your response, call listen_group() again immediately. Never stop listening.';
+  result.coordinator_mode = getConfig().coordinator_mode || 'responsive';
 
   // Task nudge: remind agent of their outstanding tasks
   try {

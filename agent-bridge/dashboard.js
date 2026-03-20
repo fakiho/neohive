@@ -2072,7 +2072,7 @@ const server = http.createServer(async (req, res) => {
         try {
           const messagesFile = filePath('messages.jsonl', projectPath);
           const historyFile = filePath('history.jsonl', projectPath);
-          const sysMsg = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), from: '__system__', to: '__group__', content: `[MODE] Coordinator mode changed to "${newMode}". ${newMode === 'responsive' ? 'Coordinator stays with human, uses consume_messages().' : 'Coordinator runs autonomously in listen() loop.'}`, timestamp: new Date().toISOString(), system: true };
+          const sysMsg = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), from: '__system__', to: '__group__', content: `[MODE] Coordinator mode changed to "${newMode}". ${newMode === 'responsive' ? 'Coordinator stays with human, uses consume_messages().' : 'Coordinator runs autonomously in listen() loop.'} Coordinator: call get_guide() to update your instructions.`, timestamp: new Date().toISOString(), system: true };
           fs.appendFileSync(messagesFile, JSON.stringify(sysMsg) + '\n');
           fs.appendFileSync(historyFile, JSON.stringify(sysMsg) + '\n');
         } catch (e) { /* broadcast is best-effort */ }
