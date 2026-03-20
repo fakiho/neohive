@@ -4400,8 +4400,8 @@ function renderAgents(agents) {
       var name = agentNames[i];
       var info = agents[name];
       var color = getColor(name);
-      var state = info.status || (info.alive ? 'working' : 'offline');
-      if (state === 'idle' || state === 'sleeping') sleepCount++;
+      var state = !info.alive ? 'offline' : info.is_listening ? 'listening' : (info.status === 'idle' || info.status === 'sleeping') ? 'idle' : 'working';
+      if (state === 'idle') sleepCount++;
 
       // Compact activity text
       var activityText = '';
@@ -4415,7 +4415,7 @@ function renderAgents(agents) {
         activityText = timeAgo(info.last_activity);
       }
 
-      var cardClass = 'agent-card' + (state !== 'active' ? ' ' + state : '');
+      var cardClass = 'agent-card' + (state !== 'working' ? ' ' + state : '');
       var avatarHtml = info.avatar
         ? '<img class="agent-avatar-img" src="' + escapeHtml(info.avatar) + '" alt="' + escapeHtml(name) + '" onerror="this.style.display=\'none\'">'
         : '<div class="agent-avatar" style="background:' + color + '">' + initial(name) + '</div>';
@@ -7108,7 +7108,7 @@ function renderMonitorPanel(data) {
     for (var i = 0; i < agentNames.length; i++) {
       var name = agentNames[i];
       var a = agents[name];
-      var color = a.status === 'active' ? 'var(--green)' : a.status === 'idle' ? 'var(--orange)' : 'var(--red,#ef4444)';
+      var color = a.status === 'working' ? 'var(--green)' : a.status === 'listening' ? '#3b82f6' : a.status === 'idle' ? 'var(--orange)' : 'var(--red,#ef4444)';
       var role = a.role ? ' (' + a.role + ')' : '';
       html += '<div style="padding:4px 8px;background:var(--surface-2);border-left:3px solid ' + color + ';border-radius:4px;font-size:11px">' +
         '<span style="font-weight:600">' + escapeHtml(name) + '</span>' +
