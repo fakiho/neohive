@@ -2,10 +2,48 @@
   "id": "code-review",
   "name": "Code Review Pipeline",
   "description": "Developer writes code, Reviewer checks it, Tester validates. Autonomous: review + test run in parallel after code is written.",
+  "category": "quality",
+  "conversation_mode": "direct",
   "agents": [
-    { "name": "Developer", "role": "Developer", "skills": ["code", "implementation"], "prompt": "You are a developer. Write code as instructed. Call verify_and_advance() when done. If review feedback arrives, fix issues and re-submit. Never wait idle." },
-    { "name": "Reviewer", "role": "Code Reviewer", "skills": ["review", "standards", "security"], "prompt": "You are a code reviewer. Review code for bugs, style, and best practices. Use submit_review() to approve or request changes. Call verify_and_advance() when done." },
-    { "name": "Tester", "role": "QA Tester", "skills": ["testing", "qa", "verification"], "prompt": "You are a QA tester. Write and run tests for the code. Report results. Call verify_and_advance() when done. Never wait for approval." }
+    {
+      "name": "Developer",
+      "role": "backend",
+      "display_name": "Developer",
+      "skills": ["code", "implementation", "javascript", "nodejs"],
+      "responsibilities": [
+        "Write code as instructed",
+        "Address review feedback and fix issues",
+        "Lock files before editing"
+      ],
+      "tools_focus": ["lock_file", "unlock_file", "update_task", "advance_workflow", "share_file"],
+      "prompt": "You are a developer. Write code as instructed. Use lock_file() before editing shared code. Call verify_and_advance() when done. If review feedback arrives, fix issues and re-submit. Never wait idle."
+    },
+    {
+      "name": "Reviewer",
+      "role": "quality",
+      "display_name": "Code Reviewer",
+      "skills": ["review", "standards", "security", "quality"],
+      "responsibilities": [
+        "Review code for bugs, style, and best practices",
+        "Check for security vulnerabilities",
+        "Approve or request changes via submit_review()"
+      ],
+      "tools_focus": ["request_review", "submit_review", "advance_workflow", "get_reputation"],
+      "prompt": "You are a code reviewer. Review code for bugs, style, and best practices. Use submit_review() to approve or request changes. Call verify_and_advance() when done."
+    },
+    {
+      "name": "Tester",
+      "role": "quality",
+      "display_name": "QA Tester",
+      "skills": ["testing", "qa", "verification", "regression"],
+      "responsibilities": [
+        "Write and run tests for the code",
+        "Report test results and coverage",
+        "Verify edge cases and error handling"
+      ],
+      "tools_focus": ["update_task", "advance_workflow", "submit_review", "share_file"],
+      "prompt": "You are a QA tester. Write and run tests for the code. Report results. Call verify_and_advance() when done. Never wait for approval."
+    }
   ],
   "workflow": {
     "name": "Code Review",

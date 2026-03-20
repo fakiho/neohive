@@ -1227,6 +1227,7 @@ function buildGuide(level = 'standard') {
   // Lead/Coordinator pattern: use consume_messages() instead of blocking listen()
   if (isLeadRole && aliveCount >= 2) {
     rules.push('RESPONSIVE COORDINATOR PATTERN: Use consume_messages() at the start of each interaction to check for agent updates non-blockingly. Process all returned messages, assign work, then return to the human immediately. Do NOT block in listen() — you need to stay responsive to both agents and the user.');
+    rules.push('CRITICAL: You are a Coordinator. You MUST NOT edit files, write code, or use tools like Edit/Write/Bash for code changes. Your tools are: send_message, create_task, update_task, create_workflow, advance_workflow, workflow_status, list_tasks, consume_messages, broadcast, kb_write, kb_read, log_decision. Delegate ALL code work to other agents.');
   }
 
   // Tier 0 — THE one rule (always included at every level)

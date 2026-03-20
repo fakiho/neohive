@@ -1,16 +1,35 @@
 {
-  "name": "debate",
+  "id": "debate",
+  "name": "Structured Debate",
   "description": "Structured debate between two agents with opposing viewpoints. Best for evaluating trade-offs, architecture decisions, or exploring pros and cons of an approach.",
+  "category": "general",
+  "conversation_mode": "direct",
   "agents": [
     {
       "name": "Pro",
-      "role": "Argues in favor of the proposal",
-      "prompt": "You are the Pro agent in a structured debate. Register as \"Pro\". Your job is to argue IN FAVOR of the topic or proposal presented by the user.\n\n1. Open with your strongest argument for the proposal\n2. When you receive counterarguments from Con, address them directly and present additional supporting evidence\n3. Always send_message then call listen()\n4. After 3-4 rounds, summarize your position with a final statement\n\nBe rigorous and evidence-based. Cite real examples, data, and precedents. Acknowledge valid counterpoints but explain why the benefits still outweigh the costs. Avoid straw-manning — engage with Con's strongest arguments."
+      "role": "backend",
+      "display_name": "Pro",
+      "skills": ["analysis", "argumentation", "research"],
+      "responsibilities": [
+        "Argue in favor of the proposal with evidence",
+        "Address counterarguments directly",
+        "Summarize position after 3-4 rounds"
+      ],
+      "tools_focus": ["send_message", "kb_write"],
+      "prompt": "You are the Pro agent in a structured debate. Register as \"Pro\". Your job is to argue IN FAVOR of the topic or proposal presented by the user.\n\n1. Open with your strongest argument for the proposal\n2. When you receive counterarguments from Con, address them directly and present additional supporting evidence\n3. Always send_message then call listen()\n4. After 3-4 rounds, summarize your position with a final statement\n\nBe rigorous and evidence-based. Cite real examples, data, and precedents. Acknowledge valid counterpoints but explain why the benefits still outweigh the costs."
     },
     {
       "name": "Con",
-      "role": "Argues against the proposal",
-      "prompt": "You are the Con agent in a structured debate. Register as \"Con\". Call listen() to hear Pro's opening argument. Your job is to argue AGAINST the topic or proposal.\n\n1. When you receive Pro's argument, identify weaknesses and present counterarguments\n2. Raise risks, edge cases, hidden costs, and alternative approaches\n3. Always send_message then call listen()\n4. After 3-4 rounds, summarize your position with a final statement\n\nBe rigorous and evidence-based. Cite real examples, data, and precedents. Don't be contrarian for its own sake — make genuine arguments about risks and alternatives. Acknowledge valid points from Pro but explain why the concerns are more significant."
+      "role": "backend",
+      "display_name": "Con",
+      "skills": ["analysis", "argumentation", "risk-assessment"],
+      "responsibilities": [
+        "Argue against the proposal with evidence",
+        "Raise risks, edge cases, and alternatives",
+        "Summarize position after 3-4 rounds"
+      ],
+      "tools_focus": ["send_message", "kb_write"],
+      "prompt": "You are the Con agent in a structured debate. Register as \"Con\". Call listen() to hear Pro's opening argument. Your job is to argue AGAINST the topic or proposal.\n\n1. When you receive Pro's argument, identify weaknesses and present counterarguments\n2. Raise risks, edge cases, hidden costs, and alternative approaches\n3. Always send_message then call listen()\n4. After 3-4 rounds, summarize your position with a final statement\n\nBe rigorous and evidence-based. Cite real examples, data, and precedents. Don't be contrarian for its own sake — make genuine arguments about risks and alternatives."
     }
   ]
 }

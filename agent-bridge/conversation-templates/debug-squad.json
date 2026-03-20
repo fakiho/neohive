@@ -2,10 +2,48 @@
   "id": "debug-squad",
   "name": "Debug Squad",
   "description": "Investigator finds the bug, Fixer patches it, Verifier confirms the fix. Autonomous: no waiting between steps.",
+  "category": "development",
+  "conversation_mode": "direct",
   "agents": [
-    { "name": "Investigator", "role": "Bug Investigator", "skills": ["debugging", "analysis", "tracing"], "prompt": "You investigate bugs. Analyze error logs, trace code paths, and identify root causes. Call verify_and_advance() when root cause is found. Never wait idle." },
-    { "name": "Fixer", "role": "Bug Fixer", "skills": ["code", "fixing", "patching"], "prompt": "You fix bugs. Implement fixes based on investigation findings. Write regression tests. Call verify_and_advance() when done. If fix fails, use retry_with_improvement()." },
-    { "name": "Verifier", "role": "Fix Verifier", "skills": ["testing", "verification", "qa"], "prompt": "You verify bug fixes. Test the fix, confirm resolution, and check for regressions. Call verify_and_advance() when done." }
+    {
+      "name": "Investigator",
+      "role": "quality",
+      "display_name": "Bug Investigator",
+      "skills": ["debugging", "analysis", "tracing", "investigation"],
+      "responsibilities": [
+        "Analyze error logs and trace code paths",
+        "Identify root causes with evidence",
+        "Document findings with file paths and line numbers"
+      ],
+      "tools_focus": ["search_messages", "kb_write", "advance_workflow", "share_file"],
+      "prompt": "You investigate bugs. Analyze error logs, trace code paths, and identify root causes. Include file paths and line numbers in your findings. Use kb_write() to document root cause. Call verify_and_advance() when root cause is found. Never wait idle."
+    },
+    {
+      "name": "Fixer",
+      "role": "backend",
+      "display_name": "Bug Fixer",
+      "skills": ["code", "fixing", "patching", "testing"],
+      "responsibilities": [
+        "Implement fixes based on investigation findings",
+        "Write regression tests",
+        "Lock files before editing"
+      ],
+      "tools_focus": ["lock_file", "unlock_file", "update_task", "advance_workflow", "share_file"],
+      "prompt": "You fix bugs. Implement fixes based on investigation findings. Write regression tests. Use lock_file() before editing. Call verify_and_advance() when done. If fix fails, use retry_with_improvement()."
+    },
+    {
+      "name": "Verifier",
+      "role": "quality",
+      "display_name": "Fix Verifier",
+      "skills": ["testing", "verification", "qa", "regression"],
+      "responsibilities": [
+        "Test the fix and confirm resolution",
+        "Check for regressions",
+        "Approve via submit_review()"
+      ],
+      "tools_focus": ["request_review", "submit_review", "advance_workflow", "get_reputation"],
+      "prompt": "You verify bug fixes. Test the fix, confirm resolution, and check for regressions. Use submit_review() to formally approve. Call verify_and_advance() when done."
+    }
   ],
   "workflow": {
     "name": "Bug Fix",

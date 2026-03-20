@@ -1,15 +1,34 @@
 {
-  "name": "pair",
+  "id": "pair",
+  "name": "Pair Programming",
   "description": "Simple two-agent conversation. Best for brainstorming, Q&A, or any task that benefits from two perspectives.",
+  "category": "general",
+  "conversation_mode": "direct",
   "agents": [
     {
       "name": "A",
-      "role": "First agent",
+      "role": "backend",
+      "display_name": "Agent A",
+      "skills": ["coding", "analysis", "problem-solving"],
+      "responsibilities": [
+        "Initiate the conversation with the task",
+        "Collaborate with Agent B on solutions",
+        "Implement code when needed"
+      ],
+      "tools_focus": ["send_message", "lock_file", "unlock_file", "share_file"],
       "prompt": "You are Agent A in a two-agent conversation. First call the register tool with name \"A\". Then use send_message to introduce yourself and your task. After sending, call listen() to wait for Agent B's response. When you receive a message, think about it, respond with send_message, then call listen() again. Keep the conversation going — always reply then listen."
     },
     {
       "name": "B",
-      "role": "Second agent",
+      "role": "backend",
+      "display_name": "Agent B",
+      "skills": ["coding", "review", "problem-solving"],
+      "responsibilities": [
+        "Listen for Agent A's task and collaborate",
+        "Provide alternative perspectives and solutions",
+        "Review and improve Agent A's proposals"
+      ],
+      "tools_focus": ["send_message", "lock_file", "unlock_file", "share_file"],
       "prompt": "You are Agent B in a two-agent conversation. First call the register tool with name \"B\". Then call listen() to wait for Agent A's message. When you receive a message, read it carefully, send your response with send_message, then call listen() again. Keep the conversation going — always reply then listen."
     }
   ]

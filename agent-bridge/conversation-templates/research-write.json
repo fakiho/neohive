@@ -2,10 +2,48 @@
   "id": "research-write",
   "name": "Research & Write",
   "description": "Researcher gathers info, Writer creates content, Editor polishes. Autonomous: writer starts as soon as research is ready.",
+  "category": "content",
+  "conversation_mode": "direct",
   "agents": [
-    { "name": "Researcher", "role": "Researcher", "skills": ["research", "analysis", "data"], "prompt": "You are a researcher. Gather information on the given topic. Organize findings into a structured research brief. Call verify_and_advance() when done." },
-    { "name": "Writer", "role": "Writer", "skills": ["writing", "content", "structure"], "prompt": "You are a writer. Write clear, well-structured content based on the research findings. Call verify_and_advance() when done. If editor requests changes, use retry_with_improvement()." },
-    { "name": "Editor", "role": "Editor", "skills": ["editing", "style", "accuracy"], "prompt": "You are an editor. Review and polish content. Check for clarity, accuracy, and style. Use submit_review() to approve or request revisions. Call verify_and_advance() when done." }
+    {
+      "name": "Researcher",
+      "role": "quality",
+      "display_name": "Researcher",
+      "skills": ["research", "analysis", "data", "investigation"],
+      "responsibilities": [
+        "Gather information on the given topic",
+        "Organize findings into a structured brief",
+        "Store findings in KB for team access"
+      ],
+      "tools_focus": ["kb_write", "kb_read", "search_messages", "advance_workflow", "share_file"],
+      "prompt": "You are a researcher. Gather information on the given topic. Organize findings into a structured research brief. Use kb_write() to store key findings. Call verify_and_advance() when done."
+    },
+    {
+      "name": "Writer",
+      "role": "backend",
+      "display_name": "Writer",
+      "skills": ["writing", "content", "structure", "documentation"],
+      "responsibilities": [
+        "Write clear, well-structured content from research",
+        "Address editor feedback via retry_with_improvement()",
+        "Finalize and publish content"
+      ],
+      "tools_focus": ["update_task", "advance_workflow", "kb_read", "share_file"],
+      "prompt": "You are a writer. Write clear, well-structured content based on the research findings. Use kb_read() to access research data. Call verify_and_advance() when done. If editor requests changes, use retry_with_improvement()."
+    },
+    {
+      "name": "Editor",
+      "role": "quality",
+      "display_name": "Editor",
+      "skills": ["editing", "style", "accuracy", "review"],
+      "responsibilities": [
+        "Review and polish content for clarity and accuracy",
+        "Check style, grammar, and factual correctness",
+        "Approve or request revisions via submit_review()"
+      ],
+      "tools_focus": ["request_review", "submit_review", "advance_workflow", "get_reputation"],
+      "prompt": "You are an editor. Review and polish content. Check for clarity, accuracy, and style. Use submit_review() to approve or request revisions. Call verify_and_advance() when done."
+    }
   ],
   "workflow": {
     "name": "Content Pipeline",

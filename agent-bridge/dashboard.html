@@ -2740,11 +2740,47 @@
   .launch-area {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    padding: 28px 32px;
     display: none;
   }
-
   .launch-area.visible { display: block; }
+  .launch-section {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; margin-bottom: 20px;
+  }
+  .launch-section h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--text); }
+  .launch-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .launch-form-field { display: flex; flex-direction: column; gap: 4px; }
+  .launch-form-field label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+  .launch-form-field input, .launch-form-field select {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; font-size: 13px; color: var(--text); outline: none; transition: border-color 0.15s;
+  }
+  .launch-form-field input:focus, .launch-form-field select:focus { border-color: var(--accent); }
+  .launch-form-field input.invalid { border-color: var(--red); }
+  .launch-form-field .field-hint { font-size: 11px; color: var(--text-muted); min-height: 16px; }
+  .launch-form-field .field-hint.error { color: var(--red); }
+  .launch-form-field .field-hint.success { color: var(--green); }
+  .launch-prompt-output {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; font-size: 12px; font-family: 'SFMono-Regular', Consolas, monospace;
+    color: var(--text); line-height: 1.5; max-height: 200px; overflow-y: auto;
+    white-space: pre-wrap; cursor: pointer; position: relative; transition: border-color 0.15s;
+  }
+  .launch-prompt-output:hover { border-color: var(--accent); }
+  .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .template-card {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; cursor: pointer; transition: all 0.15s;
+  }
+  .template-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+  .template-card-name { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .template-card-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; }
+  .template-card-agents { display: flex; flex-wrap: wrap; gap: 4px; }
+  .template-agent-chip {
+    font-size: 11px; padding: 2px 8px; border-radius: 6px;
+    background: var(--accent-dim); color: var(--accent); font-weight: 500;
+  }
 
   /* ===== RULES VIEW ===== */
   .rules-area {
@@ -8002,88 +8038,174 @@ var selectedCli = 'claude';
 var _launchWatchers = []; // [{name, cli, prompt, state}] for tracking launch status
 var _launchWatchInterval = null;
 
+var ROLE_SKILLS = {
+  lead: ['project-management', 'architecture', 'code-review'],
+  backend: ['node.js', 'python', 'databases', 'api-design'],
+  frontend: ['html', 'css', 'javascript', 'ui-design', 'responsive-design'],
+  quality: ['testing', 'code-review', 'debugging', 'documentation'],
+  monitor: ['observability', 'logging', 'performance', 'health-checks']
+};
+
 function renderLaunchPanel() {
   var el = document.getElementById('launch-area');
-  // Fetch unified templates (serves both templates/ and conversation-templates/ dirs)
-  lttFetch('/api/templates').then(function(r) { return r.json(); }).then(function(allTemplates) {
-    // Split by source field — "templates" = quick start, "conversation-templates" = workflows
+  var pq = projectParam();
+  Promise.all([
+    lttFetch('/api/templates').then(function(r) { return r.json(); }).catch(function() { return []; }),
+    lttFetch('/api/agents' + pq).then(function(r) { return r.json(); }).catch(function() { return {}; })
+  ]).then(function(results) {
+    var allTemplates = results[0];
+    var existingAgents = results[1];
+    var existingNames = Object.keys(existingAgents).map(function(n) { return n.toLowerCase(); });
+
     var simpleTemplates = [];
     var convTemplates = [];
     for (var k = 0; k < allTemplates.length; k++) {
-      if (allTemplates[k].source === 'conversation-templates') {
-        convTemplates.push(allTemplates[k]);
-      } else {
-        simpleTemplates.push(allTemplates[k]);
-      }
+      if (allTemplates[k].source === 'conversation-templates') convTemplates.push(allTemplates[k]);
+      else simpleTemplates.push(allTemplates[k]);
     }
     launchTemplates = simpleTemplates;
-
-    // Build unified template picker with optgroups
-    var templateOpts = '<option value="">-- No template --</option>';
-    if (simpleTemplates.length) {
-      templateOpts += '<optgroup label="Quick Start">';
-      for (var i = 0; i < simpleTemplates.length; i++) {
-        templateOpts += '<option value="simple:' + escapeHtml(simpleTemplates[i].name) + '">' + escapeHtml(simpleTemplates[i].name) + ' \u2014 ' + escapeHtml(simpleTemplates[i].description || '') + '</option>';
-      }
-      templateOpts += '</optgroup>';
-    }
-    if (convTemplates.length) {
-      templateOpts += '<optgroup label="Workflows (multi-agent)">';
-      for (var j = 0; j < convTemplates.length; j++) {
-        var ct = convTemplates[j];
-        var agentCount = ct.agents ? ct.agents.length : 0;
-        templateOpts += '<option value="conv:' + escapeHtml(ct.id || ct.name) + '">' + escapeHtml(ct.name) + ' (' + agentCount + ' agents) \u2014 ' + escapeHtml(ct.description || '') + '</option>';
-      }
-      templateOpts += '</optgroup>';
-    }
-
-    // Store conv templates for later use
     window._convTemplates = convTemplates;
 
-    el.innerHTML =
-      '<div class="launch-panel">' +
-        '<h3>Launch Agent Terminal</h3>' +
-        '<div class="launch-field">' +
-          '<label>Project Folder</label>' +
-          '<input type="text" id="launch-project" value="' + escapeHtml(activeProject) + '" placeholder="Path to project folder">' +
-        '</div>' +
-        '<div class="launch-field">' +
-          '<label>CLI Type</label>' +
-          '<div class="cli-btns">' +
-            '<div class="cli-btn' + (selectedCli === 'claude' ? ' selected' : '') + '" onclick="selectCli(\'claude\')">Claude</div>' +
-            '<div class="cli-btn' + (selectedCli === 'gemini' ? ' selected' : '') + '" onclick="selectCli(\'gemini\')">Gemini</div>' +
-            '<div class="cli-btn' + (selectedCli === 'codex' ? ' selected' : '') + '" onclick="selectCli(\'codex\')">Codex</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="launch-field">' +
-          '<label>Agent Name</label>' +
-          '<input type="text" id="launch-name" placeholder="e.g. Builder, Coder, Reviewer" maxlength="20">' +
-        '</div>' +
-        '<div class="launch-field">' +
-          '<label>Template</label>' +
-          '<select id="launch-template" onchange="onTemplateSelect()">' + templateOpts + '</select>' +
-        '</div>' +
-        '<div id="launch-template-preview"></div>' +
-        '<div class="launch-field">' +
-          '<label>Prompt (auto-copied to clipboard on launch)</label>' +
-          '<textarea id="launch-prompt" placeholder="Custom instructions for the agent..."></textarea>' +
-        '</div>' +
-        '<div class="launch-actions">' +
-          '<button class="btn btn-primary" onclick="doLaunch()">Launch Terminal</button>' +
-          '<button class="btn" onclick="copyLaunchPrompt()">Copy Prompt</button>' +
-        '</div>' +
-        '<div id="launch-all-section" style="display:none">' +
-          '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">' +
-            '<button class="btn btn-primary" onclick="doLaunchAll()" style="width:100%;padding:12px;font-size:14px">Launch All Agents from Template</button>' +
-            '<p style="font-size:11px;color:var(--text-muted);margin-top:6px;text-align:center">Opens a terminal for each agent in the selected template. Prompts are copied to clipboard sequentially.</p>' +
-          '</div>' +
-        '</div>' +
-        '<div class="launch-result" id="launch-result"></div>' +
-        '<div id="launch-status-tracker" class="launch-status-list" style="display:none"></div>' +
-      '</div>';
+    var html = '';
+    // Section 1: Add Agent
+    html += '<div class="launch-section">';
+    html += '<h3>Add Agent</h3>';
+    html += '<div class="launch-form-row">';
+    html += '<div class="launch-form-field"><label>Agent Name</label><input type="text" id="launch-name" placeholder="e.g. Backend, Reviewer" maxlength="20" oninput="validateLaunchName()"><div class="field-hint" id="launch-name-hint">1-20 alphanumeric, underscore, or hyphen</div></div>';
+    html += '<div class="launch-form-field"><label>Role</label><select id="launch-role" onchange="onLaunchRoleChange()"><option value="">Select role...</option><option value="lead">Lead</option><option value="backend">Backend</option><option value="frontend">Frontend</option><option value="quality">Quality</option><option value="monitor">Monitor</option></select></div>';
+    html += '</div>';
+    html += '<div class="launch-form-row">';
+    html += '<div class="launch-form-field"><label>CLI Type</label><select id="launch-cli"><option value="claude"' + (selectedCli === 'claude' ? ' selected' : '') + '>Claude Code</option><option value="gemini"' + (selectedCli === 'gemini' ? ' selected' : '') + '>Gemini CLI</option><option value="codex"' + (selectedCli === 'codex' ? ' selected' : '') + '>Codex CLI</option></select></div>';
+    html += '<div class="launch-form-field"><label>Skills</label><input type="text" id="launch-skills" placeholder="Auto-filled from role" readonly style="color:var(--text-muted)"></div>';
+    html += '</div>';
+    html += '<div style="margin-top:8px"><button class="btn btn-primary" onclick="generateAgentPrompt()" style="margin-right:8px">Generate Prompt</button><button class="btn" onclick="doLaunch()">Launch Terminal</button></div>';
+    html += '<div id="launch-prompt-output" style="display:none;margin-top:12px"></div>';
+    html += '<div class="launch-result" id="launch-result"></div>';
+    html += '</div>';
+
+    // Section 2: Team Templates
+    if (allTemplates.length > 0) {
+      html += '<div class="launch-section">';
+      html += '<h3>Team Templates</h3>';
+      html += '<div class="template-grid">';
+      var allTpls = simpleTemplates.concat(convTemplates);
+      for (var t = 0; t < allTpls.length; t++) {
+        var tpl = allTpls[t];
+        var agents = tpl.agents || [];
+        var isConv = tpl.source === 'conversation-templates';
+        html += '<div class="template-card" onclick="expandTemplate(' + t + ')">';
+        html += '<div class="template-card-name">' + escapeHtml(tpl.name || tpl.id || 'Template') + '</div>';
+        html += '<div class="template-card-desc">' + escapeHtml(tpl.description || '') + '</div>';
+        html += '<div class="template-card-agents">';
+        if (agents.length > 0) {
+          for (var a = 0; a < agents.length; a++) {
+            html += '<span class="template-agent-chip">' + escapeHtml(agents[a].name || agents[a].role || 'Agent') + '</span>';
+          }
+        } else if (tpl.roles) {
+          var roleNames = Object.keys(tpl.roles);
+          for (var r = 0; r < roleNames.length; r++) {
+            html += '<span class="template-agent-chip">' + escapeHtml(roleNames[r]) + '</span>';
+          }
+        }
+        html += '</div></div>';
+      }
+      html += '</div>';
+      html += '<div id="template-expanded" style="display:none;margin-top:16px"></div>';
+      html += '</div>';
+    }
+
+    // Store data for JS functions
+    window._launchExistingNames = existingNames;
+    window._allLaunchTemplates = allTpls;
+
+    el.innerHTML = html;
   }).catch(function() {
-    el.innerHTML = '<div class="launch-panel"><h3>Launch Agent Terminal</h3><p style="color:var(--text-dim)">Failed to load templates.</p></div>';
+    el.innerHTML = '<div class="launch-section"><h3>Add Agent</h3><p style="color:var(--text-dim)">Failed to load data.</p></div>';
   });
+}
+
+function validateLaunchName() {
+  var input = document.getElementById('launch-name');
+  var hint = document.getElementById('launch-name-hint');
+  var name = (input.value || '').trim();
+  if (!name) { hint.className = 'field-hint'; hint.textContent = '1-20 alphanumeric, underscore, or hyphen'; input.classList.remove('invalid'); return; }
+  if (!/^[a-zA-Z0-9_-]{1,20}$/.test(name)) { hint.className = 'field-hint error'; hint.textContent = 'Invalid: only letters, numbers, _ and -'; input.classList.add('invalid'); return; }
+  if (window._launchExistingNames && window._launchExistingNames.indexOf(name.toLowerCase()) !== -1) { hint.className = 'field-hint error'; hint.textContent = 'Name already taken by an existing agent'; input.classList.add('invalid'); return; }
+  hint.className = 'field-hint success'; hint.textContent = 'Name available'; input.classList.remove('invalid');
+}
+
+function onLaunchRoleChange() {
+  var role = document.getElementById('launch-role').value;
+  var skillsInput = document.getElementById('launch-skills');
+  if (role && ROLE_SKILLS[role]) {
+    skillsInput.value = ROLE_SKILLS[role].join(', ');
+  } else {
+    skillsInput.value = '';
+  }
+}
+
+function generateAgentPrompt() {
+  var name = (document.getElementById('launch-name').value || '').trim();
+  var role = document.getElementById('launch-role').value;
+  var cli = document.getElementById('launch-cli').value;
+  if (!name) { showToast('!', 'Enter an agent name'); return; }
+  if (!/^[a-zA-Z0-9_-]{1,20}$/.test(name)) { showToast('!', 'Invalid agent name'); return; }
+
+  var prompt = 'You are ' + name + (role ? ', the ' + role + ' specialist' : '') + ' in a team. Register as "' + name + '". Call listen() to wait for tasks from the Coordinator. When you receive a coding task:\n1. Implement the requested changes\n2. Write clean, tested code\n3. Send a summary of what you built back to the Coordinator (use send_message with to="Coordinator")\n4. Call listen() again for the next task\n\nFocus on writing production-quality code. Include file paths and key decisions in your reports.';
+
+  var outputEl = document.getElementById('launch-prompt-output');
+  outputEl.style.display = 'block';
+  outputEl.innerHTML = '<div class="launch-prompt-output" onclick="copyGeneratedPrompt()">' + escapeHtml(prompt) + '</div>';
+  // Also set for legacy doLaunch()
+  window._generatedLaunchPrompt = prompt;
+}
+
+function copyGeneratedPrompt() {
+  if (window._generatedLaunchPrompt) {
+    navigator.clipboard.writeText(window._generatedLaunchPrompt).then(function() {
+      showToast('&#x2713;', 'Prompt copied to clipboard');
+    });
+  }
+}
+
+function expandTemplate(index) {
+  var tpls = window._allLaunchTemplates;
+  if (!tpls || !tpls[index]) return;
+  var tpl = tpls[index];
+  var agents = tpl.agents || [];
+  var expanded = document.getElementById('template-expanded');
+  if (!expanded) return;
+
+  var html = '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:16px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><span style="font-size:14px;font-weight:600">' + escapeHtml(tpl.name) + '</span><button class="btn" onclick="document.getElementById(\'template-expanded\').style.display=\'none\'" style="font-size:11px;padding:4px 10px">Close</button></div>';
+
+  if (agents.length > 0) {
+    for (var i = 0; i < agents.length; i++) {
+      var ag = agents[i];
+      var agPrompt = ag.prompt || 'You are ' + (ag.name || 'Agent') + '. Register as "' + (ag.name || 'Agent') + '". Call listen() for tasks.';
+      html += '<div style="margin-bottom:10px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+      html += '<span style="font-weight:600;font-size:13px">' + escapeHtml(ag.name || ag.role || 'Agent') + '</span>';
+      html += '<span style="font-size:11px;color:var(--text-muted)">' + escapeHtml(ag.role || '') + '</span>';
+      html += '</div>';
+      html += '<div class="launch-prompt-output" style="font-size:11px;max-height:100px" onclick="navigator.clipboard.writeText(this.textContent).then(function(){showToast(\'&#x2713;\',\'Copied!\')})">' + escapeHtml(agPrompt) + '</div>';
+      html += '</div>';
+    }
+  } else if (tpl.roles) {
+    var roleNames = Object.keys(tpl.roles);
+    for (var r = 0; r < roleNames.length; r++) {
+      var rolePrompt = tpl.roles[roleNames[r]].prompt || 'Register as "' + roleNames[r] + '" and call listen().';
+      html += '<div style="margin-bottom:8px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px">';
+      html += '<div style="font-weight:600;font-size:13px;margin-bottom:4px">' + escapeHtml(roleNames[r]) + '</div>';
+      html += '<div class="launch-prompt-output" style="font-size:11px;max-height:100px" onclick="navigator.clipboard.writeText(this.textContent).then(function(){showToast(\'&#x2713;\',\'Copied!\')})">' + escapeHtml(rolePrompt) + '</div>';
+      html += '</div>';
+    }
+  }
+  html += '</div>';
+
+  expanded.innerHTML = html;
+  expanded.style.display = 'block';
+  expanded.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ==================== v4.4: UNIFIED TEMPLATE PREVIEW ====================
@@ -8186,10 +8308,10 @@ function fillAgentFromConvTemplate(templateId, agentName) {
 
 // ==================== LAUNCH SINGLE AGENT ====================
 function doLaunch() {
-  var projectDir = document.getElementById('launch-project').value.trim();
   var agentName = document.getElementById('launch-name').value.trim();
-  var prompt = document.getElementById('launch-prompt').value.trim();
   var resultEl = document.getElementById('launch-result');
+  var cliSelect = document.getElementById('launch-cli');
+  var cli = cliSelect ? cliSelect.value : selectedCli;
 
   if (!agentName) {
     resultEl.className = 'launch-result error';
@@ -8197,9 +8319,10 @@ function doLaunch() {
     return;
   }
 
-  // Copy prompt to clipboard before launching
-  var launchPrompt = prompt || 'You are agent "' + agentName + '". Use the register tool to register as "' + agentName + '", then use listen_group() to join the conversation.';
+  // Use generated prompt if available, otherwise build a default
+  var launchPrompt = window._generatedLaunchPrompt || 'You are agent "' + agentName + '". Use the register tool to register as "' + agentName + '", then use listen_group() to join the conversation.';
   navigator.clipboard.writeText(launchPrompt).catch(function() {});
+  selectedCli = cli;
 
   resultEl.className = 'launch-result info';
   resultEl.innerHTML = 'Launching terminal for <strong>' + escapeHtml(agentName) + '</strong>...';
@@ -8207,7 +8330,7 @@ function doLaunch() {
   lttFetch('/api/launch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cli: selectedCli, project_dir: projectDir || undefined, agent_name: agentName, prompt: launchPrompt })
+    body: JSON.stringify({ cli: cli, project_dir: undefined, agent_name: agentName, prompt: launchPrompt })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.error) {
       resultEl.className = 'launch-result error';

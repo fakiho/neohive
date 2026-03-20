@@ -1,0 +1,85 @@
+{
+  "name": "neohive",
+  "displayName": "Neohive",
+  "description": "Monitor and manage Neohive AI agent collaboration from VS Code",
+  "version": "0.1.0",
+  "publisher": "alionix",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "neohive",
+          "title": "Neohive",
+          "icon": "$(symbol-misc)"
+        }
+      ]
+    },
+    "views": {
+      "neohive": [
+        {
+          "id": "neohive-agents",
+          "name": "Agents"
+        },
+        {
+          "id": "neohive-workflows",
+          "name": "Workflows"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "neohive.refreshAgents",
+        "title": "Neohive: Refresh Agents",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "neohive.refreshWorkflows",
+        "title": "Neohive: Refresh Workflows",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "neohive.showAgents",
+        "title": "Neohive: Show Agents"
+      },
+      {
+        "command": "neohive.showWorkflows",
+        "title": "Neohive: Show Workflows"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "neohive.refreshAgents",
+          "when": "view == neohive-agents",
+          "group": "navigation"
+        },
+        {
+          "command": "neohive.refreshWorkflows",
+          "when": "view == neohive-workflows",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Neohive",
+      "properties": {
+        "neohive.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:4321",
+          "description": "URL of the Neohive HTTP server"
+        },
+        "neohive.pollInterval": {
+          "type": "number",
+          "default": 5000,
+          "description": "Polling interval in milliseconds for agent/workflow status"
+        }
+      }
+    }
+  }
+}

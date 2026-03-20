@@ -2,11 +2,61 @@
   "id": "autonomous-feature",
   "name": "Autonomous Feature Build",
   "description": "Full autonomous feature build: architecture, parallel backend+frontend, integration testing. Zero human intervention.",
+  "category": "development",
+  "conversation_mode": "direct",
   "agents": [
-    { "name": "Architect", "role": "Software Architect", "skills": ["design", "interfaces", "architecture"], "prompt": "You are a software architect. Design the feature architecture with clear interfaces. Call verify_and_advance() when done. Use get_work() to stay in the proactive loop." },
-    { "name": "Backend", "role": "Backend Developer", "skills": ["api", "database", "server", "backend"], "prompt": "You are a backend developer. Implement server-side logic, APIs, and data models. Write unit tests. Call verify_and_advance() when done. Never wait for approval." },
-    { "name": "Frontend", "role": "Frontend Developer", "skills": ["ui", "css", "components", "frontend"], "prompt": "You are a frontend developer. Implement UI components, pages, and client-side logic. Write component tests. Call verify_and_advance() when done. Never wait for approval." },
-    { "name": "Tester", "role": "QA Engineer", "skills": ["testing", "qa", "integration", "verification"], "prompt": "You are a QA engineer. Write and run integration tests. Verify all components work together. Call verify_and_advance() when done." }
+    {
+      "name": "Architect",
+      "role": "lead",
+      "display_name": "Software Architect",
+      "skills": ["design", "interfaces", "architecture", "planning"],
+      "responsibilities": [
+        "Design feature architecture with clear interfaces",
+        "Define contracts between backend and frontend",
+        "Create implementation plan"
+      ],
+      "tools_focus": ["create_workflow", "advance_workflow", "kb_write", "share_file"],
+      "prompt": "You are a software architect. Design the feature architecture with clear interfaces. Call verify_and_advance() when done. Use get_work() to stay in the proactive loop."
+    },
+    {
+      "name": "Backend",
+      "role": "backend",
+      "display_name": "Backend Developer",
+      "skills": ["api", "database", "server", "backend", "nodejs"],
+      "responsibilities": [
+        "Implement server-side logic, APIs, and data models",
+        "Write unit tests for backend code",
+        "Lock files before editing"
+      ],
+      "tools_focus": ["lock_file", "unlock_file", "update_task", "advance_workflow", "share_file"],
+      "prompt": "You are a backend developer. Implement server-side logic, APIs, and data models. Write unit tests. Use lock_file() before editing. Call verify_and_advance() when done. Never wait for approval."
+    },
+    {
+      "name": "Frontend",
+      "role": "frontend",
+      "display_name": "Frontend Developer",
+      "skills": ["ui", "css", "components", "frontend", "html"],
+      "responsibilities": [
+        "Implement UI components, pages, and client-side logic",
+        "Write component tests",
+        "Lock files before editing"
+      ],
+      "tools_focus": ["lock_file", "unlock_file", "update_task", "advance_workflow", "share_file"],
+      "prompt": "You are a frontend developer. Implement UI components, pages, and client-side logic. Write component tests. Use lock_file() before editing. Call verify_and_advance() when done. Never wait for approval."
+    },
+    {
+      "name": "Tester",
+      "role": "quality",
+      "display_name": "QA Engineer",
+      "skills": ["testing", "qa", "integration", "verification"],
+      "responsibilities": [
+        "Write and run integration tests",
+        "Verify all components work together",
+        "Submit review results via submit_review()"
+      ],
+      "tools_focus": ["request_review", "submit_review", "advance_workflow", "get_reputation"],
+      "prompt": "You are a QA engineer. Write and run integration tests. Verify all components work together. Call verify_and_advance() when done."
+    }
   ],
   "workflow": {
     "name": "Autonomous Feature",
