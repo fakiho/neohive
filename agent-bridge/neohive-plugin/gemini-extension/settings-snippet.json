@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "neohive": {
+      "command": "npx",
+      "args": ["-y", "neohive"],
+      "env": {
+        "NEOHIVE_DATA_DIR": ".neohive"
+      },
+      "timeout": 30
+    }
+  }
+}
