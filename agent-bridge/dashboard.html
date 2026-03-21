@@ -5724,7 +5724,7 @@ function renderActivityHeatmap(data) {
     html += '<div class="activity-agent">' +
       '<div class="activity-label">' +
         '<span class="activity-name" style="color:' + color + '">' + escapeHtml(name) + '</span>' +
-        '<span class="activity-pct">' + pct + '%</span>' +
+        '<span class="activity-pct">' + pct + '<span style="font-size:0.75em;margin-left:1px">%</span></span>' +
       '</div>' +
       '<div class="activity-bar">' +
         '<div class="activity-fill" style="width:' + pct + '%;background:' + color + '"></div>' +
@@ -7021,7 +7021,7 @@ function renderWorkflows(workflows) {
     html += '<div class="pipeline">' +
       '<div class="pipeline-header">' +
         '<div class="pipeline-name">' + escapeHtml(wf.name) + ' <span style="font-size:11px;color:' + statusColor + ';font-weight:600">' + escapeHtml(wf.status) + '</span></div>' +
-        '<div class="pipeline-progress">' + doneCount + '/' + wf.steps.length + ' (' + pct + '%)</div>' +
+        '<div class="pipeline-progress">' + doneCount + '/' + wf.steps.length + ' (' + pct + '<span style="font-size:0.8em;margin-left:1px">%</span>)</div>' +
       '</div>' +
       metaHtml +
       '<div class="pipeline-bar"><div class="pipeline-bar-fill" style="width:' + pct + '%;background:' + barColor + '"></div></div>' +
@@ -9191,7 +9191,7 @@ function renderOverview() {
     html += '<div class="metric-card">';
     html += '<div class="metric-icon" style="background:' + (taskPct === 100 ? 'var(--green-dim)' : 'var(--purple-dim)') + '"><svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="' + (taskPct === 100 ? 'var(--green)' : 'var(--purple)') + '" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8l2 2 4-4"/></svg></div>';
     html += '<div class="metric-label">Task Progress</div>';
-    html += '<div class="metric-value">' + taskPct + '<span style="font-size:18px;font-weight:600;color:var(--text-muted)">%</span></div>';
+    html += '<div class="metric-value">' + taskPct + '<span style="font-size:18px;font-weight:600;color:var(--text-muted);margin-left:2px">%</span></div>';
     html += '<div class="metric-sub">' + done + ' done, ' + inProgress + ' active, ' + pending + ' pending</div>';
     html += '</div>';
     html += '</div>';
@@ -9229,7 +9229,7 @@ function renderOverview() {
           var wfDone = wf.steps ? wf.steps.filter(function(s) { return s.status === 'done'; }).length : 0;
           var wfTotal = wf.steps ? wf.steps.length : 1;
           var wfPct = Math.round((wfDone / wfTotal) * 100);
-          html += '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span style="font-size:13px;font-weight:600;color:var(--text)">' + (wf.name || 'Workflow') + '</span><span style="font-size:12px;color:var(--text-muted)">' + wfPct + '%</span></div>';
+          html += '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span style="font-size:13px;font-weight:600;color:var(--text)">' + (wf.name || 'Workflow') + '</span><span style="font-size:12px;color:var(--text-muted)">' + wfPct + '<span style="font-size:0.8em;margin-left:1px">%</span></span></div>';
           html += '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + wfPct + '%;background:var(--gradient-accent);border-radius:3px;transition:width 0.3s"></div></div></div>';
         }
         html += '</div>';
