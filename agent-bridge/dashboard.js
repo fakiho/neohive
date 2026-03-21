@@ -2387,6 +2387,29 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(fs.existsSync(wfFile) ? JSON.parse(fs.readFileSync(wfFile, 'utf8')) : []));
     }
+    else if (url.pathname === '/api/workflows' && req.method === 'DELETE') {
+      const body = await parseBody(req);
+      if (!body.workflow_id) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Missing workflow_id' }));
+        return;
+      }
+      const projectPath = url.searchParams.get('project') || null;
+      const dataDir = resolveDataDir(projectPath);
+      const wfFile = path.join(dataDir, 'workflows.json');
+      let workflows = [];
+      if (fs.existsSync(wfFile)) try { workflows = JSON.parse(fs.readFileSync(wfFile, 'utf8')); } catch {}
+      const idx = workflows.findIndex(w => w.id === body.workflow_id);
+      if (idx === -1) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Workflow not found' }));
+        return;
+      }
+      const removed = workflows.splice(idx, 1)[0];
+      fs.writeFileSync(wfFile, JSON.stringify(workflows, null, 2));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, removed: removed.name }));
+    }
     else if (url.pathname === '/api/workflows' && req.method === 'POST') {
       const body = await parseBody(req);
       const projectPath = url.searchParams.get('project') || null;

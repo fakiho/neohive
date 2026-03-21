@@ -7018,7 +7018,7 @@ function renderWorkflows(workflows) {
     if (wf.updated_at && wf.updated_at !== wf.created_at) metaHtml += '<span>Updated ' + timeAgo(wf.updated_at) + '</span>';
     metaHtml += '</div>';
 
-    html += '<div class="pipeline">' +
+    html += '<div class="pipeline" style="cursor:pointer" onclick="showWorkflowDetail(\'' + wf.id + '\')">' +
       '<div class="pipeline-header">' +
         '<div class="pipeline-name">' + escapeHtml(wf.name) + ' <span style="font-size:11px;color:' + statusColor + ';font-weight:600">' + escapeHtml(wf.status) + '</span></div>' +
         '<div class="pipeline-progress">' + doneCount + '/' + wf.steps.length + ' (' + pct + '<span style="font-size:0.8em;margin-left:1px">%</span>)</div>' +
@@ -7067,6 +7067,144 @@ function dashAdvanceWorkflow(wfId) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'advance', workflow_id: wfId })
   }).then(function() { fetchWorkflows(); }).catch(function() {});
+}
+
+// ==================== WORKFLOW DETAIL VIEW ====================
+
+var _cachedWorkflows = [];
+
+// Override fetchWorkflows to cache
+var _origFetchWorkflows = fetchWorkflows;
+fetchWorkflows = function() {
+  var pq = projectParam();
+  document.getElementById('workflows-area').innerHTML = '<div class="loading-spinner">Loading workflows...</div>';
+  lttFetch('/api/workflows' + pq).then(function(r) { return r.json(); }).then(function(wfs) {
+    _cachedWorkflows = Array.isArray(wfs) ? wfs : [];
+    renderWorkflows(_cachedWorkflows);
+  }).catch(function() { _cachedWorkflows = []; renderWorkflows([]); });
+};
+
+function showWorkflowDetail(wfId) {
+  var wf = _cachedWorkflows.find(function(w) { return w.id === wfId; });
+  if (!wf) return;
+  var el = document.getElementById('wf-detail-content');
+  var steps = wf.steps || [];
+  var doneCount = steps.filter(function(s) { return s.status === 'done'; }).length;
+  var pct = steps.length > 0 ? Math.round((doneCount / steps.length) * 100) : 0;
+  var statusColors = { active: 'var(--accent)', completed: 'var(--green)', paused: 'var(--orange)' };
+  var statusColor = statusColors[wf.status] || 'var(--text-muted)';
+
+  var html = '';
+  // Header
+  html += '<div style="margin-bottom:16px">';
+  html += '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px">' + escapeHtml(wf.name || 'Workflow') + '</div>';
+  html += '<span style="font-size:11px;padding:3px 8px;border-radius:6px;font-weight:600;background:' + statusColor + '20;color:' + statusColor + '">' + escapeHtml(wf.status) + '</span>';
+  if (wf.autonomous) html += ' <span style="font-size:10px;padding:2px 6px;border-radius:4px;background:var(--accent-dim);color:var(--accent);font-weight:600">AUTO</span>';
+  if (wf.parallel) html += ' <span style="font-size:10px;padding:2px 6px;border-radius:4px;background:var(--purple-dim);color:var(--purple);font-weight:600">PARALLEL</span>';
+  html += '</div>';
+
+  // Info grid
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px;font-size:12px">';
+  html += '<div style="color:var(--text-muted)">Progress <div style="color:var(--text);font-weight:700;font-size:16px;margin-top:2px">' + pct + '<span style="font-size:12px;margin-left:1px">%</span></div></div>';
+  html += '<div style="color:var(--text-muted)">Created by <div style="color:var(--text);font-weight:600;margin-top:2px">' + escapeHtml(wf.created_by || '?') + '</div></div>';
+  html += '<div style="color:var(--text-muted)">Created <div style="color:var(--text);margin-top:2px">' + (wf.created_at ? timeAgo(wf.created_at) : '?') + '</div></div>';
+  html += '</div>';
+
+  // Progress bar
+  html += '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-bottom:16px"><div style="height:100%;width:' + pct + '%;background:' + statusColor + ';border-radius:3px;transition:width 0.3s"></div></div>';
+
+  // Steps
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">Steps (' + doneCount + '/' + steps.length + ')</div>';
+  for (var i = 0; i < steps.length; i++) {
+    var s = steps[i];
+    var sColor = s.status === 'done' ? 'var(--green)' : s.status === 'in_progress' ? 'var(--accent)' : s.status === 'awaiting_approval' ? 'var(--orange)' : 'var(--text-muted)';
+    html += '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;border-left:3px solid ' + sColor + '">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+    html += '<span style="font-size:13px;font-weight:600;color:var(--text)">Step ' + (s.id || i+1) + ': ' + escapeHtml((s.description || '').substring(0, 80)) + '</span>';
+    html += '<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:' + sColor + '20;color:' + sColor + ';font-weight:600">' + escapeHtml(s.status || 'pending').replace('_', ' ') + '</span>';
+    html += '</div>';
+    html += '<div style="font-size:11px;color:var(--text-muted)">';
+    if (s.assignee) html += 'Assignee: <span style="color:var(--text)">' + escapeHtml(s.assignee) + '</span>';
+    if (s.started_at) html += ' | Started: ' + timeAgo(s.started_at);
+    if (s.completed_at) html += ' | Done: ' + timeAgo(s.completed_at);
+    html += '</div>';
+    if (s.notes) html += '<div style="font-size:11px;color:var(--text-dim);margin-top:4px;font-style:italic">' + escapeHtml(s.notes.substring(0, 200)) + '</div>';
+    html += '</div>';
+  }
+
+  // Checkpoints
+  if (wf.checkpoints && wf.checkpoints.length > 0) {
+    html += '<div style="font-size:13px;font-weight:600;color:var(--text);margin:12px 0 8px">Checkpoints (' + wf.checkpoints.length + ')</div>';
+    for (var c = 0; c < wf.checkpoints.length; c++) {
+      var cp = wf.checkpoints[c];
+      html += '<div style="font-size:12px;padding:6px 8px;background:var(--surface-2);border-radius:6px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">';
+      html += '<span style="color:var(--text-dim)">Step ' + cp.step_id + ' — ' + escapeHtml((cp.step_description || '').substring(0, 50)) + ' <span style="color:var(--text-muted)">' + (cp.completed_at ? timeAgo(cp.completed_at) : '') + '</span></span>';
+      html += '</div>';
+    }
+  }
+
+  // Actions
+  var canDelete = wf.status !== 'active';
+  html += '<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px;display:flex;justify-content:flex-end;gap:8px">';
+  if (wf.status === 'active') {
+    html += '<button class="btn btn-primary" onclick="event.stopPropagation();dashAdvanceWorkflow(\'' + wf.id + '\');closeWfDetail()" style="font-size:12px">Advance Step</button>';
+  }
+  if (canDelete) {
+    html += '<button class="btn btn-danger" id="wf-delete-btn" onclick="event.stopPropagation();confirmDeleteWorkflow(\'' + wf.id + '\')" style="font-size:12px">Delete</button>';
+  } else {
+    html += '<button class="btn btn-danger" disabled style="font-size:12px;opacity:0.4;cursor:not-allowed" title="Cannot delete active workflow">Delete</button>';
+  }
+  html += '</div>';
+
+  el.innerHTML = html;
+  document.getElementById('wf-detail-overlay').classList.add('open');
+}
+
+function closeWfDetail() {
+  document.getElementById('wf-detail-overlay').classList.remove('open');
+  var btn = document.getElementById('wf-delete-btn');
+  if (btn) { btn.textContent = 'Delete'; btn._confirming = false; }
+}
+
+var _wfDeleteTimer = null;
+function confirmDeleteWorkflow(wfId) {
+  var btn = document.getElementById('wf-delete-btn');
+  if (!btn) return;
+  if (!btn._confirming) {
+    btn._confirming = true;
+    btn.textContent = 'Confirm Delete';
+    btn.style.background = 'var(--red-dim)';
+    _wfDeleteTimer = setTimeout(function() {
+      btn.textContent = 'Delete';
+      btn.style.background = '';
+      btn._confirming = false;
+    }, 3000);
+  } else {
+    if (_wfDeleteTimer) clearTimeout(_wfDeleteTimer);
+    btn.textContent = 'Deleting...';
+    btn.disabled = true;
+    lttFetch('/api/workflows' + projectParam(), {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workflow_id: wfId })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.error) {
+        showToast('!', 'Delete failed: ' + data.error);
+        btn.textContent = 'Delete';
+        btn.disabled = false;
+        btn._confirming = false;
+      } else {
+        showToast('&#x2713;', 'Workflow deleted');
+        closeWfDetail();
+        fetchWorkflows();
+      }
+    }).catch(function() {
+      showToast('!', 'Delete failed');
+      btn.textContent = 'Delete';
+      btn.disabled = false;
+      btn._confirming = false;
+    });
+  }
 }
 
 // ==================== v5.0: PLAN EXECUTION VIEW ====================
@@ -9450,6 +9588,13 @@ loadProjects().then(function() {
 setInterval(poll, 10000);
 </script>
 
+<!-- Workflow Detail Popup -->
+<div class="phone-modal-overlay" id="wf-detail-overlay" onclick="if(event.target===this)closeWfDetail()">
+  <div class="phone-modal" style="width:620px;text-align:left;max-height:85vh;overflow-y:auto">
+    <button class="phone-modal-close" onclick="closeWfDetail()">&times;</button>
+    <div id="wf-detail-content"></div>
+  </div>
+</div>
 <!-- Task Detail Popup -->
 <div class="phone-modal-overlay" id="task-detail-overlay" onclick="if(event.target===this)closeTaskDetail()">
   <div class="phone-modal" style="width:520px;text-align:left;max-height:80vh;overflow-y:auto">
