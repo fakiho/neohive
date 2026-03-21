@@ -7638,6 +7638,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       try { autoCompress(); } catch (e) { log.debug('auto-compress failed:', e.message); }
     }
 
+    // Coordinator mode hint: inject into every tool response for lead/manager/coordinator agents
+    if (registeredName && typeof result === 'object' && result !== null) {
+      try {
+        const prof = getProfiles()[registeredName];
+        const role = prof && prof.role ? prof.role.toLowerCase() : '';
+        if (role === 'lead' || role === 'manager' || role === 'coordinator') {
+          const coordMode = getConfig().coordinator_mode || 'responsive';
+          result.coordinator_mode = coordMode;
+          result.coordinator_hint = coordMode === 'responsive'
+            ? 'MODE: Stay with me — do NOT call listen(). Use consume_messages/workflow_status between human interactions.'
+            : 'MODE: Run autonomously — use listen() to wait for agent results.';
+        }
+      } catch (e) { log.debug('coordinator mode hint failed:', e.message); }
+    }
+
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };

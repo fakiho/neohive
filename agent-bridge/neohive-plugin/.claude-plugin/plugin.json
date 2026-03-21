@@ -1,0 +1,24 @@
+{
+  "name": "neohive",
+  "version": "6.0.2",
+  "description": "Multi-agent collaboration layer. Turn Claude Code into a team — agents communicate, delegate tasks, and build together. Adds /neohive:launch-team, /neohive:status, /neohive:send, /neohive:plan commands.",
+  "author": {
+    "name": "Alionix",
+    "url": "https://github.com/fakiho"
+  },
+  "homepage": "https://github.com/fakiho/neohive",
+  "repository": "https://github.com/fakiho/neohive",
+  "license": "SEE LICENSE IN LICENSE",
+  "keywords": [
+    "multi-agent",
+    "collaboration",
+    "team",
+    "communication",
+    "mcp",
+    "neohive"
+  ],
+  "skills": "./skills/",
+  "agents": "./agents/",
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json"
+}
