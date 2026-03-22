@@ -8326,14 +8326,16 @@ function updateLanUI() {
   var existing = document.getElementById('lan-badge');
   if (lanState.lan_mode && lanState.lan_ip) {
     if (!existing) {
-      var conn = document.querySelector('.connection');
-      var badge = document.createElement('span');
-      badge.className = 'lan-badge';
-      badge.id = 'lan-badge';
-      conn.appendChild(badge);
-      existing = badge;
+      var conn = document.querySelector('.connection') || document.querySelector('.header-actions');
+      if (conn) {
+        var badge = document.createElement('span');
+        badge.className = 'lan-badge';
+        badge.id = 'lan-badge';
+        conn.appendChild(badge);
+        existing = badge;
+      }
     }
-    existing.textContent = 'LAN ' + lanState.lan_ip + ':' + lanState.port;
+    if (existing) existing.textContent = 'LAN ' + lanState.lan_ip + ':' + lanState.port;
   } else if (existing) {
     existing.remove();
   }
@@ -8345,6 +8347,10 @@ function updateLanUI() {
 
 function openPhoneAccess() {
   fetchLanState().then(function() {
+    renderPhoneModalContent();
+    document.getElementById('phone-modal-overlay').classList.add('open');
+  }).catch(function() {
+    // Still open the modal even if fetch fails — show current state
     renderPhoneModalContent();
     document.getElementById('phone-modal-overlay').classList.add('open');
   });
