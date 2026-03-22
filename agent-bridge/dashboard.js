@@ -2068,13 +2068,24 @@ const server = http.createServer(async (req, res) => {
           config.coordinator_mode = newMode;
           fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
         });
-        // Broadcast mode change to all agents
+        // Broadcast mode change to all agents + direct message to lead agents
         try {
           const messagesFile = filePath('messages.jsonl', projectPath);
           const historyFile = filePath('history.jsonl', projectPath);
-          const sysMsg = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), from: '__system__', to: '__group__', content: `[MODE] Coordinator mode changed to "${newMode}". ${newMode === 'responsive' ? 'Coordinator stays with human, uses consume_messages().' : 'Coordinator runs autonomously in listen() loop.'} Coordinator: call get_guide() to update your instructions.`, timestamp: new Date().toISOString(), system: true };
+          const modeText = newMode === 'responsive' ? 'Coordinator stays with human, uses consume_messages().' : 'Coordinator runs autonomously in listen() loop.';
+          const sysMsg = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), from: '__system__', to: '__group__', content: `[MODE] Coordinator mode changed to "${newMode}". ${modeText} Coordinator: call get_guide() to update your instructions.`, timestamp: new Date().toISOString(), system: true };
           fs.appendFileSync(messagesFile, JSON.stringify(sysMsg) + '\n');
           fs.appendFileSync(historyFile, JSON.stringify(sysMsg) + '\n');
+          // Also send direct message to lead/coordinator agents so listen() in direct mode picks it up
+          const profiles = readJson(filePath('profiles.json', projectPath));
+          for (const [agentName, prof] of Object.entries(profiles)) {
+            const role = (prof.role || '').toLowerCase();
+            if (role === 'lead' || role === 'manager' || role === 'coordinator') {
+              const directMsg = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), from: '__system__', to: agentName, content: `[MODE CHANGE] Coordinator mode switched to "${newMode}". ${modeText} Call get_guide() now to update your instructions.`, timestamp: new Date().toISOString(), system: true };
+              fs.appendFileSync(messagesFile, JSON.stringify(directMsg) + '\n');
+              fs.appendFileSync(historyFile, JSON.stringify(directMsg) + '\n');
+            }
+          }
         } catch (e) { /* broadcast is best-effort */ }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, mode: newMode }));

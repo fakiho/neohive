@@ -4502,7 +4502,7 @@ function renderAgents(agents) {
     html += renderAgentCards(filtered);
   }
 
-  el.innerHTML = html;
+  if (el.innerHTML !== html) el.innerHTML = html;
 
   // Update alert badge
   var alertEl = document.getElementById('alert-count');
@@ -5958,8 +5958,10 @@ function renderTasks() {
     html += '</div>';
   }
   html += '</div>';
-  el.innerHTML = html;
-  el.scrollTop = savedScroll;
+  if (el.innerHTML !== html) {
+    el.innerHTML = html;
+    el.scrollTop = savedScroll;
+  }
 }
 
 function buildTaskCard(t) {
@@ -7062,8 +7064,10 @@ function renderWorkflows(workflows) {
     }
     html += '</div>';
   }
-  el.innerHTML = html;
-  el.scrollTop = savedScroll;
+  if (el.innerHTML !== html) {
+    el.innerHTML = html;
+    el.scrollTop = savedScroll;
+  }
 }
 
 function dashAdvanceWorkflow(wfId) {
@@ -9321,7 +9325,7 @@ function updateAgentBar(agents) {
       '<span class="agent-activity">' + activity + '</span>' +
     '</div>';
   }
-  bar.innerHTML = html;
+  if (bar.innerHTML !== html) bar.innerHTML = html;
 }
 
 // ==================== OVERVIEW PAGE ====================
@@ -9495,8 +9499,10 @@ function renderOverview() {
       html += '</div>';
     }
 
-    area.innerHTML = html;
-    area.scrollTop = savedScroll;
+    if (area.innerHTML !== html) {
+      area.innerHTML = html;
+      area.scrollTop = savedScroll;
+    }
   }).catch(function(e) {
     area.innerHTML = '<div style="padding:28px 32px;color:var(--text-muted)">Failed to load overview: ' + e.message + '</div>';
   });
