@@ -175,7 +175,9 @@ timeout = 300
   console.log('  [ok] Codex CLI: .codex/config.toml updated');
 }
 
-// Configure for Cursor IDE (.cursor/mcp.json — project scope; uses NEOHIVE_DATA_DIR so cwd mismatches do not split agents)
+// Configure for Cursor IDE — absolute NEOHIVE_DATA_DIR so Node never sees unexpanded ${workspaceFolder}.
+// If the IDE omits env on spawn, server startup still resolves the hive via lib/resolve-server-data-dir.js
+// (walks cwd ancestors for the same MCP files).
 function setupCursor(serverPath, cwd) {
   const cursorDir = path.join(cwd, '.cursor');
   const mcpConfigPath = path.join(cursorDir, 'mcp.json');
@@ -411,8 +413,13 @@ function init() {
     console.log('  [ok] .gitignore created');
   }
 
+  const configuredCursor = targets.includes('cursor');
   console.log('');
-  console.log('  Neohive is ready! Restart your CLI to pick up the MCP tools.');
+  console.log(
+    configuredCursor
+      ? '  Neohive is ready! Restart Cursor (or reload MCP tools) and restart any terminal CLIs you use.'
+      : '  Neohive is ready! Restart your CLI to pick up the MCP tools.'
+  );
   console.log('');
 
   // Show template if --template was provided
@@ -427,7 +434,11 @@ function init() {
   if (templateFlag) {
     showTemplate(templateFlag);
   } else {
-    console.log('  Open two terminals and start a conversation between agents.');
+    if (configuredCursor) {
+      console.log('  Cursor: use register + listen() from chat (neohive MCP). Terminal CLIs: one session per agent.');
+    } else {
+      console.log('  Open two terminals and start a conversation between agents.');
+    }
     console.log('  Tip: Use "npx neohive init --template pair" for ready-made prompts.');
     console.log('');
     console.log('  \x1b[1m  Monitor:\x1b[0m');

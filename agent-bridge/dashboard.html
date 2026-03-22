@@ -3623,11 +3623,22 @@
     <div class="nav-sidebar-divider"></div>
     <!-- Project -->
     <div class="nav-sidebar-section nav-sidebar-project">
-      <div class="nav-sidebar-label" style="display:flex;align-items:center;justify-content:space-between">PROJECT <button onclick="showAddProject()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:0 2px;line-height:1" title="Add project">+</button></div>
+      <div class="nav-sidebar-label" style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+        <span>PROJECT</span>
+        <span style="display:flex;align-items:center;gap:2px">
+          <button type="button" id="remove-project-btn" onclick="removeProject()" title="Remove selected project from this list (does not delete .neohive data on disk)" aria-label="Remove project"
+            style="display:none;background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px 4px;line-height:1;border-radius:4px;opacity:0.85"
+            onmouseenter="this.style.color='#f87171'" onmouseleave="this.style.color='var(--text-muted)'">
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true"><path d="M2 4h12"/><path d="M5 4V2.5h6V4"/><path d="M6 7v5M10 7v5"/><path d="M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4"/></svg>
+          </button>
+          <button type="button" onclick="showAddProject()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:0 2px;line-height:1" title="Add project">+</button>
+        </span>
+      </div>
       <select class="project-select" id="project-select" onchange="switchProject()" style="width:100%;margin-top:4px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px">
         <option value="">Default (local)</option>
       </select>
-      <input class="project-input" id="project-path-input" placeholder="Project path..." onkeydown="if(event.key==='Enter')addProject();if(event.key==='Escape')this.classList.remove('visible');" style="margin-top:4px">
+      <button type="button" id="remove-project-text-btn" class="btn" onclick="removeProject()" style="display:none;width:100%;margin-top:6px;padding:5px 8px;font-size:11px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted)" title="Removes this folder from the dashboard only">Remove project from list</button>
+      <input class="project-input" id="project-path-input" placeholder="Repo root (not …/.neohive)" title="Use the folder you open in Cursor — not the .neohive subfolder" onkeydown="if(event.key==='Enter')addProject();if(event.key==='Escape')this.classList.remove('visible');" style="margin-top:4px">
     </div>
     <div class="nav-sidebar-spacer"></div>
     <!-- Bottom nav -->
@@ -7974,6 +7985,14 @@ function doReset() {
 
 // ==================== PROJECT MANAGEMENT ====================
 
+function setProjectRemoveButtonsVisible(visible) {
+  var disp = visible ? '' : 'none';
+  var icon = document.getElementById('remove-project-btn');
+  var text = document.getElementById('remove-project-text-btn');
+  if (icon) icon.style.display = disp;
+  if (text) text.style.display = disp;
+}
+
 function loadProjects() {
   return lttFetch('/api/projects').then(function(r) { return r.json(); }).then(function(projects) {
     console.log('[LTT] loadProjects:', projects.length, 'projects, activeProject:', activeProject);
@@ -7987,10 +8006,12 @@ function loadProjects() {
       sel.appendChild(opt);
     }
 
-    // Auto-select first project if none selected
-    if (!activeProject && projects.length > 0) {
-      activeProject = projects[0].path;
-      console.log('[LTT] auto-selected first project:', activeProject);
+    // If selection pointed at a project the server removed (e.g. redundant with Default), fall back to Default
+    if (activeProject && !projects.some(function(p) { return p.path === activeProject; })) {
+      activeProject = '';
+      sel.value = '';
+      setProjectRemoveButtonsVisible(false);
+      poll();
     }
 
     // If project came from URL param, try fuzzy match (handles path separator differences)
@@ -8006,7 +8027,7 @@ function loadProjects() {
 
     if (activeProject) {
       sel.value = activeProject;
-      $id('remove-project-btn').style.display = '';
+      setProjectRemoveButtonsVisible(true);
       // Update header project indicator for mobile
       var indicator = document.getElementById('mobile-project-name');
       if (indicator) {
@@ -8016,8 +8037,8 @@ function loadProjects() {
       }
     }
 
-    // Show/hide remove button
-    $id('remove-project-btn').style.display = activeProject ? '' : 'none';
+    // Show/hide remove buttons (not shown for Default / local)
+    setProjectRemoveButtonsVisible(!!activeProject);
     // Sync mobile header project select
     syncMobileProjectSelect();
   }).catch(function(e) {
@@ -8028,7 +8049,7 @@ function loadProjects() {
 function switchProject() {
   activeProject = document.getElementById('project-select').value;
   lastMessageCount = 0;
-  $id('remove-project-btn').style.display = activeProject ? '' : 'none';
+  setProjectRemoveButtonsVisible(!!activeProject);
   syncMobileProjectSelect();
   loadConversationList();
   poll();
@@ -8040,7 +8061,7 @@ function mobileSelectProject(val) {
   lastMessageCount = 0;
   // Sync sidebar select
   document.getElementById('project-select').value = val;
-  $id('remove-project-btn').style.display = val ? '' : 'none';
+  setProjectRemoveButtonsVisible(!!val);
   poll();
 }
 
@@ -8075,6 +8096,8 @@ function addProject() {
   if (!input) return;
   var projectPath = input.value.trim();
   if (!projectPath) return;
+  // If user pasted .../repo/.neohive, use repo root (matches server rules)
+  projectPath = projectPath.replace(/[\\/]+\.neohive\/?$/i, '');
 
   lttFetch('/api/projects', {
     method: 'POST',
@@ -8143,7 +8166,9 @@ function addDiscovered(projectPath, name) {
 
 function removeProject() {
   if (!activeProject) return;
-  if (!confirm('Remove this project from the dashboard?')) return;
+  var sel = document.getElementById('project-select');
+  var label = sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : activeProject;
+  if (!confirm('Remove “' + label + '” from the dashboard?\n\nYour .neohive folder on disk is not deleted — only this shortcut in the list.')) return;
 
   lttFetch('/api/projects', {
     method: 'DELETE',
@@ -8153,10 +8178,17 @@ function removeProject() {
     if (res.success) {
       activeProject = '';
       document.getElementById('project-select').value = '';
+      setProjectRemoveButtonsVisible(false);
       loadProjects();
       poll();
+      showToast('\u2713', 'Project removed from list');
+    } else {
+      showToast('!', res.error || 'Could not remove project');
     }
-  }).catch(function(e) { console.error('Remove project failed:', e); });
+  }).catch(function(e) {
+    console.error('Remove project failed:', e);
+    showToast('!', 'Remove project failed');
+  });
 }
 
 // ==================== SOUND NOTIFICATIONS ====================

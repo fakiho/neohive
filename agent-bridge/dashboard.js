@@ -5,6 +5,31 @@ const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
 
+function findCursorProjectRootWithNeohive(startDir) {
+  let dir = path.resolve(startDir);
+  const root = path.parse(dir).root;
+  while (true) {
+    const mcpPath = path.join(dir, '.cursor', 'mcp.json');
+    if (fs.existsSync(mcpPath)) {
+      try {
+        const j = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+        if (j.mcpServers && j.mcpServers.neohive) return dir;
+      } catch {}
+    }
+    if (dir === root) break;
+    dir = path.dirname(dir);
+  }
+  return null;
+}
+
+function normalizeNeohiveDataDirString(raw, workspaceRoot) {
+  if (raw == null || typeof raw !== 'string') return null;
+  let d = raw.trim();
+  if (!d) return null;
+  d = d.replace(/\$\{workspaceFolder\}/gi, workspaceRoot);
+  return path.isAbsolute(d) ? path.resolve(d) : path.resolve(workspaceRoot, d);
+}
+
 // --- File-level mutex for serializing read-then-write operations ---
 const lockMap = new Map();
 function withFileLock(filePath, fn) {
@@ -57,10 +82,120 @@ function getLanIP() {
   }
   return fallback;
 }
-const DEFAULT_DATA_DIR = process.env.NEOHIVE_DATA || path.join(process.cwd(), '.neohive');
+
+// Check if a directory has actual data files (not just an empty dir)
+function hasDataFiles(dir) {
+  if (!fs.existsSync(dir)) return false;
+  try {
+    const files = fs.readdirSync(dir);
+    return files.some(f => f.endsWith('.jsonl') || f === 'agents.json');
+  } catch { return false; }
+}
+
+function countAgentsInNeohiveDir(nhDir) {
+  if (!fs.existsSync(nhDir)) return 0;
+  const ag = path.join(nhDir, 'agents.json');
+  if (!fs.existsSync(ag)) return 0;
+  try {
+    const j = JSON.parse(fs.readFileSync(ag, 'utf8'));
+    return j && typeof j === 'object' ? Object.keys(j).length : 0;
+  } catch { return 0; }
+}
+
+function countNeohiveJsonArray(filePath) {
+  if (!fs.existsSync(filePath)) return 0;
+  try {
+    const j = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return Array.isArray(j) ? j.length : 0;
+  } catch { return 0; }
+}
+
+function neohiveHasTasksOrWorkflows(nhDir) {
+  return countNeohiveJsonArray(path.join(nhDir, 'tasks.json')) > 0
+    || countNeohiveJsonArray(path.join(nhDir, 'workflows.json')) > 0;
+}
+
+// Score each ancestor’s .neohive so we prefer the hive that has tasks/workflows (not the first with only agents).
+function scoreNeohiveDataDir(nhDir) {
+  if (!fs.existsSync(nhDir)) return -1;
+  let s = countAgentsInNeohiveDir(nhDir) * 10;
+  s += countNeohiveJsonArray(path.join(nhDir, 'tasks.json'));
+  s += countNeohiveJsonArray(path.join(nhDir, 'workflows.json')) * 3;
+  if (hasDataFiles(nhDir)) s += 5;
+  return s;
+}
+
+function bestNeohiveAmongAncestors(startDir) {
+  let dir = path.resolve(startDir);
+  const root = path.parse(dir).root;
+  let best = null;
+  let bestScore = -1;
+  for (let d = 0; d < 24 && dir !== root; d++) {
+    const nh = path.join(dir, '.neohive');
+    const sc = scoreNeohiveDataDir(nh);
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = nh;
+    }
+    dir = path.dirname(dir);
+  }
+  if (bestScore <= 0) return null;
+  return best;
+}
+
+// Read NEOHIVE_DATA_DIR from project-local MCP configs (same files init writes).
+// Cursor uses ${workspaceFolder} in .cursor/mcp.json — expand using projectRoot when parsing files.
+function readNeohiveDataDirFromMcpConfigs(projectRoot) {
+  const candidates = [
+    path.join(projectRoot, '.cursor', 'mcp.json'),
+    path.join(projectRoot, '.mcp.json'),
+    path.join(projectRoot, '.gemini', 'settings.json'),
+  ];
+  for (const filePath of candidates) {
+    if (!fs.existsSync(filePath)) continue;
+    try {
+      const j = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      const nh = j.mcpServers && j.mcpServers.neohive;
+      const raw = nh && nh.env && nh.env.NEOHIVE_DATA_DIR;
+      const out = normalizeNeohiveDataDirString(raw, projectRoot);
+      if (out) return out;
+    } catch {}
+  }
+  return null;
+}
+
+function resolveDashboardDefaultDataDir() {
+  let envData = process.env.NEOHIVE_DATA_DIR || process.env.NEOHIVE_DATA;
+  if (envData && String(envData).trim()) {
+    let s = String(envData).trim();
+    if (/\$\{workspaceFolder\}/i.test(s)) {
+      const root = findCursorProjectRootWithNeohive(process.cwd());
+      if (root) s = s.replace(/\$\{workspaceFolder\}/gi, root);
+    }
+    return { path: path.resolve(s), source: 'environment' };
+  }
+  const fromWalk = bestNeohiveAmongAncestors(process.cwd());
+  if (fromWalk) {
+    return { path: fromWalk, source: 'walk-up' };
+  }
+  let dir = path.resolve(process.cwd());
+  const root = path.parse(dir).root;
+  while (true) {
+    const fromMcp = readNeohiveDataDirFromMcpConfigs(dir);
+    if (fromMcp) {
+      return { path: fromMcp, source: 'mcp-config', configAt: dir };
+    }
+    if (dir === root) break;
+    dir = path.dirname(dir);
+  }
+  return { path: path.join(process.cwd(), '.neohive'), source: 'cwd' };
+}
+
+const _defaultDataResolved = resolveDashboardDefaultDataDir();
+const DEFAULT_DATA_DIR = _defaultDataResolved.path;
 
 // Auto-migrate from .agent-bridge/ to .neohive/ (v5 → v6 rename)
-const _legacyDir = path.join(process.cwd(), '.agent-bridge');
+const _legacyDir = path.join(path.dirname(DEFAULT_DATA_DIR), '.agent-bridge');
 if (!fs.existsSync(DEFAULT_DATA_DIR) && fs.existsSync(_legacyDir)) {
   try { fs.renameSync(_legacyDir, DEFAULT_DATA_DIR); } catch {}
 }
@@ -80,22 +215,24 @@ function saveProjects(projects) {
   fs.writeFileSync(PROJECTS_FILE, JSON.stringify(projects, null, 2));
 }
 
-// Check if a directory has actual data files (not just an empty dir)
-function hasDataFiles(dir) {
-  if (!fs.existsSync(dir)) return false;
-  try {
-    const files = fs.readdirSync(dir);
-    return files.some(f => f.endsWith('.jsonl') || f === 'agents.json');
-  } catch { return false; }
+// Multi-project paths must be the repo root, not .../project/.neohive (otherwise we join .neohive twice).
+function normalizeMonitoredProjectRoot(projectPath) {
+  if (!projectPath) return projectPath;
+  const p = path.resolve(projectPath);
+  if (path.basename(p) === '.neohive') {
+    return path.dirname(p);
+  }
+  return p;
 }
 
 // Resolve data dir: explicit project path > env var > cwd > legacy fallback
 // Prefers directories with actual data files over empty ones
 function resolveDataDir(projectPath) {
   if (projectPath) {
-    const dir = path.join(projectPath, '.neohive');
+    projectPath = normalizeMonitoredProjectRoot(projectPath);
+    let dir = path.join(projectPath, '.neohive');
     const dataDir = path.join(projectPath, 'data');
-    // Prefer whichever has data
+    // Prefer whichever has data (local hive only — do not redirect agents/messages to parent)
     if (hasDataFiles(dir)) return dir;
     if (hasDataFiles(dataDir)) return dataDir;
     if (fs.existsSync(dir)) return dir;
@@ -111,19 +248,35 @@ function resolveDataDir(projectPath) {
   return DEFAULT_DATA_DIR;
 }
 
+// Monorepo: tasks/workflows may live in parent .neohive while agents.json stays in the subfolder.
+// Using parent for *all* files hid agents (empty parent agents.json). Only tasks + workflows use this.
+function resolveTasksWorkflowsDataDir(projectPath) {
+  if (!projectPath) return resolveDataDir(null);
+  projectPath = normalizeMonitoredProjectRoot(projectPath);
+  const localHive = path.join(projectPath, '.neohive');
+  const parentHive = path.join(path.dirname(projectPath), '.neohive');
+  if (!neohiveHasTasksOrWorkflows(localHive) && neohiveHasTasksOrWorkflows(parentHive)) {
+    return parentHive;
+  }
+  return resolveDataDir(projectPath);
+}
+
 function filePath(name, projectPath) {
-  return path.join(resolveDataDir(projectPath), name);
+  const dir = (name === 'tasks.json' || name === 'workflows.json')
+    ? resolveTasksWorkflowsDataDir(projectPath)
+    : resolveDataDir(projectPath);
+  return path.join(dir, name);
 }
 
 // Validate project path is registered or is the default
 function validateProjectPath(projectPath) {
   if (!projectPath) return true;
-  const absPath = path.resolve(projectPath);
+  const absPath = normalizeMonitoredProjectRoot(path.resolve(projectPath));
   const projects = getProjects();
   const cwd = path.resolve(process.cwd());
   const scriptDir = path.resolve(__dirname);
   if (absPath === cwd || absPath === scriptDir) return true;
-  return projects.some(p => path.resolve(p.path) === absPath);
+  return projects.some(p => normalizeMonitoredProjectRoot(path.resolve(p.path)) === absPath);
 }
 
 function htmlEscape(s) {
@@ -279,13 +432,11 @@ function apiAgents(query) {
   const cards = readJson(filePath('agent-cards.json', projectPath));
   const history = readJsonl(filePath('history.jsonl', projectPath));
 
-  // Merge per-agent heartbeat files — agents write these during listen loops
-  // Without this merge, agents show as dead because agents.json has stale last_activity
   const dataDir = resolveDataDir(projectPath);
   try {
     const hbFiles = fs.readdirSync(dataDir).filter(f => f.startsWith('heartbeat-') && f.endsWith('.json'));
     for (const f of hbFiles) {
-      const name = f.slice(10, -5); // 'heartbeat-Backend.json' → 'Backend'
+      const name = f.slice(10, -5);
       if (agents[name]) {
         try {
           const hb = JSON.parse(fs.readFileSync(path.join(dataDir, f), 'utf8'));
@@ -295,6 +446,7 @@ function apiAgents(query) {
       }
     }
   } catch {}
+
   const result = {};
 
   // Build last message timestamp per agent from history
@@ -977,12 +1129,56 @@ function apiInjectMessage(body, query) {
 
 // Multi-project management
 function apiProjects() {
-  return getProjects();
+  const raw = getProjects();
+  const normalized = raw.map(p => {
+    const np = normalizeMonitoredProjectRoot(p.path);
+    let name = p.name;
+    if (path.resolve(np) !== path.resolve(p.path)) {
+      name = path.basename(np) || p.name;
+    }
+    if (!name || name === '.neohive') {
+      name = path.basename(np) || 'project';
+    }
+    return { ...p, path: np, name };
+  });
+
+  const seen = new Set();
+  const deduped = [];
+  for (const p of normalized) {
+    const key = path.resolve(p.path);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(p);
+  }
+
+  // Drop projects whose hive is the same as “Default (local)” — avoids duplicate rows and agents flickering between two identical paths.
+  const defaultHive = path.resolve(resolveDataDir(null));
+  const nonRedundant = deduped.filter(p => path.resolve(resolveDataDir(p.path)) !== defaultHive);
+
+  const pack = (arr) =>
+    JSON.stringify(
+      [...arr].sort((a, b) => path.resolve(a.path).localeCompare(path.resolve(b.path)))
+        .map(p => ({ p: path.resolve(p.path), n: p.name, a: p.added_at || '' }))
+    );
+  // Compare to on-disk `raw`, not `normalized`: normalized always includes dupes / default-hive
+  // rows that nonRedundant drops, so pack(normalized) !== pack(nonRedundant) would rewrite every
+  // read even when projects.json already matches nonRedundant.
+  if (pack(nonRedundant) !== pack(raw)) {
+    saveProjects(nonRedundant);
+  }
+  return nonRedundant;
 }
 
 function apiAddProject(body) {
   if (!body.path) return { error: 'Missing "path" field' };
-  const absPath = path.resolve(body.path);
+  const rawResolved = path.resolve(String(body.path).trim());
+  if (path.basename(rawResolved) === '.neohive') {
+    return {
+      error:
+        'Add the repository folder (same as your Cursor workspace root), not .neohive. Data is stored in <repo>/.neohive automatically.',
+    };
+  }
+  const absPath = normalizeMonitoredProjectRoot(rawResolved);
 
   // Reject root directories and system paths
   const normalized = absPath.replace(/\\/g, '/');
@@ -992,11 +1188,21 @@ function apiAddProject(body) {
 
   if (!fs.existsSync(absPath)) return { error: `Path does not exist: ${absPath}` };
 
-  // Any existing directory can be added as a project — user explicitly chose it
+  const targetHive = path.resolve(resolveDataDir(absPath));
+  const defaultHive = path.resolve(resolveDataDir(null));
+  if (targetHive === defaultHive) {
+    return {
+      error:
+        'That folder uses the same Neohive data directory as “Default (local)”. No separate project is needed.',
+      same_as_default: true,
+    };
+  }
 
   const projects = getProjects();
   const name = body.name || path.basename(absPath);
-  if (projects.find(p => p.path === absPath)) return { error: 'Project already added' };
+  if (projects.find(p => normalizeMonitoredProjectRoot(path.resolve(p.path)) === absPath)) {
+    return { error: 'Project already added' };
+  }
 
   // Create .neohive directory if it doesn't exist
   const abDir = path.join(absPath, '.neohive');
@@ -1014,10 +1220,10 @@ function apiAddProject(body) {
 
 function apiRemoveProject(body) {
   if (!body.path) return { error: 'Missing "path" field' };
-  const absPath = path.resolve(body.path);
+  const absPath = normalizeMonitoredProjectRoot(path.resolve(body.path));
   let projects = getProjects();
   const before = projects.length;
-  projects = projects.filter(p => p.path !== absPath);
+  projects = projects.filter(p => normalizeMonitoredProjectRoot(path.resolve(p.path)) !== absPath);
   if (projects.length === before) return { error: 'Project not found' };
   saveProjects(projects);
   return { success: true };
@@ -1289,7 +1495,7 @@ function apiDeleteRule(body, query) {
 function apiDiscover() {
   const found = [];
   const checked = new Set();
-  const existing = new Set(getProjects().map(p => p.path));
+  const existing = new Set(getProjects().map(p => normalizeMonitoredProjectRoot(path.resolve(p.path))));
 
   function scanDir(dir, depth, maxDepth) {
     maxDepth = maxDepth || 3;
@@ -1376,7 +1582,12 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
       try { mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8')); if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {}; } catch {}
     }
     if (!mcpConfig.mcpServers['neohive']) {
-      mcpConfig.mcpServers['neohive'] = { command: 'node', args: [serverPath], env: { NEOHIVE_DATA_DIR: abDir }, timeout: 300 };
+      mcpConfig.mcpServers['neohive'] = {
+        command: 'node',
+        args: [serverPath],
+        env: { NEOHIVE_DATA_DIR: abDir },
+        timeout: 300,
+      };
       fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
     }
   }
@@ -1408,7 +1619,7 @@ function apiLaunchAgent(body) {
       cli: 'cursor',
       project_dir: projectDir,
       prompt: launchPrompt,
-      message: 'Open this folder in Cursor IDE. .cursor/mcp.json is configured with NEOHIVE_DATA_DIR. Restart Cursor or reload MCP tools, then paste the prompt.',
+      message: 'Open this folder in Cursor IDE. .cursor/mcp.json sets NEOHIVE_DATA_DIR to this project’s .neohive (absolute path). Restart Cursor or reload MCP tools, then paste the prompt.',
     };
   }
 
@@ -1882,8 +2093,9 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify(apiHistory(url.searchParams)));
     }
     else if (url.pathname === '/api/agents' && req.method === 'GET') {
+      const payload = apiAgents(url.searchParams);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(apiAgents(url.searchParams)));
+      res.end(JSON.stringify(payload));
     }
     else if (url.pathname === '/api/channels' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2199,8 +2411,9 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const projectPath = url.searchParams.get('project') || null;
-      const dataDir = resolveDataDir(projectPath);
-      const tasksFile = path.join(dataDir, 'tasks.json');
+      const tasksDir = resolveTasksWorkflowsDataDir(projectPath);
+      const tasksFile = path.join(tasksDir, 'tasks.json');
+      const msgDir = resolveDataDir(projectPath);
       let tasks = [];
       if (fs.existsSync(tasksFile)) try { tasks = JSON.parse(fs.readFileSync(tasksFile, 'utf8')); } catch {}
       const task = tasks.find(t => t.id === body.task_id);
@@ -2210,8 +2423,8 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const oldAssignee = task.assignee;
-      const msgFile = path.join(dataDir, 'messages.jsonl');
-      const histFile = path.join(dataDir, 'history.jsonl');
+      const msgFile = path.join(msgDir, 'messages.jsonl');
+      const histFile = path.join(msgDir, 'history.jsonl');
       // Apply edits
       if (body.title !== undefined) task.title = body.title;
       if (body.description !== undefined) task.description = body.description;
@@ -2240,8 +2453,9 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const projectPath = url.searchParams.get('project') || null;
-      const dataDir = resolveDataDir(projectPath);
-      const tasksFile = path.join(dataDir, 'tasks.json');
+      const tasksDir = resolveTasksWorkflowsDataDir(projectPath);
+      const tasksFile = path.join(tasksDir, 'tasks.json');
+      const msgDir = resolveDataDir(projectPath);
       let tasks = [];
       if (fs.existsSync(tasksFile)) try { tasks = JSON.parse(fs.readFileSync(tasksFile, 'utf8')); } catch {}
       const idx = tasks.findIndex(t => t.id === body.task_id);
@@ -2253,8 +2467,8 @@ const server = http.createServer(async (req, res) => {
       const removed = tasks.splice(idx, 1)[0];
       fs.writeFileSync(tasksFile, JSON.stringify(tasks, null, 2));
       // Write system message about deletion
-      const msgFile = path.join(dataDir, 'messages.jsonl');
-      const histFile = path.join(dataDir, 'history.jsonl');
+      const msgFile = path.join(msgDir, 'messages.jsonl');
+      const histFile = path.join(msgDir, 'history.jsonl');
       const sysMsg = JSON.stringify({ id: 'sys_' + Date.now().toString(36), from: '__system__', to: '__all__', content: '[TASK DELETED] Task "' + (removed.title || '') + '" was removed', timestamp: new Date().toISOString(), system: true }) + '\n';
       try { fs.appendFileSync(msgFile, sysMsg); fs.appendFileSync(histFile, sysMsg); } catch {}
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2432,8 +2646,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const projectPath = url.searchParams.get('project') || null;
-      const dataDir = resolveDataDir(projectPath);
-      const wfFile = path.join(dataDir, 'workflows.json');
+      const wfFile = filePath('workflows.json', projectPath);
       let workflows = [];
       if (fs.existsSync(wfFile)) try { workflows = JSON.parse(fs.readFileSync(wfFile, 'utf8')); } catch {}
       const idx = workflows.findIndex(w => w.id === body.workflow_id);
@@ -3386,7 +3599,15 @@ server.listen(PORT, LAN_MODE ? '0.0.0.0' : '127.0.0.1', () => {
     console.log('  LAN access: http://' + lanIP + ':' + PORT);
     console.log('  WARNING:    LAN mode enabled — accessible to anyone on your network');
   }
-  console.log('  Data dir:   ' + dataDir);
+  let dataDirLine = '  Data dir:   ' + dataDir;
+  if (_defaultDataResolved.source === 'walk-up') {
+    dataDirLine += ' (best .neohive among ancestors — tasks/agents/history)';
+  } else if (_defaultDataResolved.source === 'mcp-config' && _defaultDataResolved.configAt) {
+    dataDirLine += ' (from MCP config under ' + _defaultDataResolved.configAt + ')';
+  } else if (_defaultDataResolved.source === 'environment') {
+    dataDirLine += ' (NEOHIVE_DATA_DIR / NEOHIVE_DATA)';
+  }
+  console.log(dataDirLine);
   console.log('  Projects:   ' + getProjects().length + ' registered');
   console.log('  Updates:    SSE (real-time) + polling fallback (2s)');
   console.log('');

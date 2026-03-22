@@ -2,9 +2,10 @@
 
 const fs = require('fs');
 const path = require('path');
+const { resolveDataDirForServer } = require('./resolve-server-data-dir');
 
-// Data dir lives in the project where the CLI runs, not where the package is installed
-const DATA_DIR = process.env.NEOHIVE_DATA_DIR || path.join(process.cwd(), '.neohive');
+// Same rules as server.js: env, else repo .cursor/mcp.json sibling, else cwd/.neohive
+const DATA_DIR = resolveDataDirForServer(path.join(__dirname, '..'));
 
 // File paths for all shared data
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.jsonl');

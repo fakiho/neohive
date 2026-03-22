@@ -94,3 +94,8 @@ No tests, linter, or build step. Raw Node.js (CommonJS).
 - **Workflows** — step statuses: pending/in_progress/done, auto-handoff on advance
 - **Branching** — `main` branch uses existing files for backward compatibility, branch-aware file resolution via `getMessagesFile(branch)`/`getHistoryFile(branch)`
 - **Plugins** — sandboxed execution context with 30s timeout, tools appear as `plugin_{name}` in MCP
+
+## Debugging and fix attempts
+
+- **Temporary logs:** When debugging, add only the logging needed to confirm behavior. **Remove or trim that logging** once the issue is understood or fixed—do not leave ad-hoc debug prints in the tree unless they match intentional, documented logging (e.g. MCP stderr lines).
+- **Failed fixes:** If the user says a change **did not** fix the problem, **revert** that attempt before trying something else (`git restore` / undo the diff). **Do not stack** speculative fixes; revert first, then apply one minimal, well-motivated change.

@@ -19,9 +19,12 @@ const _agents = require('./lib/agents');
 const _messaging = require('./lib/messaging');
 const _compact = require('./lib/compact');
 
-// --- Structured logging ---
-const LOG_LEVEL = (process.env.NEOHIVE_LOG_LEVEL || 'warn').toLowerCase();
+const DATA_DIR = _config.DATA_DIR;
+
+const _envLog = process.env.NEOHIVE_LOG_LEVEL;
+const LOG_LEVEL = (_envLog != null && String(_envLog).trim() !== '' ? String(_envLog).trim() : 'warn').toLowerCase();
 const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+
 const log = {
   error: (...args) => { if (LOG_LEVELS[LOG_LEVEL] >= 0) process.stderr.write('[NEOHIVE:ERROR] ' + args.map(String).join(' ') + '\n'); },
   warn:  (...args) => { if (LOG_LEVELS[LOG_LEVEL] >= 1) process.stderr.write('[NEOHIVE:WARN] ' + args.map(String).join(' ') + '\n'); },
@@ -29,11 +32,13 @@ const log = {
   debug: (...args) => { if (LOG_LEVELS[LOG_LEVEL] >= 3) process.stderr.write('[NEOHIVE:DEBUG] ' + args.map(String).join(' ') + '\n'); },
 };
 
-// Data dir lives in the project where Claude Code runs, not where the package is installed
-const DATA_DIR = process.env.NEOHIVE_DATA_DIR || path.join(process.cwd(), '.neohive');
+const _rawNeohiveEnv = String(process.env.NEOHIVE_DATA_DIR || '');
+if (_rawNeohiveEnv && /\$\{|\$\s*workspaceFolder/i.test(_rawNeohiveEnv)) {
+  log.warn('[neohive] NEOHIVE_DATA_DIR looks unexpanded (' + _rawNeohiveEnv.substring(0, 60) + '…). Node will not substitute ${workspaceFolder}. Use an absolute path (re-run npx neohive init --cursor) or set env in Cursor. Effective DATA_DIR=' + DATA_DIR);
+}
 
 // Auto-migrate from .agent-bridge/ to .neohive/ (v5 → v6 rename)
-const _legacyDir = path.join(process.cwd(), '.agent-bridge');
+const _legacyDir = path.join(path.dirname(DATA_DIR), '.agent-bridge');
 if (!fs.existsSync(DATA_DIR) && fs.existsSync(_legacyDir)) {
   try { fs.renameSync(_legacyDir, DATA_DIR); } catch {}
 }
@@ -436,11 +441,11 @@ function getAgents() {
 }
 
 function saveAgents(agents) {
-  // Safe write: serialize first, then write complete string
-  // This minimizes the window where the file could be truncated
   const data = JSON.stringify(agents);
   if (data && data.length > 2) {
     fs.writeFileSync(AGENTS_FILE, data);
+  } else {
+    log.debug('[neohive/agents.json] skipped write (empty {}): ' + AGENTS_FILE);
   }
   invalidateCache('agents');
 }
@@ -1416,96 +1421,96 @@ function toolRegister(name, provider = null, skills = null) {
     agents[name] = { pid: process.pid, ppid: process.ppid, timestamp: now, last_activity: now, provider: provider || 'unknown', branch: currentBranch, token, started_at: now };
     saveAgents(agents);
     registeredName = name;
-  registeredToken = token;
+    registeredToken = token;
 
-  // Auto-create profile if not exists
-  const profiles = getProfiles();
-  if (!profiles[name]) {
-    profiles[name] = { display_name: name, avatar: '', bio: '', role: '', created_at: now };
-    saveProfiles(profiles);
-  }
+    // Auto-create profile if not exists
+    const profiles = getProfiles();
+    if (!profiles[name]) {
+      profiles[name] = { display_name: name, avatar: '', bio: '', role: '', created_at: now };
+      saveProfiles(profiles);
+    }
 
-  // Save agent card with skills
-  const cards = readJsonFile(AGENT_CARDS_FILE) || {};
-  cards[name] = {
-    name,
-    provider: provider || 'unknown',
-    skills: Array.isArray(skills) ? skills.map(s => String(s).toLowerCase().substring(0, 30)).slice(0, 20) : [],
-    registered_at: now,
-  };
-  writeJsonFile(AGENT_CARDS_FILE, cards);
+    // Save agent card with skills
+    const cards = readJsonFile(AGENT_CARDS_FILE) || {};
+    cards[name] = {
+      name,
+      provider: provider || 'unknown',
+      skills: Array.isArray(skills) ? skills.map(s => String(s).toLowerCase().substring(0, 30)).slice(0, 20) : [],
+      registered_at: now,
+    };
+    writeJsonFile(AGENT_CARDS_FILE, cards);
 
-  // Start heartbeat — updates last_activity every 10s so dashboard knows we're alive
-  // Deterministic jitter per agent to spread writes across the interval (prevents lock storms at 10 agents)
-  const heartbeatJitter = name.split('').reduce((h, c) => h + c.charCodeAt(0), 0) % 2000;
-  if (heartbeatInterval) clearInterval(heartbeatInterval);
-  heartbeatInterval = setInterval(() => {
-    try {
-      // Scale fix: write per-agent heartbeat file instead of lock+read+write agents.json
-      // Eliminates write contention — each agent writes only its own file, no locking needed
-      touchHeartbeat(registeredName);
-      const agents = getAgents(); // cached + merges heartbeat files automatically
-      // Managed mode: detect dead manager and dead turn holder
-      if (isManagedMode()) {
-        const managed = getManagedConfig();
-        let managedChanged = false;
+    // Start heartbeat — updates last_activity every 10s so dashboard knows we're alive
+    // Deterministic jitter per agent to spread writes across the interval (prevents lock storms at 10 agents)
+    const heartbeatJitter = name.split('').reduce((h, c) => h + c.charCodeAt(0), 0) % 2000;
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    heartbeatInterval = setInterval(() => {
+      try {
+        // Scale fix: write per-agent heartbeat file instead of lock+read+write agents.json
+        // Eliminates write contention — each agent writes only its own file, no locking needed
+        touchHeartbeat(registeredName);
+        const agents = getAgents(); // cached + merges heartbeat files automatically
+        // Managed mode: detect dead manager and dead turn holder
+        if (isManagedMode()) {
+          const managed = getManagedConfig();
+          let managedChanged = false;
 
-        // Dead manager detection
-        if (managed.manager && managed.manager !== registeredName) {
-          if (agents[managed.manager] && !isPidAlive(agents[managed.manager].pid, agents[managed.manager].last_activity)) {
-            managed.manager = null;
-            managed.floor = 'closed';
-            managed.turn_current = null;
-            managed.turn_queue = [];
-            managedChanged = true;
-            saveManagedConfig(managed);
-            broadcastSystemMessage(`[SYSTEM] Manager disconnected. Call claim_manager() to take over as the new manager.`);
+          // Dead manager detection
+          if (managed.manager && managed.manager !== registeredName) {
+            if (agents[managed.manager] && !isPidAlive(agents[managed.manager].pid, agents[managed.manager].last_activity)) {
+              managed.manager = null;
+              managed.floor = 'closed';
+              managed.turn_current = null;
+              managed.turn_queue = [];
+              managedChanged = true;
+              saveManagedConfig(managed);
+              broadcastSystemMessage(`[SYSTEM] Manager disconnected. Call claim_manager() to take over as the new manager.`);
+            }
           }
-        }
 
-        // Dead turn holder detection — unstick the floor
-        if (!managedChanged && managed.turn_current && managed.turn_current !== registeredName && managed.manager) {
-          if (agents[managed.turn_current] && !isPidAlive(agents[managed.turn_current].pid, agents[managed.turn_current].last_activity)) {
-            const deadAgent = managed.turn_current;
-            managed.turn_current = null;
-            managed.floor = 'closed';
-            managed.turn_queue = [];
-            saveManagedConfig(managed);
-            if (managed.manager !== registeredName) {
-              sendSystemMessage(managed.manager, `[FLOOR] ${deadAgent} disconnected while holding the floor. Floor returned to you.`);
+          // Dead turn holder detection — unstick the floor
+          if (!managedChanged && managed.turn_current && managed.turn_current !== registeredName && managed.manager) {
+            if (agents[managed.turn_current] && !isPidAlive(agents[managed.turn_current].pid, agents[managed.turn_current].last_activity)) {
+              const deadAgent = managed.turn_current;
+              managed.turn_current = null;
+              managed.floor = 'closed';
+              managed.turn_queue = [];
+              saveManagedConfig(managed);
+              if (managed.manager !== registeredName) {
+                sendSystemMessage(managed.manager, `[FLOOR] ${deadAgent} disconnected while holding the floor. Floor returned to you.`);
+              }
             }
           }
         }
-      }
-      // Clean stale listening_since flags (listen times out at 5min, clear after 6min)
-      for (const [aName, aInfo] of Object.entries(agents)) {
-        if (aInfo.listening_since) {
-          const listenAge = Date.now() - new Date(aInfo.listening_since).getTime();
-          if (listenAge > 360000) {
-            aInfo.listening_since = null;
+        // Clean stale listening_since flags (listen times out at 5min, clear after 6min)
+        for (const [aName, aInfo] of Object.entries(agents)) {
+          if (aInfo.listening_since) {
+            const listenAge = Date.now() - new Date(aInfo.listening_since).getTime();
+            if (listenAge > 360000) {
+              aInfo.listening_since = null;
+            }
           }
         }
-      }
-      // Agent status change notifications — detect agents going offline/online
-      detectAgentStatusChanges(agents);
-      // Snapshot dead agents BEFORE cleanup (for auto-recovery)
-      snapshotDeadAgents(agents);
-      // Clean up file locks held by dead agents
-      cleanStaleLocks();
-      cleanStaleChannelMembers();
-      // Auto-escalation: notify team about long-blocked tasks
-      escalateBlockedTasks();
-      // Stand-up meetings: periodic team check-ins
-      triggerStandupIfDue();
-      // Auto-reassign stuck workflow steps from dead agents
-      checkStuckWorkflowSteps();
-      // Stale task detection: warn about tasks in_progress for >30 minutes without update
-      checkStaleTasks();
-      // Watchdog: nudge idle agents, reassign stuck work (autonomous mode only)
-      watchdogCheck();
-    } catch (e) { log.warn("heartbeat loop error:", e.message); }
-  }, 10000 + heartbeatJitter);
-  heartbeatInterval.unref(); // Don't prevent process exit
+        // Agent status change notifications — detect agents going offline/online
+        detectAgentStatusChanges(agents);
+        // Snapshot dead agents BEFORE cleanup (for auto-recovery)
+        snapshotDeadAgents(agents);
+        // Clean up file locks held by dead agents
+        cleanStaleLocks();
+        cleanStaleChannelMembers();
+        // Auto-escalation: notify team about long-blocked tasks
+        escalateBlockedTasks();
+        // Stand-up meetings: periodic team check-ins
+        triggerStandupIfDue();
+        // Auto-reassign stuck workflow steps from dead agents
+        checkStuckWorkflowSteps();
+        // Stale task detection: warn about tasks in_progress for >30 minutes without update
+        checkStaleTasks();
+        // Watchdog: nudge idle agents, reassign stuck work (autonomous mode only)
+        watchdogCheck();
+      } catch (e) { log.warn("heartbeat loop error:", e.message); }
+    }, 10000 + heartbeatJitter);
+    heartbeatInterval.unref(); // Don't prevent process exit
 
     // Fire join event + recovery data for returning agents
     const config = getConfig();
@@ -7883,7 +7888,6 @@ async function main() {
     try {
       const transport = new StdioServerTransport();
       await server.connect(transport);
-      console.error('Neohive MCP server v6.0.0 running (66 tools)');
     } catch (e) {
       console.error('ERROR: MCP server failed to start: ' + e.message);
       console.error('Fix: Run "npx neohive doctor" to check your setup.');
