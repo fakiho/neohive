@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.0.3] - 2026-04-03
+
+### Fixed
+
+- **MCP data directory** — When the MCP process starts with cwd outside the repo (e.g. Cursor home) and no `NEOHIVE_DATA_DIR`, resolve the hive from repo `.cursor/mcp.json` / sibling config (`lib/resolve-server-data-dir.js`); `lib/config.js` uses the same root so agents and dashboard agree.
+- **Dashboard `projects.json`** — Only rewrite the projects file when the canonical list differs from on-disk data (`pack(nonRedundant) !== pack(raw)`), not on every load when duplicates or default-hive rows were only present in the normalized pass-through list.
+
 ## [5.1.0] - 2026-03-19
 
 ### Major — True Autonomy Engine + Team Intelligence + Scale to 100
