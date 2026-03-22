@@ -684,9 +684,23 @@ function autoCompact() {
     }
 
     // Rewrite messages.jsonl atomically — write to temp file then rename
+    // Capture pre-compaction size to detect messages appended during compaction
+    const preCompactSize = Buffer.byteLength(content, 'utf8') + 1; // +1 for trailing newline trimmed earlier
     const newContent = active.map(m => JSON.stringify(m)).join('\n') + (active.length ? '\n' : '');
     const tmpFile = msgFile + '.tmp';
     fs.writeFileSync(tmpFile, newContent);
+    // Check for messages appended after our initial read
+    let lateMessages = '';
+    try {
+      const currentSize = fs.statSync(msgFile).size;
+      if (currentSize > preCompactSize) {
+        const fd = fs.openSync(msgFile, 'r');
+        const lateBuf = Buffer.alloc(currentSize - preCompactSize);
+        fs.readSync(fd, lateBuf, 0, lateBuf.length, preCompactSize);
+        fs.closeSync(fd);
+        lateMessages = lateBuf.toString('utf8');
+      }
+    } catch (e) { log.debug('late message check during compaction:', e.message); }
     try {
       fs.renameSync(tmpFile, msgFile);
     } catch {
@@ -695,7 +709,12 @@ function autoCompact() {
       try { fs.unlinkSync(tmpFile); } catch {}
       return;
     }
-    lastReadOffset = Buffer.byteLength(newContent, 'utf8');
+    // Re-append any messages that arrived during compaction
+    if (lateMessages.trim()) {
+      fs.appendFileSync(msgFile, lateMessages);
+      log.info('Re-appended ' + lateMessages.trim().split('\n').length + ' messages that arrived during compaction');
+    }
+    lastReadOffset = fs.statSync(msgFile).size;
 
     // Trim consumed ID files — keep only IDs still in active messages
     const activeIds = new Set(active.map(m => m.id));
@@ -7651,6 +7670,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             : 'MODE: Run autonomously — use listen() to wait for agent results.';
         }
       } catch (e) { log.debug('coordinator mode hint failed:', e.message); }
+    }
+
+    // Unread message hint: check if agent has pending messages on every tool call
+    // This ensures agents see messages even when they forget to call listen()
+    if (registeredName && typeof result === 'object' && result !== null && !listenTools.includes(name)) {
+      try {
+        const unread = getUnconsumedMessages(registeredName);
+        if (unread.length > 0) {
+          const latest = unread[unread.length - 1];
+          result.unread_messages = unread.length;
+          result.unread_preview = `${latest.from}: "${latest.content.substring(0, 100).replace(/\n/g, ' ')}"`;
+          result.unread_action = `You have ${unread.length} unread message(s). Call listen() to receive them.`;
+        }
+      } catch (e) { log.debug('unread message hint failed:', e.message); }
     }
 
     return {
