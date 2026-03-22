@@ -5904,10 +5904,13 @@ function fetchTasks() {
   });
 }
 
+var _lastTasksHash = '';
 function renderTasks() {
   var el = document.getElementById('tasks-area');
   var savedScroll = el.scrollTop;
   if (!cachedTasks.length) {
+    _lastTasksHash = '';
+
     el.innerHTML = '<div class="kanban">' +
       '<div class="kanban-col">' +
         '<div class="kanban-title pending">Pending<span class="kanban-count">0</span></div>' +
@@ -5929,6 +5932,11 @@ function renderTasks() {
     '<div class="tasks-empty" style="margin-top:16px">No tasks yet. Agents create tasks with <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px;font-size:12px;color:var(--orange)">create_task(title, description, assignee)</code></div>';
     return;
   }
+
+  // Data hash to skip unnecessary DOM rebuilds
+  var tasksHash = cachedTasks.map(function(t) { return t.id + ':' + t.status + ':' + (t.assignee || ''); }).join('|');
+  if (tasksHash === _lastTasksHash) return;
+  _lastTasksHash = tasksHash;
 
   var groups = { pending: [], in_progress: [], in_review: [], done: [], blocked: [] };
   for (var i = 0; i < cachedTasks.length; i++) {
@@ -7002,13 +7010,19 @@ function fetchWorkflows() {
   }).catch(function() {});
 }
 
+var _lastWorkflowsHash = '';
 function renderWorkflows(workflows) {
   var el = document.getElementById('workflows-area');
   var savedScroll = el.scrollTop;
   if (!workflows.length) {
     el.innerHTML = '<div class="tasks-empty">No workflows yet. Agents create workflows with <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px;font-size:12px;color:var(--orange)">create_workflow(name, steps)</code></div>';
+    _lastWorkflowsHash = '';
     return;
   }
+  // Build a lightweight hash from workflow data to avoid unnecessary DOM rebuilds
+  var dataHash = workflows.map(function(w) { return w.id + ':' + w.status + ':' + w.steps.map(function(s) { return s.status; }).join(','); }).join('|');
+  if (dataHash === _lastWorkflowsHash) return;
+  _lastWorkflowsHash = dataHash;
 
   var html = '';
   for (var i = 0; i < workflows.length; i++) {
