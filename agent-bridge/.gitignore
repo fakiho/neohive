@@ -1,1 +1,8 @@
 .lan-mode
+
+# Neohive (auto-added by neohive init)
+.neohive/
+.mcp.json
+.cursor/mcp.json
+.codex/
+.gemini/

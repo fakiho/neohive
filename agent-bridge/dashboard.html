@@ -4361,7 +4361,7 @@ function renderTable(rows) {
 
 // ==================== AGENT MONITORING ====================
 
-var PROVIDER_COLORS = { claude: '#d97706', anthropic: '#d97706', openai: '#10b981', gemini: '#3b82f6', google: '#3b82f6' };
+var PROVIDER_COLORS = { claude: '#d97706', anthropic: '#d97706', openai: '#10b981', gemini: '#3b82f6', google: '#3b82f6', cursor: '#6366f1' };
 
 function getProviderBadge(provider) {
   if (!provider) return '';
@@ -4388,12 +4388,13 @@ function toggleRoleGroup(role) {
   renderAgents(cachedAgents);
 }
 
+var _lastAgentsHash = '';
 function renderAgents(agents) {
   updateAgentBar(agents);
   var el = document.getElementById('agents-list');
   var keys = Object.keys(agents);
   if (!keys.length) {
-    el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:4px;">No agents registered</div>';
+    if (_lastAgentsHash !== 'empty') { el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:4px;">No agents registered</div>'; _lastAgentsHash = 'empty'; }
     return;
   }
 
@@ -4410,8 +4411,17 @@ function renderAgents(agents) {
     filtered.push(fname);
   }
 
+  var collapsedSig = Object.keys(collapsedRoleGroups).filter(function(k) { return collapsedRoleGroups[k]; }).sort().join(',');
+  var structuralPart = keys.map(function(k) { var a = agents[k]; return k + ':' + (a.alive ? '1' : '0') + ':' + (a.is_listening ? 'L' : 'W') + ':' + (a.role || '') + ':' + (a.status || ''); }).join('|');
+  var useGrouping = filtered.length > 6;
+  var layoutHash = structuralPart + '|F:' + agentFilterSearch + ':' + agentFilterRole + ':' + agentFilterStatus + '|C:' + collapsedSig + '|G:' + (useGrouping ? '1' : '0');
+
   if (!filtered.length) {
     el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:4px;">No matching agents</div>';
+    _lastAgentsHash = layoutHash;
+    var alertEl0 = document.getElementById('alert-count');
+    if (alertEl0) alertEl0.style.display = 'none';
+    updateInjectTargets(keys);
     return;
   }
 
@@ -4426,9 +4436,6 @@ function renderAgents(agents) {
     if (!roleGroups[grole]) roleGroups[grole] = [];
     roleGroups[grole].push(gname);
   }
-
-  // Only use role grouping if more than 6 agents (otherwise flat list)
-  var useGrouping = filtered.length > 6;
 
   var sleepCount = 0;
   var html = '';
@@ -4466,7 +4473,7 @@ function renderAgents(agents) {
       if (activityText) subtitleParts.push(activityText);
       var subtitleText = subtitleParts.join(' \u00B7 ');
 
-      cardHtml += '<div class="' + cardClass + '" onclick="showProfilePopup(\'' + escapeHtml(name) + '\', event)">' +
+      cardHtml += '<div class="' + cardClass + '" data-agent="' + escapeHtml(name) + '" onclick="showProfilePopup(\'' + escapeHtml(name) + '\', event)">' +
         '<div class="agent-top">' +
           avatarHtml +
           '<div class="agent-info">' +
@@ -4502,7 +4509,43 @@ function renderAgents(agents) {
     html += renderAgentCards(filtered);
   }
 
-  if (el.innerHTML !== html) el.innerHTML = html;
+  // DOM patching: when layout is unchanged, update cards in place (activity text, dots); else full rebuild
+  var existingCards = el.querySelectorAll('[data-agent]');
+  var canPatch = !useGrouping && existingCards.length === filtered.length && existingCards.length > 0;
+  var didPatch = false;
+  if (canPatch && layoutHash === _lastAgentsHash) {
+    didPatch = true;
+    for (var pi = 0; pi < filtered.length; pi++) {
+      var pName = filtered[pi];
+      var pCard = el.querySelector('[data-agent="' + pName + '"]');
+      if (!pCard) { didPatch = false; break; }
+      var pInfo = agents[pName];
+      var pState = !pInfo.alive ? 'offline' : pInfo.is_listening ? 'listening' : (pInfo.status === 'idle' || pInfo.status === 'sleeping') ? 'idle' : 'working';
+      var dot = pCard.querySelector('.agent-status-dot');
+      if (dot) { dot.className = 'agent-status-dot ' + pState; dot.title = pState; }
+      var sub = pCard.querySelector('.agent-subtitle');
+      if (sub) {
+        var parts = [];
+        if (pInfo.role) parts.push(pInfo.role);
+        if (pState === 'offline') parts.push('offline');
+        else if (pInfo.idle_seconds != null) {
+          if (pInfo.idle_seconds < 5) parts.push('just now');
+          else if (pInfo.idle_seconds < 60) parts.push(pInfo.idle_seconds + 's ago');
+          else parts.push(Math.floor(pInfo.idle_seconds / 60) + 'm ago');
+        } else if (pInfo.last_activity) {
+          parts.push(timeAgo(pInfo.last_activity));
+        }
+        var newSub = parts.join(' \u00B7 ');
+        if (sub.textContent !== newSub) sub.textContent = newSub;
+      }
+      var newCardClass = 'agent-card' + (pState !== 'working' ? ' ' + pState : '');
+      if (pCard.className !== newCardClass) pCard.className = newCardClass;
+    }
+  }
+  if (!didPatch) {
+    el.innerHTML = html;
+    _lastAgentsHash = layoutHash;
+  }
 
   // Update alert badge
   var alertEl = document.getElementById('alert-count');
@@ -5848,6 +5891,10 @@ var activeView = localStorage.getItem('neohive_activeView') || 'overview';
 function switchView(view) {
   activeView = view;
   try { localStorage.setItem('neohive_activeView', view); } catch {}
+  // Reset render hashes so switching tabs forces a fresh render
+  _lastTasksHash = '';
+  _lastAgentsHash = '';
+  if (renderOverview._lastHash) renderOverview._lastHash = '';
   // Update nav sidebar active state
   var navItems = document.querySelectorAll('.nav-item');
   for (var i = 0; i < navItems.length; i++) {
@@ -5894,7 +5941,10 @@ var cachedTasks = [];
 
 function fetchTasks() {
   var pq = projectParam();
-  document.getElementById('tasks-area').innerHTML = '<div class="loading-spinner">Loading tasks...</div>';
+  var tasksArea = document.getElementById('tasks-area');
+  if (tasksArea && !tasksArea.querySelector('.kanban') && !tasksArea.querySelector('.tasks-empty')) {
+    tasksArea.innerHTML = '<div class="loading-spinner">Loading tasks...</div>';
+  }
   lttFetch('/api/tasks' + pq).then(function(r) { return r.json(); }).then(function(tasks) {
     cachedTasks = Array.isArray(tasks) ? tasks : [];
     renderTasks();
@@ -6026,6 +6076,7 @@ function showTaskDetail(taskId) {
   var task = cachedTasks.find(function(t) { return t.id === taskId; });
   if (!task) return;
   var el = document.getElementById('task-detail-content');
+  if (!el) return;
   var statusColors = { pending: 'var(--yellow)', in_progress: 'var(--accent)', in_review: 'var(--purple)', done: 'var(--green)', blocked: 'var(--red)' };
   var statusColor = statusColors[task.status] || 'var(--text-muted)';
 
@@ -6071,11 +6122,13 @@ function showTaskDetail(taskId) {
   html += '</div>';
 
   el.innerHTML = html;
-  document.getElementById('task-detail-overlay').classList.add('open');
+  var taskOverlay = document.getElementById('task-detail-overlay');
+  if (taskOverlay) taskOverlay.classList.add('open');
 }
 
 function closeTaskDetail() {
-  document.getElementById('task-detail-overlay').classList.remove('open');
+  var taskOv = document.getElementById('task-detail-overlay');
+  if (taskOv) taskOv.classList.remove('open');
   var btn = document.getElementById('task-delete-btn');
   if (btn) { btn.textContent = 'Delete Task'; btn._confirming = false; }
 }
@@ -6084,6 +6137,7 @@ function editTask(taskId) {
   var task = cachedTasks.find(function(t) { return t.id === taskId; });
   if (!task) return;
   var el = document.getElementById('task-detail-content');
+  if (!el) return;
   var html = '';
   html += '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:16px">Edit Task</div>';
   html += '<div style="margin-bottom:12px"><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Title</label>';
@@ -7004,84 +7058,159 @@ function renderWorkspaces(data) {
 
 function fetchWorkflows() {
   var pq = projectParam();
-  document.getElementById('workflows-area').innerHTML = '<div class="loading-spinner">Loading workflows...</div>';
+  var wfArea = document.getElementById('workflows-area');
+  // Only show loading spinner on first load (no existing workflow elements)
+  if (wfArea && !wfArea.querySelector('[data-wf-id]') && !wfArea.querySelector('.tasks-empty')) {
+    wfArea.innerHTML = '<div class="loading-spinner">Loading workflows...</div>';
+  }
   lttFetch('/api/workflows' + pq).then(function(r) { return r.json(); }).then(function(data) {
     renderWorkflows(Array.isArray(data) ? data : []);
   }).catch(function() {});
 }
 
-var _lastWorkflowsHash = '';
+function buildWorkflowHTML(wf) {
+  var doneCount = wf.steps.filter(function(s) { return s.status === 'done'; }).length;
+  var pct = Math.round((doneCount / wf.steps.length) * 100);
+  var statusColor = wf.status === 'completed' ? 'var(--green)' : 'var(--accent)';
+  var barColor = statusColor;
+
+  var stepsHtml = '';
+  for (var j = 0; j < wf.steps.length; j++) {
+    var s = wf.steps[j];
+    var stepColor = s.status === 'done' ? 'var(--green)' : s.status === 'in_progress' ? 'var(--accent)' : 'var(--text-muted)';
+    if (j > 0) stepsHtml += '<span class="step-arrow">&rarr;</span>';
+    var stepTimeHtml = '';
+    if (s.status === 'done' && s.started_at && s.completed_at) {
+      var dur = Math.round((new Date(s.completed_at) - new Date(s.started_at)) / 60000);
+      stepTimeHtml = '<div class="step-time" style="font-size:9px;color:var(--text-muted);margin-top:2px">' + (dur > 0 ? dur + 'm' : '<1m') + '</div>';
+    } else if (s.status === 'in_progress' && s.started_at) {
+      var elapsed = Math.round((Date.now() - new Date(s.started_at)) / 60000);
+      stepTimeHtml = '<div class="step-time" style="font-size:9px;color:var(--accent);margin-top:2px">' + elapsed + 'm elapsed</div>';
+    }
+    stepsHtml += '<div class="step-card ' + s.status + '" data-step-id="' + s.id + '" title="' + escapeHtml(s.notes || '') + '">' +
+      '<span class="step-num">' + s.id + '</span>' +
+      '<span class="step-status" style="font-size:10px;color:' + stepColor + ';font-weight:600;text-transform:uppercase">' + s.status.replace('_', ' ') + '</span>' +
+      '<div class="step-desc">' + escapeHtml(s.description) + '</div>' +
+      (s.assignee ? '<div class="step-assignee">' + escapeHtml(s.assignee) + '</div>' : '') +
+      stepTimeHtml +
+    '</div>';
+  }
+
+  var controlsHtml = wf.status === 'active' ? '<div class="wf-advance-controls" style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-primary" onclick="dashAdvanceWorkflow(\'' + wf.id + '\')">Complete Step</button></div>' : '';
+
+  return '<div class="pipeline" data-wf-id="' + wf.id + '" style="cursor:pointer" onclick="showWorkflowDetail(\'' + wf.id + '\')">' +
+    '<div class="pipeline-header">' +
+      '<div class="pipeline-name">' + escapeHtml(wf.name) + ' <span class="wf-status-label" style="font-size:11px;color:' + statusColor + ';font-weight:600">' + escapeHtml(wf.status) + '</span></div>' +
+      '<div class="pipeline-progress">' + doneCount + '/' + wf.steps.length + ' (' + pct + '%)</div>' +
+    '</div>' +
+    '<div class="pipeline-bar"><div class="pipeline-bar-fill" style="width:' + pct + '%;background:' + barColor + '"></div></div>' +
+    '<div class="pipeline-steps">' + stepsHtml + '</div>' +
+    controlsHtml +
+  '</div>';
+}
+
 function renderWorkflows(workflows) {
   var el = document.getElementById('workflows-area');
-  var savedScroll = el.scrollTop;
   if (!workflows.length) {
-    el.innerHTML = '<div class="tasks-empty">No workflows yet. Agents create workflows with <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px;font-size:12px;color:var(--orange)">create_workflow(name, steps)</code></div>';
-    _lastWorkflowsHash = '';
+    if (!el.querySelector('.tasks-empty')) {
+      el.innerHTML = '<div class="tasks-empty">No workflows yet. Agents create workflows with <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px;font-size:12px;color:var(--orange)">create_workflow(name, steps)</code></div>';
+    }
     return;
   }
-  // Build a lightweight hash from workflow data to avoid unnecessary DOM rebuilds
-  var dataHash = workflows.map(function(w) { return w.id + ':' + w.status + ':' + w.steps.map(function(s) { return s.status; }).join(','); }).join('|');
-  if (dataHash === _lastWorkflowsHash) return;
-  _lastWorkflowsHash = dataHash;
 
-  var html = '';
+  // Remove empty-state if present
+  var emptyEl = el.querySelector('.tasks-empty');
+  if (emptyEl) emptyEl.remove();
+  // Remove loading spinner if present
+  var spinner = el.querySelector('.loading-spinner');
+  if (spinner) spinner.remove();
+
+  // Build map of existing workflow DOM elements
+  var existingEls = {};
+  el.querySelectorAll('[data-wf-id]').forEach(function(node) {
+    existingEls[node.getAttribute('data-wf-id')] = node;
+  });
+
+  // Track which IDs are in the new data
+  var activeIds = {};
+
   for (var i = 0; i < workflows.length; i++) {
     var wf = workflows[i];
-    var doneCount = wf.steps.filter(function(s) { return s.status === 'done'; }).length;
-    var pct = Math.round((doneCount / wf.steps.length) * 100);
-    var statusColor = wf.status === 'completed' ? 'var(--green)' : 'var(--accent)';
+    activeIds[wf.id] = true;
+    var existing = existingEls[wf.id];
 
-    var barColor = wf.status === 'completed' ? 'var(--green)' : 'var(--accent)';
-    var metaHtml = '<div class="pipeline-meta">';
-    if (wf.created_by) metaHtml += '<span>Created by ' + escapeHtml(wf.created_by) + '</span>';
-    if (wf.created_at) metaHtml += '<span>' + timeAgo(wf.created_at) + '</span>';
-    if (wf.updated_at && wf.updated_at !== wf.created_at) metaHtml += '<span>Updated ' + timeAgo(wf.updated_at) + '</span>';
-    metaHtml += '</div>';
+    if (existing) {
+      // PATCH existing workflow element in place
+      var doneCount = wf.steps.filter(function(s) { return s.status === 'done'; }).length;
+      var pct = Math.round((doneCount / wf.steps.length) * 100);
 
-    html += '<div class="pipeline" style="cursor:pointer" onclick="showWorkflowDetail(\'' + wf.id + '\')">' +
-      '<div class="pipeline-header">' +
-        '<div class="pipeline-name">' + escapeHtml(wf.name) + ' <span style="font-size:11px;color:' + statusColor + ';font-weight:600">' + escapeHtml(wf.status) + '</span></div>' +
-        '<div class="pipeline-progress">' + doneCount + '/' + wf.steps.length + ' (' + pct + '<span style="font-size:0.8em;margin-left:1px">%</span>)</div>' +
-      '</div>' +
-      metaHtml +
-      '<div class="pipeline-bar"><div class="pipeline-bar-fill" style="width:' + pct + '%;background:' + barColor + '"></div></div>' +
-      '<div class="pipeline-steps">';
+      // Update progress text
+      var progEl = existing.querySelector('.pipeline-progress');
+      var newProg = doneCount + '/' + wf.steps.length + ' (' + pct + '%)';
+      if (progEl && progEl.textContent !== newProg) progEl.textContent = newProg;
 
-    for (var j = 0; j < wf.steps.length; j++) {
-      var s = wf.steps[j];
-      var stepColor = s.status === 'done' ? 'var(--green)' : s.status === 'in_progress' ? 'var(--accent)' : 'var(--text-muted)';
-      if (j > 0) html += '<span class="step-arrow">&rarr;</span>';
-      var stepTimeHtml = '';
-      if (s.status === 'done' && s.started_at && s.completed_at) {
-        var dur = Math.round((new Date(s.completed_at) - new Date(s.started_at)) / 60000);
-        stepTimeHtml = '<div style="font-size:9px;color:var(--text-muted);margin-top:2px">' + (dur > 0 ? dur + 'm' : '<1m') + '</div>';
-      } else if (s.status === 'in_progress' && s.started_at) {
-        var elapsed = Math.round((Date.now() - new Date(s.started_at)) / 60000);
-        stepTimeHtml = '<div style="font-size:9px;color:var(--accent);margin-top:2px">' + elapsed + 'm elapsed</div>';
+      // Update progress bar
+      var barFill = existing.querySelector('.pipeline-bar-fill');
+      if (barFill) {
+        var newWidth = pct + '%';
+        if (barFill.style.width !== newWidth) barFill.style.width = newWidth;
+        var barColor = wf.status === 'completed' ? 'var(--green)' : 'var(--accent)';
+        if (barFill.style.background !== barColor) barFill.style.background = barColor;
       }
 
-      html += '<div class="step-card ' + s.status + '" title="' + escapeHtml(s.notes || '') + '">' +
-        '<span class="step-num">' + s.id + '</span>' +
-        '<span style="font-size:10px;color:' + stepColor + ';font-weight:600;text-transform:uppercase">' + s.status.replace('_', ' ') + '</span>' +
-        '<div class="step-desc">' + escapeHtml(s.description) + '</div>' +
-        (s.assignee ? '<div class="step-assignee">' + escapeHtml(s.assignee) + '</div>' : '') +
-        stepTimeHtml +
-      '</div>';
-    }
-    html += '</div>';
+      // Update status label
+      var statusLabel = existing.querySelector('.wf-status-label');
+      if (statusLabel && statusLabel.textContent !== wf.status) {
+        statusLabel.textContent = wf.status;
+        statusLabel.style.color = wf.status === 'completed' ? 'var(--green)' : 'var(--accent)';
+      }
 
-    // Dashboard controls — advance or skip
-    if (wf.status === 'active') {
-      html += '<div style="margin-top:8px;display:flex;gap:6px">' +
-        '<button class="btn btn-primary" onclick="dashAdvanceWorkflow(\'' + wf.id + '\')">Complete Step</button>' +
-      '</div>';
+      // Update each step
+      for (var j = 0; j < wf.steps.length; j++) {
+        var s = wf.steps[j];
+        var stepEl = existing.querySelector('[data-step-id="' + s.id + '"]');
+        if (stepEl) {
+          var newClass = 'step-card ' + s.status;
+          if (stepEl.className !== newClass) stepEl.className = newClass;
+          // Update step status text
+          var stepStatusEl = stepEl.querySelector('.step-status');
+          var newStatusText = s.status.replace('_', ' ');
+          if (stepStatusEl && stepStatusEl.textContent !== newStatusText) {
+            var stepColor = s.status === 'done' ? 'var(--green)' : s.status === 'in_progress' ? 'var(--accent)' : 'var(--text-muted)';
+            stepStatusEl.textContent = newStatusText;
+            stepStatusEl.style.color = stepColor;
+          }
+          // Update elapsed time
+          var timeEl = stepEl.querySelector('.step-time');
+          if (s.status === 'in_progress' && s.started_at) {
+            var elapsed = Math.round((Date.now() - new Date(s.started_at)) / 60000);
+            var newTime = elapsed + 'm elapsed';
+            if (timeEl) { if (timeEl.textContent !== newTime) timeEl.textContent = newTime; }
+            else { stepEl.insertAdjacentHTML('beforeend', '<div class="step-time" style="font-size:9px;color:var(--accent);margin-top:2px">' + newTime + '</div>'); }
+          } else if (timeEl && s.status !== 'done') {
+            timeEl.remove();
+          }
+        }
+      }
+
+      var advControls = existing.querySelector('.wf-advance-controls');
+      if (wf.status === 'active') {
+        if (!advControls) {
+          existing.insertAdjacentHTML('beforeend', '<div class="wf-advance-controls" style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-primary" onclick="dashAdvanceWorkflow(\'' + wf.id + '\')">Complete Step</button></div>');
+        }
+      } else if (advControls) {
+        advControls.remove();
+      }
+    } else {
+      // NEW workflow — append
+      el.insertAdjacentHTML('beforeend', buildWorkflowHTML(wf));
     }
-    html += '</div>';
   }
-  if (el.innerHTML !== html) {
-    el.innerHTML = html;
-    el.scrollTop = savedScroll;
-  }
+
+  // Remove workflows that no longer exist
+  Object.keys(existingEls).forEach(function(id) {
+    if (!activeIds[id]) existingEls[id].remove();
+  });
 }
 
 function dashAdvanceWorkflow(wfId) {
@@ -7100,7 +7229,10 @@ var _cachedWorkflows = [];
 var _origFetchWorkflows = fetchWorkflows;
 fetchWorkflows = function() {
   var pq = projectParam();
-  document.getElementById('workflows-area').innerHTML = '<div class="loading-spinner">Loading workflows...</div>';
+  var wfArea = document.getElementById('workflows-area');
+  if (wfArea && !wfArea.querySelector('[data-wf-id]') && !wfArea.querySelector('.tasks-empty')) {
+    wfArea.innerHTML = '<div class="loading-spinner">Loading workflows...</div>';
+  }
   lttFetch('/api/workflows' + pq).then(function(r) { return r.json(); }).then(function(wfs) {
     _cachedWorkflows = Array.isArray(wfs) ? wfs : [];
     renderWorkflows(_cachedWorkflows);
@@ -7111,6 +7243,7 @@ function showWorkflowDetail(wfId) {
   var wf = _cachedWorkflows.find(function(w) { return w.id === wfId; });
   if (!wf) return;
   var el = document.getElementById('wf-detail-content');
+  if (!el) return;
   var steps = wf.steps || [];
   var doneCount = steps.filter(function(s) { return s.status === 'done'; }).length;
   var pct = steps.length > 0 ? Math.round((doneCount / steps.length) * 100) : 0;
@@ -7180,11 +7313,13 @@ function showWorkflowDetail(wfId) {
   html += '</div>';
 
   el.innerHTML = html;
-  document.getElementById('wf-detail-overlay').classList.add('open');
+  var wfOverlay = document.getElementById('wf-detail-overlay');
+  if (wfOverlay) wfOverlay.classList.add('open');
 }
 
 function closeWfDetail() {
-  document.getElementById('wf-detail-overlay').classList.remove('open');
+  var wfOv = document.getElementById('wf-detail-overlay');
+  if (wfOv) wfOv.classList.remove('open');
   var btn = document.getElementById('wf-delete-btn');
   if (btn) { btn.textContent = 'Delete'; btn._confirming = false; }
 }
@@ -8502,7 +8637,7 @@ function renderLaunchPanel() {
     html += '<div class="launch-form-field"><label>Role</label><select id="launch-role" onchange="onLaunchRoleChange()"><option value="">Select role...</option><option value="lead">Lead</option><option value="backend">Backend</option><option value="frontend">Frontend</option><option value="quality">Quality</option><option value="monitor">Monitor</option></select></div>';
     html += '</div>';
     html += '<div class="launch-form-row">';
-    html += '<div class="launch-form-field"><label>CLI Type</label><select id="launch-cli"><option value="claude"' + (selectedCli === 'claude' ? ' selected' : '') + '>Claude Code</option><option value="gemini"' + (selectedCli === 'gemini' ? ' selected' : '') + '>Gemini CLI</option><option value="codex"' + (selectedCli === 'codex' ? ' selected' : '') + '>Codex CLI</option></select></div>';
+    html += '<div class="launch-form-field"><label>CLI Type</label><select id="launch-cli"><option value="claude"' + (selectedCli === 'claude' ? ' selected' : '') + '>Claude Code</option><option value="gemini"' + (selectedCli === 'gemini' ? ' selected' : '') + '>Gemini CLI</option><option value="codex"' + (selectedCli === 'codex' ? ' selected' : '') + '>Codex CLI</option><option value="cursor"' + (selectedCli === 'cursor' ? ' selected' : '') + '>Cursor IDE</option></select></div>';
     html += '<div class="launch-form-field"><label>Skills</label><input type="text" id="launch-skills" placeholder="Auto-filled from role" readonly style="color:var(--text-muted)"></div>';
     html += '</div>';
     html += '<div style="margin-top:8px"><button class="btn btn-primary" onclick="generateAgentPrompt()" style="margin-right:8px">Generate Prompt</button><button class="btn" onclick="doLaunch()">Launch Terminal</button></div>';
@@ -8930,11 +9065,18 @@ function doLaunch() {
       startLaunchWatcher(agentName);
     } else {
       resultEl.className = 'launch-result success';
-      var html = '<strong>MCP config written.</strong> Run this command in a terminal:<br>';
-      html += '<div class="launch-prompt-box" onclick="copyText(this)" data-text="' + escapeHtml(data.command).replace(/"/g, '&quot;') + '">' + escapeHtml(data.command) + '</div>';
-      html += '<br>Then paste this prompt:<br>';
-      html += '<div class="launch-prompt-box" onclick="copyText(this)" data-text="' + escapeHtml(launchPrompt).replace(/"/g, '&quot;') + '">' + escapeHtml(launchPrompt.substring(0, 300)) + (launchPrompt.length > 300 ? '...' : '') + '</div>';
-      resultEl.innerHTML = html;
+      if (data.cli === 'cursor') {
+        resultEl.innerHTML =
+          '<strong>.cursor/mcp.json updated</strong> with <code>NEOHIVE_DATA_DIR</code>. Open this project in Cursor, reload MCP tools if needed, then paste the prompt (already copied).<br>' +
+          '<span style="font-size:11px;color:var(--text-dim)">' + escapeHtml(data.project_dir || '') + '</span><br><br>' +
+          '<div class="launch-prompt-box" onclick="copyText(this)" data-text="' + escapeHtml(launchPrompt).replace(/"/g, '&quot;') + '">' + escapeHtml(launchPrompt.substring(0, 300)) + (launchPrompt.length > 300 ? '...' : '') + '</div>';
+      } else {
+        var html = '<strong>MCP config written.</strong> Run this command in a terminal:<br>';
+        html += '<div class="launch-prompt-box" onclick="copyText(this)" data-text="' + escapeHtml(data.command).replace(/"/g, '&quot;') + '">' + escapeHtml(data.command) + '</div>';
+        html += '<br>Then paste this prompt:<br>';
+        html += '<div class="launch-prompt-box" onclick="copyText(this)" data-text="' + escapeHtml(launchPrompt).replace(/"/g, '&quot;') + '">' + escapeHtml(launchPrompt.substring(0, 300)) + (launchPrompt.length > 300 ? '...' : '') + '</div>';
+        resultEl.innerHTML = html;
+      }
       startLaunchWatcher(agentName);
     }
   }).catch(function(err) {
@@ -9081,7 +9223,9 @@ function renderLaunchStatusTracker() {
   var h = '<div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Launch Status</div>';
   for (var i = 0; i < _launchWatchers.length; i++) {
     var w = _launchWatchers[i];
-    var stateLabel = { pending: 'Waiting...', launching: 'Opening terminal...', launched: 'Terminal open \u2014 paste prompt', registered: 'Online', failed: 'Failed' }[w.state] || w.state;
+    var launchingLabel = w.cli === 'cursor' ? 'Writing MCP config...' : 'Opening terminal...';
+    var launchedLabel = w.cli === 'cursor' ? 'Open Cursor \u2014 paste prompt' : 'Terminal open \u2014 paste prompt';
+    var stateLabel = { pending: 'Waiting...', launching: launchingLabel, launched: launchedLabel, registered: 'Online', failed: 'Failed' }[w.state] || w.state;
     if (w.state === 'failed' && w.error) stateLabel = 'Failed: ' + w.error;
     h += '<div class="launch-status-item">' +
       '<span class="ls-dot ' + w.state + '"></span>' +
@@ -9115,7 +9259,7 @@ function renderDocs() {
     '<div class="docs-container">' +
 
     '<h2>Neohive v6.0</h2>' +
-    '<p class="docs-subtitle">True Autonomy Engine \u2014 AI agents that self-organize, self-verify, and never stop working. Works with Claude Code, Gemini CLI, and Codex CLI.</p>' +
+    '<p class="docs-subtitle">True Autonomy Engine \u2014 AI agents that self-organize, self-verify, and never stop working. Works with Claude Code, Gemini CLI, Codex CLI, and Cursor IDE.</p>' +
 
     // Quick Start — One Command
     '<div class="docs-section">' +
@@ -9355,10 +9499,11 @@ function renderOverview() {
   if (!area) return;
   var savedScroll = area.scrollTop;
   var pq = projectParam();
+  var histQ = pq + (pq ? '&' : '?') + 'limit=5' + (activeBranch && activeBranch !== 'main' ? '&branch=' + encodeURIComponent(activeBranch) : '');
   Promise.all([
     lttFetch('/api/status' + pq).then(function(r) { return r.json(); }),
     lttFetch('/api/agents' + pq).then(function(r) { return r.json(); }),
-    lttFetch('/api/history' + pq + (pq ? '&' : '?') + 'limit=5').then(function(r) { return r.json(); }),
+    lttFetch('/api/history' + histQ).then(function(r) { return r.json(); }),
     lttFetch('/api/tasks' + pq).then(function(r) { return r.json(); }),
     lttFetch('/api/workflows' + pq).then(function(r) { return r.json(); }),
     lttFetch('/api/notifications' + pq + (pq ? '&' : '?') + 'limit=10').then(function(r) { return r.json(); }).catch(function() { return []; })
@@ -9370,11 +9515,17 @@ function renderOverview() {
     var workflows = Array.isArray(results[4]) ? results[4] : [];
     var notifications = Array.isArray(results[5]) ? results[5] : [];
 
+    var agentEntries = Object.entries(agents).filter(function(e) { return e[0] !== '__system__'; });
+
+    // Data hash to skip unnecessary rebuilds (excludes timestamps)
+    var overviewHash = (status.aliveCount || 0) + ':' + (status.messageCount || 0) + ':' + agentEntries.length + ':' + tasks.map(function(t) { return t.status; }).join(',') + ':' + workflows.map(function(w) { return w.status; }).join(',') + ':' + history.length + ':' + notifications.length + ':b:' + (activeBranch || 'main');
+    if (overviewHash === renderOverview._lastHash) { return; }
+    renderOverview._lastHash = overviewHash;
+
     var pending = tasks.filter(function(t) { return t.status === 'pending'; }).length;
     var inProgress = tasks.filter(function(t) { return t.status === 'in_progress'; }).length;
     var done = tasks.filter(function(t) { return t.status === 'done'; }).length;
     var taskPct = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0;
-    var agentEntries = Object.entries(agents).filter(function(e) { return e[0] !== '__system__'; });
     var activeWfs = workflows.filter(function(w) { return w.status === 'active'; });
     var hasAgents = agentEntries.length > 0;
     var hasMessages = history.length > 0;

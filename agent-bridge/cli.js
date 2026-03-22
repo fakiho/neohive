@@ -17,7 +17,8 @@ function printUsage() {
     npx neohive init --claude       Configure for Claude Code only
     npx neohive init --gemini       Configure for Gemini CLI only
     npx neohive init --codex        Configure for Codex CLI only
-    npx neohive init --all          Configure for all detected CLIs
+    npx neohive init --cursor       Configure for Cursor IDE only (.cursor/mcp.json)
+    npx neohive init --all          Configure for all supported CLIs
     npx neohive init --ollama       Setup Ollama local LLM bridge
     npx neohive init --template T   Initialize with a team template
     npx neohive serve               Run MCP server in HTTP mode (port 4321)
@@ -55,6 +56,11 @@ function detectCLIs() {
   // Codex CLI: ~/.codex/ directory exists
   if (fs.existsSync(path.join(home, '.codex'))) {
     detected.push('codex');
+  }
+
+  // Cursor IDE: ~/.cursor/ (app support) exists
+  if (fs.existsSync(path.join(home, '.cursor'))) {
+    detected.push('cursor');
   }
 
   return detected;
@@ -167,6 +173,39 @@ timeout = 300
   }
 
   console.log('  [ok] Codex CLI: .codex/config.toml updated');
+}
+
+// Configure for Cursor IDE (.cursor/mcp.json — project scope; uses NEOHIVE_DATA_DIR so cwd mismatches do not split agents)
+function setupCursor(serverPath, cwd) {
+  const cursorDir = path.join(cwd, '.cursor');
+  const mcpConfigPath = path.join(cursorDir, 'mcp.json');
+  const abDataDir = path.join(path.resolve(cwd), '.neohive').replace(/\\/g, '/');
+
+  if (!fs.existsSync(cursorDir)) {
+    fs.mkdirSync(cursorDir, { recursive: true });
+  }
+
+  let mcpConfig = { mcpServers: {} };
+  if (fs.existsSync(mcpConfigPath)) {
+    try {
+      mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8'));
+      if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {};
+    } catch {
+      const backup = mcpConfigPath + '.backup';
+      fs.copyFileSync(mcpConfigPath, backup);
+      console.log('  [warn] Existing .cursor/mcp.json was invalid — backed up to mcp.json.backup');
+    }
+  }
+
+  mcpConfig.mcpServers['neohive'] = {
+    command: 'node',
+    args: [serverPath],
+    env: { NEOHIVE_DATA_DIR: abDataDir },
+    timeout: 300,
+  };
+
+  fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
+  console.log('  [ok] Cursor IDE: .cursor/mcp.json updated');
 }
 
 // Setup Ollama agent bridge script
@@ -316,8 +355,10 @@ function init() {
     targets = ['gemini'];
   } else if (flag === '--codex') {
     targets = ['codex'];
+  } else if (flag === '--cursor') {
+    targets = ['cursor'];
   } else if (flag === '--all') {
-    targets = ['claude', 'gemini', 'codex'];
+    targets = ['claude', 'gemini', 'codex', 'cursor'];
   } else if (flag === '--ollama') {
     const ollama = detectOllama();
     if (!ollama.installed) {
@@ -349,11 +390,12 @@ function init() {
       case 'claude': setupClaude(serverPath, cwd); break;
       case 'gemini': setupGemini(serverPath, cwd); break;
       case 'codex':  setupCodex(serverPath, cwd);  break;
+      case 'cursor': setupCursor(serverPath, cwd); break;
     }
   }
 
   // Add .neohive/ and MCP config files to .gitignore
-  const gitignoreEntries = ['.neohive/', '.mcp.json', '.codex/', '.gemini/'];
+  const gitignoreEntries = ['.neohive/', '.mcp.json', '.cursor/mcp.json', '.codex/', '.gemini/'];
   if (fs.existsSync(gitignorePath)) {
     let content = fs.readFileSync(gitignorePath, 'utf8');
     const missing = gitignoreEntries.filter(e => !content.includes(e));
@@ -860,6 +902,44 @@ function uninstall() {
     }
   }
 
+  // 7. Remove from Cursor IDE project config (.cursor/mcp.json in cwd)
+  const cursorMcpPath = path.join(cwd, '.cursor', 'mcp.json');
+  if (fs.existsSync(cursorMcpPath)) {
+    try {
+      const mcpConfig = JSON.parse(fs.readFileSync(cursorMcpPath, 'utf8'));
+      if (mcpConfig.mcpServers && mcpConfig.mcpServers['neohive']) {
+        delete mcpConfig.mcpServers['neohive'];
+        fs.writeFileSync(cursorMcpPath, JSON.stringify(mcpConfig, null, 2) + '\n');
+        removed.push('Cursor IDE (project): ' + cursorMcpPath);
+      } else {
+        notFound.push('Cursor IDE (project): no neohive entry in .cursor/mcp.json');
+      }
+    } catch (e) {
+      console.log('  [warn] Could not parse ' + cursorMcpPath + ': ' + e.message);
+    }
+  } else {
+    notFound.push('Cursor IDE (project): .cursor/mcp.json not found');
+  }
+
+  // 8. Remove from Cursor IDE user config (~/.cursor/mcp.json)
+  const cursorGlobalPath = path.join(home, '.cursor', 'mcp.json');
+  if (fs.existsSync(cursorGlobalPath)) {
+    try {
+      const mcpConfig = JSON.parse(fs.readFileSync(cursorGlobalPath, 'utf8'));
+      if (mcpConfig.mcpServers && mcpConfig.mcpServers['neohive']) {
+        delete mcpConfig.mcpServers['neohive'];
+        fs.writeFileSync(cursorGlobalPath, JSON.stringify(mcpConfig, null, 2) + '\n');
+        removed.push('Cursor IDE (global): ' + cursorGlobalPath);
+      } else {
+        notFound.push('Cursor IDE (global): no neohive entry');
+      }
+    } catch (e) {
+      console.log('  [warn] Could not parse ' + cursorGlobalPath + ': ' + e.message);
+    }
+  } else {
+    notFound.push('Cursor IDE (global): ~/.cursor/mcp.json not found');
+  }
+
   // Print summary
   if (removed.length > 0) {
     console.log('  Removed neohive from:');
@@ -878,7 +958,7 @@ function uninstall() {
     }
   }
 
-  // 7. Check for data directory
+  // 9. Check for data directory
   const dataPath = path.join(cwd, '.neohive');
   if (fs.existsSync(dataPath)) {
     console.log('');

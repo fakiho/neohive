@@ -551,8 +551,9 @@ function apiTokenUsage(query) {
   for (const [name, info] of Object.entries(agents)) {
     if (!info.pid) continue;
     try {
-      // Map PID → session ID → session file
-      const pidFile = path.join(sessionsDir, info.pid + '.json');
+      // Map CLI PID (ppid) → session ID → session file. Fall back to pid if ppid not available.
+      const cliPid = info.ppid || info.pid;
+      const pidFile = path.join(sessionsDir, cliPid + '.json');
       if (!fs.existsSync(pidFile)) continue;
       const session = readJson(pidFile);
       if (!session || !session.sessionId) continue;
@@ -1004,6 +1005,7 @@ function apiAddProject(body) {
   // Set up MCP config so agents can use it
   const serverPath = path.join(__dirname, 'server.js').replace(/\\/g, '/');
   ensureMCPConfig('claude', serverPath, absPath);
+  ensureMCPConfig('cursor', serverPath, absPath);
 
   projects.push({ name, path: absPath, added_at: new Date().toISOString() });
   saveProjects(projects);
@@ -1365,13 +1367,25 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
       config += `\n[mcp_servers.neohive]\ncommand = "node"\nargs = [${JSON.stringify(serverPath)}]\n\n[mcp_servers.neohive.env]\nNEOHIVE_DATA_DIR = ${JSON.stringify(abDir)}\n`;
       fs.writeFileSync(configPath, config);
     }
+  } else if (cli === 'cursor') {
+    const cursorDir = path.join(projectDir, '.cursor');
+    const mcpConfigPath = path.join(cursorDir, 'mcp.json');
+    if (!fs.existsSync(cursorDir)) fs.mkdirSync(cursorDir, { recursive: true });
+    let mcpConfig = { mcpServers: {} };
+    if (fs.existsSync(mcpConfigPath)) {
+      try { mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8')); if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {}; } catch {}
+    }
+    if (!mcpConfig.mcpServers['neohive']) {
+      mcpConfig.mcpServers['neohive'] = { command: 'node', args: [serverPath], env: { NEOHIVE_DATA_DIR: abDir }, timeout: 300 };
+      fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
+    }
   }
 }
 
 function apiLaunchAgent(body) {
   const { cli, project_dir, agent_name, prompt } = body;
-  if (!cli || !['claude', 'gemini', 'codex'].includes(cli)) {
-    return { error: 'Invalid cli type. Must be: claude, gemini, or codex' };
+  if (!cli || !['claude', 'gemini', 'codex', 'cursor'].includes(cli)) {
+    return { error: 'Invalid cli type. Must be: claude, gemini, codex, or cursor' };
   }
   if (project_dir && !validateProjectPath(project_dir)) {
     return { error: 'Project directory not registered. Add it via the dashboard first.' };
@@ -1381,13 +1395,25 @@ function apiLaunchAgent(body) {
     return { error: 'Project directory does not exist: ' + projectDir };
   }
 
+  const safeName = (agent_name || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+  const launchPrompt = prompt || (safeName ? `You are agent "${safeName}". Use the register tool to register as "${safeName}", then use listen to wait for messages.` : `Register with the neohive MCP tools and use listen to wait for messages.`);
+
   const serverPath = path.join(__dirname, 'server.js').replace(/\\/g, '/');
   ensureMCPConfig(cli, serverPath, projectDir);
 
+  if (cli === 'cursor') {
+    return {
+      success: true,
+      launched: false,
+      cli: 'cursor',
+      project_dir: projectDir,
+      prompt: launchPrompt,
+      message: 'Open this folder in Cursor IDE. .cursor/mcp.json is configured with NEOHIVE_DATA_DIR. Restart Cursor or reload MCP tools, then paste the prompt.',
+    };
+  }
+
   const cliCommands = { claude: 'claude', gemini: 'gemini', codex: 'codex' };
   const cliCmd = cliCommands[cli];
-  const safeName = (agent_name || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
-  const launchPrompt = prompt || (safeName ? `You are agent "${safeName}". Use the register tool to register as "${safeName}", then use listen to wait for messages.` : `Register with the neohive MCP tools and use listen to wait for messages.`);
 
   // Try to launch terminal — user pastes prompt from clipboard after CLI loads
   if (process.platform === 'win32') {

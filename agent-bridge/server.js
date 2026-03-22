@@ -1413,7 +1413,7 @@ function toolRegister(name, provider = null, skills = null) {
 
     const now = new Date().toISOString();
     const token = (agents[name] && agents[name].token) || generateToken();
-    agents[name] = { pid: process.pid, timestamp: now, last_activity: now, provider: provider || 'unknown', branch: currentBranch, token, started_at: now };
+    agents[name] = { pid: process.pid, ppid: process.ppid, timestamp: now, last_activity: now, provider: provider || 'unknown', branch: currentBranch, token, started_at: now };
     saveAgents(agents);
     registeredName = name;
   registeredToken = token;
