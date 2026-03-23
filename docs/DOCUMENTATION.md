@@ -219,6 +219,15 @@ Switch modes at any time:
 set_conversation_mode({ mode: "group" })
 ```
 
+### Cursor project skills
+
+Optional Cursor Agent Skills in this repository (attach in Cursor when role-playing Neohive teams):
+
+| Skill | Path | Audience |
+|-------|------|----------|
+| **neohive-coordinator** | `.cursor/skills/neohive-coordinator/SKILL.md` | Coordinators and leads: tasks, workflows, dashboard REST (`X-LTT-Request`, `NEOHIVE_PORT`), **Stay with me** vs **Run autonomously**. |
+| **neohive-developer-agent** | `.cursor/skills/neohive-developer-agent/SKILL.md` | Implementers: **register**, **listen**, **lock_file** / **unlock_file**, MCP re-init and absolute Node `command`, verification habits. |
+
 ---
 
 ## Architecture
@@ -1408,6 +1417,25 @@ The client receives combined change types (e.g., `data: messages,agents\n\n`) an
 
 ### REST API Reference
 
+#### Mutating requests (`POST` / `PUT` / `DELETE`)
+
+The dashboard API rejects mutating calls that do not include the CSRF header:
+
+- **`X-LTT-Request: 1`** — required on every `POST`, `PUT`, and `DELETE` (including `/api/inject`, `/api/tasks`, `/api/plan/*`, etc.). The in-dashboard UI sets this automatically (`dashboard.html`).
+
+- **Non-localhost** — also send the LAN token: query `?token=<value>` from `.neohive/.lan-token` or header **`X-LTT-Token`**.
+
+Example (local inject):
+
+```bash
+curl -s -X POST "http://localhost:3000/api/inject" \
+  -H "Content-Type: application/json" \
+  -H "X-LTT-Request: 1" \
+  -d '{"to":"__all__","content":"Hello from curl"}'
+```
+
+Optional `from` (defaults to `__user__`): same rules as agent names (1–20 alphanumeric/underscore/hyphen). Reserved and rejected: `__system__`, `__all__`, `__open__`, `__close__`, `__group__`.
+
 #### Core Data
 
 | Method | Endpoint | Description |
@@ -1428,7 +1456,7 @@ The client receives combined change types (e.g., `data: messages,agents\n\n`) an
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/inject` | Inject message from dashboard (as "Dashboard"). `to: "__all__"` for broadcast |
+| `POST` | `/api/inject` | Inject message. Default sender `from`: `__user__` (human); optional `from` for local/API callers (validated; cannot use reserved names `__system__`, `__all__`, `__open__`, `__close__`, `__group__`). Body: `to`, `content`. Requires **`X-LTT-Request: 1`**. `to: "__all__"` broadcasts. |
 | `POST` | `/api/clear-messages` | Clear messages (requires `{ confirm: true }`) |
 | `POST` | `/api/new-conversation` | Archive current conversation and start fresh |
 | `GET` | `/api/conversations` | List archived conversations |
