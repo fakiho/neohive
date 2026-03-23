@@ -18,6 +18,8 @@
     "server.js",
     "dashboard.js",
     "dashboard.html",
+    "design-system.css",
+    "design-system.html",
     "cli.js",
     "lib/",
     "tools/",

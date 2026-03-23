@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neohive design system</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/design-system.css">
+  <style>
+    .nh-ds-page { margin: 0; min-height: 100vh; }
+    .nh-ds-layout { display: flex; min-height: 100vh; }
+    .nh-ds-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .nh-ds-content { flex: 1; padding: var(--nh-space-6); overflow: auto; }
+    .nh-ds-grid { display: grid; gap: var(--nh-space-6); }
+    @media (min-width: 960px) {
+      .nh-ds-grid--3 { grid-template-columns: repeat(3, 1fr); }
+    }
+    .nh-ds-stack { display: flex; flex-direction: column; gap: var(--nh-space-4); }
+    .nh-ds-row { display: flex; flex-wrap: wrap; gap: var(--nh-space-2); align-items: center; }
+    .nh-ds-swatch-row { display: flex; flex-wrap: wrap; gap: var(--nh-space-3); }
+    .nh-ds-swatch-item { display: flex; flex-direction: column; gap: var(--nh-space-1); width: 72px; }
+    .nh-ds-swatch-item span { font-size: 10px; color: var(--nh-text-secondary); line-height: 1.35; }
+    .nh-ds-h1 { font-size: 20px; font-weight: 600; margin: 0 0 var(--nh-space-6); }
+    .nh-ds-h2 { font-size: 14px; font-weight: 500; margin: 0 0 var(--nh-space-3); color: var(--nh-text-primary); }
+    .nh-ds-label { font-size: 12px; color: var(--nh-text-secondary); display: block; margin-bottom: var(--nh-space-2); }
+    .nh-ds-preview-board { display: flex; gap: var(--nh-space-4); overflow-x: auto; padding-bottom: var(--nh-space-2); min-height: 280px; }
+    .nh-ds-preview-board .nh-kanban-col { flex: 1; min-width: 200px; max-width: 280px; }
+  </style>
+</head>
+<body class="nh-ds nh-ds-page">
+  <div class="nh-ds-layout">
+    <aside class="nh-sidebar nh-ds" style="width: 256px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 100vh;">
+      <div class="nh-topbar" style="border-right: 0;">
+        <div class="nh-ds-row" style="gap: var(--nh-space-2);">
+          <div style="width: 24px; height: 24px; border-radius: var(--nh-radius-sm); background: var(--nh-accent); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff;">N</div>
+          <span style="font-weight: 600; font-size: 14px;">Neohive</span>
+        </div>
+      </div>
+      <div style="flex: 1; overflow-y: auto; padding: var(--nh-space-4) var(--nh-space-3); display: flex; flex-direction: column; gap: var(--nh-space-6);">
+        <nav class="nh-ds-stack" style="gap: var(--nh-space-1);">
+          <div class="nh-sidebar__section-label"><span>Menu</span></div>
+          <a class="nh-nav-link" href="#">Overview</a>
+          <a class="nh-nav-link" href="#">Messages</a>
+          <a class="nh-nav-link nh-nav-link--active" href="#">Tasks</a>
+          <a class="nh-nav-link" href="#">Workflows</a>
+        </nav>
+        <div>
+          <div class="nh-sidebar__section-label"><span>Agents</span></div>
+          <div class="nh-agent-chip">
+            <span class="nh-avatar-fallback">A</span>
+            <div style="flex: 1; min-width: 0;">
+              <div class="nh-agent-chip__name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Agent</div>
+              <div class="nh-agent-chip__status" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">lead · offline</div>
+            </div>
+            <span class="nh-dot"></span>
+          </div>
+        </div>
+      </div>
+    </aside>
+    <div class="nh-ds-main nh-ds">
+      <header class="nh-topbar">
+        <div class="nh-ds-row">
+          <span class="nh-dot"></span>
+          <span style="font-size: 14px; color: var(--nh-text-secondary);">Reference layout</span>
+        </div>
+        <div class="nh-ds-row">
+          <span class="nh-dot nh-dot--live" title="Online"></span>
+          <span class="nh-dot"></span>
+        </div>
+      </header>
+      <div class="nh-ds-content">
+        <h1 class="nh-ds-h1">Design system</h1>
+
+        <section class="nh-spec-panel nh-ds-stack" style="margin-bottom: var(--nh-space-6);">
+          <h2 class="nh-ds-h2" style="font-size: 18px; margin-bottom: var(--nh-space-4);">Color palette</h2>
+          <div class="nh-ds-grid nh-ds-grid--3">
+            <div>
+              <h3 class="nh-ds-h2">Primary &amp; neutrals</h3>
+              <div class="nh-ds-swatch-row">
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-accent);"></div>
+                  <span>#F59E0B<br>Amber accent</span>
+                </div>
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch nh-swatch--border" style="background: var(--nh-charcoal);"></div>
+                  <span>#121212<br>Charcoal</span>
+                </div>
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-graphite);"></div>
+                  <span>#172B37<br>Graphite</span>
+                </div>
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-gray);"></div>
+                  <span>#D1D5DB<br>Light gray</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h3 class="nh-ds-h2">Surfaces</h3>
+              <div class="nh-ds-swatch-row">
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch nh-swatch--border" style="background: var(--nh-bg);"></div>
+                  <span>#0F0F10<br>Background</span>
+                </div>
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-sidebar);"></div>
+                  <span>#161618<br>Sidebar</span>
+                </div>
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-card);"></div>
+                  <span>#1C1C1F<br>Card</span>
+                </div>
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-card-hover);"></div>
+                  <span>#232326<br>Card hover</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h3 class="nh-ds-h2">Semantic</h3>
+              <div class="nh-ds-swatch-row">
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-green);"></div>
+                  <span>#10B981<br>Success</span>
+                </div>
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-amber);"></div>
+                  <span>#F59E0B<br>Warning</span>
+                </div>
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-blue);"></div>
+                  <span>#3B82F6<br>Info</span>
+                </div>
+              </div>
+              <p class="nh-ds-label" style="margin-top: var(--nh-space-3);">Done lane: <code style="color: var(--nh-text-secondary);">--nh-success-surface</code> / <code style="color: var(--nh-text-secondary);">--nh-success-card</code></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="nh-ds-grid nh-ds-grid--3" style="margin-bottom: var(--nh-space-6);">
+          <div>
+            <h2 class="nh-ds-h2">Buttons</h2>
+            <span class="nh-ds-label">Primary</span>
+            <button type="button" class="nh-btn nh-btn--primary" style="width: 100%;">Primary action</button>
+            <span class="nh-ds-label" style="margin-top: var(--nh-space-4);">Secondary</span>
+            <button type="button" class="nh-btn nh-btn--secondary" style="width: 100%;">Secondary action</button>
+          </div>
+          <div>
+            <h2 class="nh-ds-h2">Status pills</h2>
+            <div class="nh-ds-row">
+              <span class="nh-pill nh-pill--review nh-pill--lg">In review</span>
+              <span class="nh-pill nh-pill--done nh-pill--lg">Done</span>
+            </div>
+          </div>
+          <div>
+            <h2 class="nh-ds-h2">Task card</h2>
+            <article class="nh-card nh-card--interactive">
+              <h3 class="nh-card__title">Refactor API endpoint for optimization</h3>
+              <p class="nh-card__body">Analyze and restructure the data flow to improve throughput and clarity for consumers of the API.</p>
+              <div class="nh-card__footer">
+                <div class="nh-ds-row">
+                  <span class="nh-avatar-fallback">S</span>
+                  <span class="nh-pill nh-pill--review">In review</span>
+                </div>
+                <span class="nh-card__meta">2h ago</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <h2 class="nh-ds-h2" style="font-size: 18px;">Kanban preview</h2>
+        <div class="nh-ds-preview-board">
+          <div class="nh-kanban-col">
+            <div class="nh-kanban-col__head">
+              <h3 class="nh-kanban-col__title">Pending <span class="nh-kanban-col__count">(0)</span></h3>
+            </div>
+            <div class="nh-kanban-col__empty">
+              <div class="nh-kanban-col__empty-icon">?</div>
+              <p class="nh-kanban-col__empty-text">No active tasks</p>
+            </div>
+          </div>
+          <div class="nh-kanban-col">
+            <div class="nh-kanban-col__head nh-kanban-col__head--sticky">
+              <h3 class="nh-kanban-col__title">In review <span class="nh-kanban-col__count">(2)</span></h3>
+              <button type="button" class="nh-btn nh-btn--ghost" aria-label="Column menu">⋯</button>
+            </div>
+            <div class="nh-kanban-col__body">
+              <article class="nh-card nh-card--interactive">
+                <h3 class="nh-card__title">Sample task in review</h3>
+                <p class="nh-card__body">Short description that clamps to two lines in the layout.</p>
+                <div class="nh-card__footer">
+                  <div class="nh-ds-row">
+                    <span class="nh-avatar-fallback">R</span>
+                    <span class="nh-pill nh-pill--review">In review</span>
+                  </div>
+                  <span class="nh-card__meta">2h ago</span>
+                </div>
+              </article>
+            </div>
+          </div>
+          <div class="nh-kanban-col nh-kanban-col--success">
+            <div class="nh-kanban-col__head nh-kanban-col__head--sticky">
+              <h3 class="nh-kanban-col__title">Done <span class="nh-kanban-col__count">(36)</span></h3>
+              <button type="button" class="nh-btn nh-btn--ghost" aria-label="Column menu">⋯</button>
+            </div>
+            <div class="nh-kanban-col__body">
+              <article class="nh-card nh-card--success nh-card--interactive">
+                <div class="nh-done-row">
+                  <span class="nh-done-row__icon" aria-hidden="true">✓</span>
+                  <h3 class="nh-done-row__title">Shipped: dashboard design tokens</h3>
+                </div>
+                <div class="nh-card__footer">
+                  <div class="nh-ds-row">
+                    <span class="nh-avatar-fallback nh-avatar-fallback--success">D</span>
+                    <span class="nh-pill nh-pill--done">Done</span>
+                  </div>
+                  <span class="nh-card__meta">yesterday</span>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <p style="font-size: 12px; color: var(--nh-text-secondary); margin-top: var(--nh-space-6); max-width: 720px;">
+          CSS variables live on <code style="color: var(--nh-text-primary);">:root</code> (prefix <code style="color: var(--nh-text-primary);">--nh-</code>).
+          Components use the <code style="color: var(--nh-text-primary);">nh-</code> prefix. Source: <code style="color: var(--nh-text-primary);">design-system.css</code>.
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

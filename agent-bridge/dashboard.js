@@ -201,6 +201,8 @@ if (!fs.existsSync(DEFAULT_DATA_DIR) && fs.existsSync(_legacyDir)) {
 }
 
 const HTML_FILE = path.join(__dirname, 'dashboard.html');
+const DESIGN_SYSTEM_CSS = path.join(__dirname, 'design-system.css');
+const DESIGN_SYSTEM_HTML = path.join(__dirname, 'design-system.html');
 const LOGO_FILE = path.join(__dirname, 'logo.png');
 const PROJECTS_FILE = path.join(__dirname, 'projects.json');
 
@@ -2068,6 +2070,40 @@ const server = http.createServer(async (req, res) => {
       } else {
         res.writeHead(404);
         res.end('Logo not found');
+      }
+      return;
+    }
+
+    if (url.pathname === '/design-system.css' && req.method === 'GET') {
+      if (fs.existsSync(DESIGN_SYSTEM_CSS)) {
+        const css = fs.readFileSync(DESIGN_SYSTEM_CSS, 'utf8');
+        res.writeHead(200, {
+          'Content-Type': 'text/css; charset=utf-8',
+          'Cache-Control': 'public, max-age=3600',
+        });
+        res.end(css);
+      } else {
+        res.writeHead(404);
+        res.end('Not found');
+      }
+      return;
+    }
+
+    if (url.pathname === '/design-system.html' && req.method === 'GET') {
+      if (fs.existsSync(DESIGN_SYSTEM_HTML)) {
+        const html = fs.readFileSync(DESIGN_SYSTEM_HTML, 'utf8');
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+          'X-Frame-Options': 'DENY',
+          'X-Content-Type-Options': 'nosniff',
+          'Referrer-Policy': 'no-referrer',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        });
+        res.end(html);
+      } else {
+        res.writeHead(404);
+        res.end('Not found');
       }
       return;
     }
