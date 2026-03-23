@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
+const { upsertNeohiveMcpInToml } = require('./lib/codex-neohive-toml');
 
 function findCursorProjectRootWithNeohive(startDir) {
   let dir = path.resolve(startDir);
@@ -1078,6 +1079,9 @@ function apiLoadConversation(query) {
   return { success: true };
 }
 
+// Sender names API callers must not use for /api/inject (prevents forged system/group traffic)
+const INJECT_FROM_BLOCKLIST = new Set(['__system__', '__all__', '__open__', '__close__', '__group__']);
+
 // Inject a message from the dashboard (system message or nudge to an agent)
 function apiInjectMessage(body, query) {
   const projectPath = query.get('project') || null;
@@ -1097,8 +1101,18 @@ function apiInjectMessage(body, query) {
     return { error: 'Invalid agent name' };
   }
 
+  let fromName = '__user__';
+  if (body.from !== undefined && body.from !== null && String(body.from).trim() !== '') {
+    if (typeof body.from !== 'string' || !/^[a-zA-Z0-9_-]{1,20}$/.test(body.from.trim())) {
+      return { error: 'Invalid "from" — must be 1–20 alphanumeric, underscore, or hyphen' };
+    }
+    fromName = body.from.trim();
+    if (INJECT_FROM_BLOCKLIST.has(fromName)) {
+      return { error: 'Invalid "from" — reserved name' };
+    }
+  }
+
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-  const fromName = '__user__';
   const now = new Date().toISOString();
 
   // Broadcast to all agents — single __group__ message instead of per-agent
@@ -1541,6 +1555,11 @@ function apiDiscover() {
 
 // --- Agent Launcher ---
 
+/** Same as cli.js: absolute Node path so MCP spawns work when PATH omits Volta/nvm. */
+function mcpNodeCommand() {
+  return process.execPath;
+}
+
 function ensureMCPConfig(cli, serverPath, projectDir) {
   const abDir = path.join(projectDir, '.neohive').replace(/\\/g, '/');
   if (cli === 'claude') {
@@ -1550,7 +1569,7 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
       try { mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8')); if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {}; } catch {}
     }
     if (!mcpConfig.mcpServers['neohive']) {
-      mcpConfig.mcpServers['neohive'] = { command: 'node', args: [serverPath], env: { NEOHIVE_DATA_DIR: abDir } };
+      mcpConfig.mcpServers['neohive'] = { command: mcpNodeCommand(), args: [serverPath], env: { NEOHIVE_DATA_DIR: abDir } };
       fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
     }
   } else if (cli === 'gemini') {
@@ -1562,7 +1581,7 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
       try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); if (!settings.mcpServers) settings.mcpServers = {}; } catch {}
     }
     if (!settings.mcpServers['neohive']) {
-      settings.mcpServers['neohive'] = { command: 'node', args: [serverPath], env: { NEOHIVE_DATA_DIR: abDir } };
+      settings.mcpServers['neohive'] = { command: mcpNodeCommand(), args: [serverPath], env: { NEOHIVE_DATA_DIR: abDir } };
       fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
     }
   } else if (cli === 'codex') {
@@ -1571,10 +1590,16 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
     if (!fs.existsSync(codexDir)) fs.mkdirSync(codexDir, { recursive: true });
     let config = '';
     if (fs.existsSync(configPath)) config = fs.readFileSync(configPath, 'utf8');
-    if (!config.includes('[mcp_servers.neohive]')) {
-      config += `\n[mcp_servers.neohive]\ncommand = "node"\nargs = [${JSON.stringify(serverPath)}]\n\n[mcp_servers.neohive.env]\nNEOHIVE_DATA_DIR = ${JSON.stringify(abDir)}\n`;
-      fs.writeFileSync(configPath, config);
-    }
+    const envSection =
+      `[mcp_servers.neohive.env]\nNEOHIVE_DATA_DIR = ${JSON.stringify(abDir)}\n`;
+    const hadNeohive = config.includes('[mcp_servers.neohive]');
+    config = upsertNeohiveMcpInToml(config, {
+      command: mcpNodeCommand(),
+      serverPath,
+      timeout: 300,
+      envSection: hadNeohive ? undefined : envSection,
+    });
+    fs.writeFileSync(configPath, config);
   } else if (cli === 'cursor') {
     const cursorDir = path.join(projectDir, '.cursor');
     const mcpConfigPath = path.join(cursorDir, 'mcp.json');
@@ -1585,7 +1610,7 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
     }
     if (!mcpConfig.mcpServers['neohive']) {
       mcpConfig.mcpServers['neohive'] = {
-        command: 'node',
+        command: mcpNodeCommand(),
         args: [serverPath],
         env: { NEOHIVE_DATA_DIR: abDir },
         timeout: 300,

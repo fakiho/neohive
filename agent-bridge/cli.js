@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
+const { upsertNeohiveMcpInToml } = require('./lib/codex-neohive-toml');
 
 const command = process.argv[2];
 
@@ -81,6 +82,11 @@ function dataDir(cwd) {
   return path.join(cwd, '.neohive');
 }
 
+// Absolute Node binary for MCP configs — CLIs often spawn without Volta/nvm PATH, so plain "node" fails.
+function mcpNodeCommand() {
+  return process.execPath;
+}
+
 // Configure for Claude Code (.mcp.json in project root)
 function setupClaude(serverPath, cwd) {
   const mcpConfigPath = path.join(cwd, '.mcp.json');
@@ -98,7 +104,7 @@ function setupClaude(serverPath, cwd) {
   }
 
   mcpConfig.mcpServers['neohive'] = {
-    command: 'node',
+    command: mcpNodeCommand(),
     args: [serverPath],
     timeout: 300,
   };
@@ -130,7 +136,7 @@ function setupGemini(serverPath, cwd) {
   }
 
   settings.mcpServers['neohive'] = {
-    command: 'node',
+    command: mcpNodeCommand(),
     args: [serverPath],
     timeout: 300,
     trust: true,
@@ -160,17 +166,17 @@ function setupCodex(serverPath, cwd) {
     fs.copyFileSync(configPath, configPath + '.backup');
   }
 
-  // Only add if not already present
-  if (!config.includes('[mcp_servers.neohive]')) {
-    const tomlBlock = `
-[mcp_servers.neohive]
-command = "node"
-args = [${JSON.stringify(serverPath)}]
-timeout = 300
-`;
-    config += tomlBlock;
-    fs.writeFileSync(configPath, config);
-  }
+  const abDataDir = path.join(path.resolve(cwd), '.neohive').replace(/\\/g, '/');
+  const envSection =
+    `[mcp_servers.neohive.env]\nNEOHIVE_DATA_DIR = ${JSON.stringify(abDataDir)}\n`;
+  const hadNeohive = config.includes('[mcp_servers.neohive]');
+  config = upsertNeohiveMcpInToml(config, {
+    command: mcpNodeCommand(),
+    serverPath,
+    timeout: 300,
+    envSection: hadNeohive ? undefined : envSection,
+  });
+  fs.writeFileSync(configPath, config);
 
   console.log('  [ok] Codex CLI: .codex/config.toml updated');
 }
@@ -200,7 +206,7 @@ function setupCursor(serverPath, cwd) {
   }
 
   mcpConfig.mcpServers['neohive'] = {
-    command: 'node',
+    command: mcpNodeCommand(),
     args: [serverPath],
     env: { NEOHIVE_DATA_DIR: abDataDir },
     timeout: 300,
@@ -420,6 +426,9 @@ function init() {
       ? '  Neohive is ready! Restart Cursor (or reload MCP tools) and restart any terminal CLIs you use.'
       : '  Neohive is ready! Restart your CLI to pick up the MCP tools.'
   );
+  console.log('  MCP server command is your current Node binary (works when the IDE has no Volta/nvm in PATH):');
+  console.log('    ' + mcpNodeCommand());
+  console.log('  Re-run `npx neohive init` after switching machines or Node versions.');
   console.log('');
 
   // Show template if --template was provided
@@ -442,7 +451,7 @@ function init() {
     console.log('  Tip: Use "npx neohive init --template pair" for ready-made prompts.');
     console.log('');
     console.log('  \x1b[1m  Monitor:\x1b[0m');
-    console.log('    npx neohive dashboard');
+    console.log('    npx neohive dashboard   → http://localhost:3000 (set NEOHIVE_PORT to change)');
     console.log('    npx neohive status');
     console.log('    npx neohive doctor');
     console.log('');
