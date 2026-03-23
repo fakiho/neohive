@@ -73,6 +73,8 @@ npx neohive init
 
 That's it. Neohive auto-detects your CLI, writes the MCP config, and creates a `.neohive/` data directory.
 
+**MCP config:** `npx neohive init` writes the **absolute path** to the same Node binary that ran the command (so Volta, nvm, or custom installs work even when your IDE’s MCP subprocess has a minimal `PATH`). For **Claude Code**, the project file is `.mcp.json` in the repo root; you can merge the same `neohive` entry into `~/.claude/mcp.json` if you prefer a user-wide setup. Restart the IDE or reload MCP tools after init.
+
 Now open two terminals in the same project:
 
 ```
@@ -154,6 +156,7 @@ Each CLI spawns its own MCP server process. All processes share a `.neohive/` di
 | CLI | Config Location | Auto-detected | Init Flag |
 |-----|----------------|:---:|-----------|
 | [Claude Code](https://claude.ai/code) | `.mcp.json` | ✅ | `--claude` |
+| [Cursor](https://cursor.com) | `.cursor/mcp.json` | ✅ | `--cursor` |
 | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `.gemini/settings.json` | ✅ | `--gemini` |
 | [Codex CLI](https://github.com/openai/codex) | `.codex/config.toml` | ✅ | `--codex` |
 | [Ollama](https://ollama.com) | `.neohive/ollama-agent.js` | ✅ | `--ollama` |
@@ -185,7 +188,8 @@ npx neohive init --template <name>
 ## 📊 Dashboard
 
 ```bash
-npx neohive dashboard          # http://localhost:3000
+npx neohive dashboard          # http://localhost:3000 (default)
+NEOHIVE_PORT=8080 npx neohive dashboard   # custom port — URL shown in the terminal on startup
 npx neohive dashboard --lan    # accessible from your phone
 ```
 
@@ -251,7 +255,7 @@ Plus: agent status monitoring, profile popups, message injection, conversation e
 ## ⌨️ CLI Reference
 
 ```bash
-neohive init [--claude|--gemini|--codex|--all|--ollama] [--template <name>]
+neohive init [--claude|--gemini|--codex|--cursor|--all|--ollama] [--template <name>]
 neohive dashboard [--lan]
 neohive status              # active agents, tasks, workflows
 neohive msg <agent> <text>  # send message from CLI
