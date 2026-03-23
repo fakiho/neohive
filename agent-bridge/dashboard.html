@@ -5346,6 +5346,33 @@ function renderThreads(messages) {
 
 // ==================== MESSAGES ====================
 
+/** Before replacing #messages innerHTML, remember which row was at the top of the viewport (stable vs raw scrollTop). */
+function captureMessageScrollAnchor(container) {
+  if (!container) return null;
+  var st = container.scrollTop;
+  var nodes = container.querySelectorAll('.nh-msg-card[data-msg-id]');
+  for (var i = 0; i < nodes.length; i++) {
+    var n = nodes[i];
+    var mid = n.getAttribute('data-msg-id');
+    if (!mid) continue;
+    if (n.offsetTop + n.offsetHeight > st + 0.5) {
+      return { id: mid, delta: n.offsetTop - st };
+    }
+  }
+  return null;
+}
+
+function restoreMessageScrollAnchor(container, anchor) {
+  if (!anchor || !container) return;
+  var nodes = container.querySelectorAll('.nh-msg-card[data-msg-id]');
+  for (var i = 0; i < nodes.length; i++) {
+    if (nodes[i].getAttribute('data-msg-id') === anchor.id) {
+      container.scrollTop = Math.max(0, nodes[i].offsetTop - anchor.delta);
+      return;
+    }
+  }
+}
+
 function renderMessages(messages) {
   var el = document.getElementById('messages');
 
@@ -5479,6 +5506,7 @@ function renderMessages(messages) {
     }
 
     var groupClass = isGrouped ? ' grouped' : '';
+    var msgIdAttr = m.id ? ' data-msg-id="' + escapeHtml(m.id) + '"' : '';
 
     var badges = '';
     if (m.channel && m.channel !== 'general') badges += '<span class="badge-channel" onclick="filterChannel(\'' + escapeHtml(m.channel) + '\')" title="Channel: #' + escapeHtml(m.channel) + '">#' + escapeHtml(m.channel) + '</span>';
@@ -5489,7 +5517,7 @@ function renderMessages(messages) {
     var msgAvatarHtml = getMsgAvatar(m.from, color);
 
     if (isSystem) {
-      html += '<div class="message nh-msg-card system-msg' + newClass + '">' +
+      html += '<div class="message nh-msg-card system-msg' + newClass + '"' + msgIdAttr + '>' +
         '<div class="msg-body">' +
           '<div class="msg-content">' + renderMarkdown(m.content) + '</div>' +
         '</div></div>';
@@ -5497,7 +5525,7 @@ function renderMessages(messages) {
       lastTo = '';
     } else if (m.type === 'handoff') {
       var handoffBadges = '<span class="nh-pill nh-pill--review nh-pill--sm">Handoff</span>' + badges;
-      html += '<div class="message nh-msg-card handoff-msg' + newClass + '">' +
+      html += '<div class="message nh-msg-card handoff-msg' + newClass + '"' + msgIdAttr + '>' +
         buildMsgActions(m.id) +
         msgAvatarHtml +
         '<div class="msg-body">' +
@@ -5512,7 +5540,7 @@ function renderMessages(messages) {
       var fileMeta = m.file || {};
       var fileName = fileMeta.name || 'file';
       var fileSize = fileMeta.size ? (fileMeta.size > 1024 ? Math.round(fileMeta.size / 1024) + ' KB' : fileMeta.size + ' B') : '';
-      html += '<div class="message nh-msg-card' + newClass + '">' +
+      html += '<div class="message nh-msg-card' + newClass + '"' + msgIdAttr + '>' +
         buildMsgActions(m.id) +
         msgAvatarHtml +
         '<div class="msg-body">' +
@@ -5527,7 +5555,7 @@ function renderMessages(messages) {
     } else {
       var userMsgClass = isUserMsg ? ' user-msg' : '';
       var replyBadge = isReplyToUser ? '<span class="nh-pill nh-pill--review nh-pill--sm">Reply to you</span>' : '';
-      html += '<div class="message nh-msg-card' + newClass + groupClass + userMsgClass + '">' +
+      html += '<div class="message nh-msg-card' + newClass + groupClass + userMsgClass + '"' + msgIdAttr + '>' +
         buildMsgActions(m.id) +
         msgAvatarHtml +
         '<div class="msg-body">' +
@@ -5582,11 +5610,11 @@ function renderMessages(messages) {
       var nToDisp = nm.to === '__user__' ? 'You' : (cachedAgents[nm.to] && cachedAgents[nm.to].display_name) || nm.to;
       var nContent = renderMarkdown(nm.content);
       if (nm.system === true) {
-        newMsgHtml += '<div class="message nh-msg-card system-msg message-new" data-id="' + escapeHtml(nm.id) + '"><div class="msg-body"><div class="msg-content">' + nContent + '</div></div></div>';
+        newMsgHtml += '<div class="message nh-msg-card system-msg message-new" data-msg-id="' + escapeHtml(nm.id) + '"><div class="msg-body"><div class="msg-content">' + nContent + '</div></div></div>';
         continue;
       }
       var nAvatar = getMsgAvatar(nm.from, nColor);
-      newMsgHtml += '<div class="message nh-msg-card message-new" data-id="' + escapeHtml(nm.id) + '">' +
+      newMsgHtml += '<div class="message nh-msg-card message-new" data-msg-id="' + escapeHtml(nm.id) + '">' +
         nAvatar +
         '<div class="msg-body">' +
         buildMsgCardHead(nFromDisp, nToDisp, nColor, nm.timestamp, '') +
@@ -5599,8 +5627,10 @@ function renderMessages(messages) {
       while (tempDiv.firstChild) el.appendChild(tempDiv.firstChild);
     }
   } else {
-    // Full re-render (filters active, messages changed, or first render)
+    // Full re-render — innerHTML clears the DOM; restore view via message anchor, not raw scrollTop
+    var scrollAnchor = !autoScroll ? captureMessageScrollAnchor(el) : null;
     el.innerHTML = loadMoreHtml + html;
+    if (scrollAnchor) restoreMessageScrollAnchor(el, scrollAnchor);
   }
 
   lastRenderedIds = currentIds;
