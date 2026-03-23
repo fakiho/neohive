@@ -8,74 +8,110 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/design-system.css">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  /*
+   * Token fallbacks: specificity 0 via :where() so a loaded design-system.css :root
+   * and [data-theme="light"] still win. If /design-system.css is blocked (Safari
+   * extensions / networking), these keep cards, padding, and colors defined.
+   */
+  :where(:root) {
+    --nh-space-1: 4px;
+    --nh-space-2: 8px;
+    --nh-space-3: 12px;
+    --nh-space-4: 16px;
+    --nh-space-5: 20px;
+    --nh-space-6: 24px;
+    --nh-space-8: 32px;
+    --nh-radius-sm: 6px;
+    --nh-radius-md: 8px;
+    --nh-radius-lg: 10px;
+    --nh-radius-xl: 12px;
+    --nh-bg: #0f0f10;
+    --nh-sidebar: #161618;
+    --nh-card: #1c1c1f;
+    --nh-card-hover: #232326;
+    --nh-border: #27272a;
+    --nh-text-primary: #f3f4f6;
+    --nh-text-secondary: #9ca3af;
+    --nh-text-muted: #6b7280;
+    --nh-accent: #f59e0b;
+    --nh-green: #10b981;
+    --nh-red: #ef4444;
+    --nh-orange: #f97316;
+    --nh-purple: #a78bfa;
+    --nh-yellow: #eab308;
+    --nh-divider: rgba(255, 255, 255, 0.08);
+    --nh-divider-strong: rgba(255, 255, 255, 0.14);
+    --nh-accent-5: rgba(245, 158, 11, 0.05);
+    --nh-accent-10: rgba(245, 158, 11, 0.1);
+    --nh-accent-20: rgba(245, 158, 11, 0.2);
+    --nh-green-10: rgba(16, 185, 129, 0.1);
+    --nh-red-10: rgba(239, 68, 68, 0.12);
+    --nh-orange-10: rgba(249, 115, 22, 0.12);
+    --nh-purple-10: rgba(167, 139, 250, 0.12);
+    --nh-purple-20: rgba(167, 139, 250, 0.22);
+    --nh-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
+    --nh-code-inline-fg: #f97316;
+    --nh-code-block-bg: #0f0f10;
+    --nh-on-dark: #ffffff;
+    --nh-on-accent: #3a2201;
+    --nh-blue: #3b82f6;
+    --nh-green-glow: 0 0 8px rgba(16, 185, 129, 0.5);
+    --nh-blue-glow: 0 0 8px rgba(59, 130, 246, 0.45);
+  }
+
   :root {
-    --bg: #09090b;
-    --surface: #111113;
-    --surface-2: #1a1a1f;
-    --surface-3: #232329;
-    --border: rgba(255, 255, 255, 0.07);
-    --border-light: rgba(255, 255, 255, 0.12);
-    --text: #ececf1;
-    --text-dim: #8e8ea0;
-    --text-muted: #56566a;
-    --accent: #f59e0b;
-    --accent-dim: rgba(245, 158, 11, 0.12);
-    --accent-glow: rgba(245, 158, 11, 0.2);
-    --green: #22c55e;
-    --green-dim: rgba(34, 197, 94, 0.12);
-    --red: #ef4444;
-    --red-dim: rgba(239, 68, 68, 0.12);
-    --orange: #f97316;
-    --orange-dim: rgba(249, 115, 22, 0.12);
-    --purple: #a78bfa;
-    --purple-dim: rgba(167, 139, 250, 0.12);
-    --yellow: #eab308;
+    /* Bridge legacy dashboard tokens → design-system.css (--nh-*) */
+    --bg: var(--nh-bg);
+    --surface: var(--nh-sidebar);
+    --surface-2: var(--nh-card);
+    --surface-3: var(--nh-card-hover);
+    --border: var(--nh-divider);
+    --border-light: var(--nh-divider-strong);
+    --text: var(--nh-text-primary);
+    --text-dim: var(--nh-text-secondary);
+    --text-muted: var(--nh-text-muted);
+    --accent: var(--nh-accent);
+    --accent-dim: var(--nh-accent-10);
+    --accent-glow: var(--nh-accent-20);
+    --green: var(--nh-green);
+    --green-dim: var(--nh-green-10);
+    --red: var(--nh-red);
+    --red-dim: var(--nh-red-10);
+    --orange: var(--nh-orange);
+    --orange-dim: var(--nh-orange-10);
+    --purple: var(--nh-purple);
+    --purple-dim: var(--nh-purple-10);
+    --yellow: var(--nh-yellow);
+    --bg-primary: var(--nh-card);
+    --bg-secondary: var(--nh-sidebar);
+    --bg-tertiary: var(--nh-card-hover);
+    --text-primary: var(--nh-text-primary);
+    --text-secondary: var(--nh-text-secondary);
     --text-xs: 12px;
     --text-sm: 13px;
     --text-base: 14px;
     --text-lg: 16px;
     --text-xl: 24px;
-    --sidebar-w: 220px;
-    --header-h: 48px;
-    --glow: 0 0 24px rgba(245, 158, 11, 0.06);
+    --sidebar-w: 256px;
+    --header-h: 56px;
+    --glow: 0 0 24px var(--nh-accent-10);
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
     --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
-    --gradient-accent: linear-gradient(135deg, #f59e0b, #f97316);
-    --gradient-surface: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 100%);
+    --gradient-accent: linear-gradient(135deg, var(--nh-accent), var(--nh-orange));
+    --gradient-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
   }
 
   [data-theme="light"] {
-    --bg: #fafaf9;
-    --surface: #ffffff;
-    --surface-2: #f5f5f4;
-    --surface-3: #e7e5e4;
-    --border: rgba(0, 0, 0, 0.08);
-    --border-light: rgba(0, 0, 0, 0.12);
-    --text: #0c0a09;
-    --text-dim: #57534e;
-    --text-muted: #a8a29e;
-    --accent: #d97706;
-    --accent-dim: rgba(217, 119, 6, 0.08);
-    --accent-glow: rgba(217, 119, 6, 0.12);
-    --green: #16a34a;
-    --green-dim: rgba(22, 163, 74, 0.08);
-    --red: #dc2626;
-    --red-dim: rgba(220, 38, 38, 0.08);
-    --orange: #ea580c;
-    --orange-dim: rgba(234, 88, 12, 0.08);
-    --purple: #7c3aed;
-    --purple-dim: rgba(124, 58, 237, 0.08);
-    --yellow: #ca8a04;
-    --glow: 0 0 20px rgba(217, 119, 6, 0.05);
+    --glow: 0 0 20px var(--nh-accent-10);
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
     --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.1);
-    --gradient-accent: linear-gradient(135deg, #d97706, #ea580c);
-    --gradient-surface: linear-gradient(180deg, rgba(0,0,0,0.01) 0%, transparent 100%);
+    --gradient-surface: linear-gradient(180deg, rgba(0, 0, 0, 0.02) 0%, transparent 100%);
   }
 
   .theme-toggle {
@@ -118,9 +154,9 @@
   /* ===== HEADER ===== */
   .header {
     background: var(--bg);
-    border-bottom: 1px solid var(--border);
-    padding: 0 16px;
-    height: 48px;
+    border-bottom: 1px solid var(--nh-border);
+    padding: 0 var(--nh-space-6);
+    height: var(--header-h);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -164,7 +200,16 @@
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 10px;
+  }
+
+  .header-conn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-right: 4px;
   }
 
   .connection {
@@ -177,11 +222,11 @@
   }
 
   .conn-dot {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: var(--green);
-    box-shadow: 0 0 6px var(--green);
+    box-shadow: var(--nh-green-glow);
     animation: pulse 2s infinite;
   }
 
@@ -394,10 +439,10 @@
     border-radius: 50%;
     flex-shrink: 0;
   }
-  .agent-status-dot.active, .agent-status-dot.working { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
-  .agent-status-dot.listening { background: #3b82f6; box-shadow: 0 0 6px #3b82f6; animation: pulse 2s infinite; }
-  .agent-status-dot.sleeping, .agent-status-dot.idle { background: #f59e0b; animation: pulse 2s infinite; }
-  .agent-status-dot.dead, .agent-status-dot.offline { background: #6b7280; }
+  .agent-status-dot.active, .agent-status-dot.working { background: var(--green); box-shadow: var(--nh-green-glow); }
+  .agent-status-dot.listening { background: var(--nh-blue); box-shadow: 0 0 6px var(--nh-blue); animation: pulse 2s infinite; }
+  .agent-status-dot.sleeping, .agent-status-dot.idle { background: var(--nh-accent); animation: pulse 2s infinite; }
+  .agent-status-dot.dead, .agent-status-dot.offline { background: var(--nh-text-muted); }
 
   .agent-name {
     font-weight: 600;
@@ -638,28 +683,73 @@
     flex-direction: column;
     min-width: 0;
     overflow: hidden;
+    background: var(--nh-bg);
   }
 
-  /* ===== MESSAGES ===== */
+  /* ===== MESSAGES (card feed — nh-msg-card from design-system.css) ===== */
   .messages-area {
     flex: 1;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding: 16px 20px;
+    padding: var(--nh-space-4) var(--nh-space-5);
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
-    gap: 2px;
+    /* margin between rows — do not rely on flex gap alone (Safari 14.0 reports @supports(gap) true for grid while flex had no gap) */
+  }
+
+  .messages-area > * + * {
+    margin-top: 12px;
+    margin-top: var(--nh-space-3, 12px);
+  }
+
+  /*
+   * Card chrome duplicated here (higher specificity than .nh-msg-card alone) with
+   * px fallbacks so messages stay “in cards” even if external CSS or vars fail.
+   * Horizontal spacing uses margin, not flex gap, for the same Safari reason.
+   */
+  .message.nh-msg-card {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-flex-direction: row;
+    flex-direction: row;
+    -webkit-align-items: flex-start;
+    align-items: flex-start;
+    box-sizing: border-box;
+    padding: 16px 20px;
+    padding: var(--nh-space-4) var(--nh-space-5);
+    background-color: #1c1c1f;
+    background-color: var(--nh-card, #1c1c1f);
+    border: 1px solid #27272a;
+    border-color: var(--nh-border, #27272a);
+    border-radius: 12px;
+    border-radius: var(--nh-radius-xl, 12px);
+  }
+
+  .message.nh-msg-card > .msg-avatar + .msg-body,
+  .message.nh-msg-card > .msg-avatar-img + .msg-body {
+    margin-left: 12px;
+    margin-left: var(--nh-space-3, 12px);
+  }
+
+  .message.nh-msg-card:hover {
+    border-color: rgba(156, 163, 175, 0.45);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--nh-shadow-card, 0 4px 24px rgba(0, 0, 0, 0.35));
   }
 
   .message {
-    display: flex;
-    gap: 10px;
-    padding: 10px 14px;
-    border-radius: 10px;
-    transition: all 0.2s ease;
     position: relative;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    overflow: visible;
   }
 
-  .message:hover { background: var(--surface); box-shadow: var(--glow); }
+  .message .msg-actions {
+    top: var(--nh-space-3);
+    right: var(--nh-space-3);
+  }
 
   /* ===== REACTIONS ===== */
   .msg-actions {
@@ -693,11 +783,11 @@
     position: absolute;
     top: -4px;
     right: 56px;
-    background: var(--surface-2);
+    background: var(--nh-card);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--border-light);
-    border-radius: 10px;
+    border: 1px solid var(--nh-border);
+    border-radius: var(--nh-radius-lg);
     padding: 4px;
     gap: 2px;
     z-index: 20;
@@ -717,7 +807,7 @@
     line-height: 1;
   }
 
-  .react-emoji:hover { background: var(--surface-3); }
+  .react-emoji:hover { background: var(--nh-card-hover); }
 
   .msg-reactions {
     display: flex;
@@ -730,9 +820,9 @@
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    background: var(--nh-card-hover);
+    border: 1px solid var(--nh-border);
+    border-radius: var(--nh-radius-lg);
     padding: 1px 6px;
     font-size: 12px;
     cursor: pointer;
@@ -768,7 +858,11 @@
 
   .pinned-toggle { font-size: 11px; color: var(--accent); }
 
-  .pinned-section .message { padding: 6px 20px; }
+  .pinned-section .message.nh-msg-card {
+    padding: var(--nh-space-2) var(--nh-space-4);
+    margin-bottom: var(--nh-space-2);
+  }
+  .pinned-section .message.nh-msg-card:last-child { margin-bottom: 0; }
   .pinned-section .msg-content { font-size: 12px; max-height: 40px; overflow: hidden; }
 
   .bookmark-btn {
@@ -791,21 +885,81 @@
   .bookmark-btn.active { opacity: 1 !important; color: var(--yellow); }
 
   .msg-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    border-radius: 9999px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
     font-size: 13px;
     flex-shrink: 0;
-    color: #fff;
+    color: var(--nh-on-dark);
     margin-top: 2px;
+    border: 1px solid var(--nh-border);
   }
 
-  .msg-body { flex: 1; min-width: 0; }
+  /* min-height:0 helps WebKit flex descendants size correctly; overflow visible avoids clipping receipts/shadows */
+  .msg-body { flex: 1; min-width: 0; min-height: 0; overflow: visible; }
 
+  .msg-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--nh-space-4);
+    margin-bottom: var(--nh-space-2);
+    width: 100%;
+  }
+
+  .msg-card-ident {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .msg-from {
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1.3;
+    color: var(--nh-text-primary);
+  }
+
+  .msg-to-line {
+    font-size: 12px;
+    color: var(--nh-text-secondary);
+    margin-top: var(--nh-space-1);
+    line-height: 1.35;
+  }
+
+  .msg-to-label {
+    color: var(--nh-text-muted);
+    margin-right: var(--nh-space-1);
+    font-weight: 500;
+  }
+
+  .msg-card-head-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--nh-space-1);
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  .msg-time {
+    font-size: 12px;
+    color: var(--nh-text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .msg-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: flex-end;
+  }
+
+  /* Legacy row layout (compact / grouped fallbacks) */
   .msg-header {
     display: flex;
     align-items: baseline;
@@ -814,10 +968,8 @@
     flex-wrap: wrap;
   }
 
-  .msg-from { font-weight: 600; font-size: 14px; }
-  .msg-arrow { color: var(--text-muted); font-size: 12px; }
-  .msg-to { font-size: 13px; color: var(--text-dim); }
-  .msg-time { font-size: 11px; color: var(--text-muted); }
+  .msg-arrow { color: var(--nh-text-muted); font-size: 12px; }
+  .msg-to { font-size: 13px; color: var(--nh-text-secondary); }
 
   .badge-channel {
     background: var(--purple-dim);
@@ -884,56 +1036,58 @@
     font-size: 14px;
     line-height: 1.6;
     word-break: break-word;
-    color: var(--text);
+    color: var(--nh-text-primary);
   }
 
-  .msg-content h1 { font-size: 22px; font-weight: 700; margin: 12px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
-  .msg-content h2 { font-size: 18px; font-weight: 700; margin: 10px 0 5px; padding-bottom: 3px; border-bottom: 1px solid var(--border); }
+  .msg-content h1 { font-size: 22px; font-weight: 700; margin: 12px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--nh-border); }
+  .msg-content h2 { font-size: 18px; font-weight: 700; margin: 10px 0 5px; padding-bottom: 3px; border-bottom: 1px solid var(--nh-border); }
   .msg-content h3 { font-size: 16px; font-weight: 600; margin: 8px 0 4px; }
   .msg-content h4 { font-size: 15px; font-weight: 600; margin: 6px 0 3px; }
 
   .msg-content p { margin: 4px 0; }
 
   .msg-content strong { font-weight: 700; }
-  .msg-content em { font-style: italic; color: var(--text-dim); }
+  .msg-content em { font-style: italic; color: var(--nh-text-secondary); }
 
   .msg-content code {
-    background: var(--surface-3);
-    padding: 1px 5px;
-    border-radius: 4px;
+    background: var(--nh-card-hover);
+    padding: 2px 6px;
+    border-radius: var(--nh-radius-sm);
     font-size: 12px;
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-    color: var(--orange);
+    color: var(--nh-code-inline-fg);
+    border: 1px solid var(--nh-border);
   }
 
   .msg-content pre {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
-    margin: 8px 0;
+    background: var(--nh-code-block-bg);
+    border: 1px solid var(--nh-border);
+    border-radius: var(--nh-radius-md);
+    padding: var(--nh-space-3) var(--nh-space-4);
+    margin: var(--nh-space-2) 0;
     overflow-x: auto;
     font-size: 12px;
     line-height: 1.6;
     font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
     position: relative;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
   }
 
   .msg-content pre code {
     background: none;
     padding: 0;
-    color: var(--text);
+    border: none;
+    color: var(--nh-text-primary);
     font-size: inherit;
   }
 
   .msg-content pre .lang-tag {
     position: absolute;
-    top: 4px;
-    right: 8px;
+    top: 6px;
+    right: var(--nh-space-2);
     font-size: 10px;
-    color: var(--text-muted);
+    color: var(--nh-text-muted);
     text-transform: uppercase;
+    font-weight: 600;
   }
 
   .msg-content ul, .msg-content ol {
@@ -946,15 +1100,15 @@
   }
 
   .msg-content blockquote {
-    border-left: 3px solid var(--border-light);
+    border-left: 3px solid var(--nh-border);
     padding: 2px 12px;
     margin: 4px 0;
-    color: var(--text-dim);
+    color: var(--nh-text-secondary);
   }
 
   .msg-content hr {
     border: none;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--nh-border);
     margin: 8px 0;
   }
 
@@ -966,18 +1120,18 @@
   }
 
   .msg-content th, .msg-content td {
-    border: 1px solid var(--border);
+    border: 1px solid var(--nh-border);
     padding: 5px 10px;
     text-align: left;
   }
 
   .msg-content th {
-    background: var(--surface-2);
+    background: var(--nh-card-hover);
     font-weight: 600;
   }
 
   .msg-content a {
-    color: var(--accent);
+    color: var(--nh-accent);
     text-decoration: none;
   }
 
@@ -988,6 +1142,7 @@
     display: flex;
     gap: 2px;
     margin-top: 4px;
+    margin-bottom: 2px;
     align-items: center;
   }
   .read-receipt-dot {
@@ -1207,14 +1362,28 @@
   .compact-toggle.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
 
   /* Compact mode styles */
-  .messages-area.compact-mode { gap: 0; padding: 8px 12px; }
-  .messages-area.compact-mode .message { padding: 3px 8px; gap: 6px; }
+  .messages-area.compact-mode { padding: 8px 12px; }
+  .messages-area.compact-mode > * + * {
+    margin-top: 4px;
+    margin-top: var(--nh-space-1, 4px);
+  }
+  .messages-area.compact-mode .message.nh-msg-card { padding: var(--nh-space-2) var(--nh-space-3); }
   .messages-area.compact-mode .msg-avatar,
   .messages-area.compact-mode .msg-avatar-img { display: none; }
-  .messages-area.compact-mode .msg-header { margin-bottom: 0; display: inline; }
-  .messages-area.compact-mode .msg-body { display: inline; }
-  .messages-area.compact-mode .msg-from { font-size: 12px; }
+  .messages-area.compact-mode .msg-card-head {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 0;
+    width: auto;
+  }
+  .messages-area.compact-mode .msg-card-ident { display: inline; flex: none; }
+  .messages-area.compact-mode .msg-from { font-size: 12px; display: inline; }
+  .messages-area.compact-mode .msg-to-line { display: inline; margin-top: 0; margin-left: 4px; }
+  .messages-area.compact-mode .msg-card-head-right { flex-direction: row; align-items: baseline; }
   .messages-area.compact-mode .msg-time { font-size: 9px; }
+  .messages-area.compact-mode .msg-body { display: block; }
   .messages-area.compact-mode .msg-content { display: inline; font-size: 12px; }
   .messages-area.compact-mode .msg-content p { display: inline; margin: 0; }
 
@@ -1310,18 +1479,26 @@
   .app-footer a:hover { color: var(--accent); }
 
   /* ===== MESSAGE GROUPING ===== */
-  .message.grouped {
-    padding-top: 2px;
-    padding-bottom: 2px;
+  .message.grouped.nh-msg-card {
+    padding-top: var(--nh-space-2);
+    padding-bottom: var(--nh-space-2);
   }
 
-  .message.grouped .msg-avatar {
+  .message.grouped .msg-avatar,
+  .message.grouped .msg-avatar-img {
     visibility: hidden;
-    width: 32px;
+    width: 36px;
     height: 0;
+    min-height: 0;
+    border: none;
+    margin: 0;
   }
 
-  .message.grouped .msg-header {
+  .message.grouped .msg-card-head {
+    display: none;
+  }
+
+  .message.grouped .handoff-banner {
     display: none;
   }
 
@@ -1397,10 +1574,10 @@
 
   /* ===== UNIFIED NAV SIDEBAR ===== */
   .nav-sidebar {
-    width: 220px;
-    min-width: 220px;
+    width: var(--sidebar-w);
+    min-width: var(--sidebar-w);
     background: var(--surface);
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--nh-border);
     display: flex;
     flex-direction: column;
     overflow-y: auto;
@@ -1416,13 +1593,30 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 16px 12px;
+    padding: var(--nh-space-4) var(--nh-space-4) var(--nh-space-3);
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--nh-border);
+  }
+  .nh-brand-mark {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--nh-radius-sm);
+    background: var(--nh-accent);
+    color: var(--nh-on-accent);
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
   }
   .nav-sidebar-logo {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text-dim);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nh-space-2);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     letter-spacing: 0.02em;
@@ -1447,11 +1641,11 @@
   .nav-section-main { display: flex; flex-direction: column; gap: 1px; }
   .nav-sidebar-divider { height: 1px; background: var(--border); margin: 10px 14px; flex-shrink: 0; }
   .nav-sidebar-label {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
-    color: var(--text-muted);
-    letter-spacing: 0.08em;
-    padding: 8px 14px 6px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+    padding: var(--nh-space-2) var(--nh-space-3) var(--nh-space-2);
     white-space: nowrap;
     overflow: hidden;
     text-transform: uppercase;
@@ -1467,23 +1661,28 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 12px;
+    padding: var(--nh-space-2) var(--nh-space-3);
     cursor: pointer;
-    border-radius: 8px;
-    transition: all 0.15s;
+    border-radius: var(--nh-radius-sm);
+    border: 1px solid transparent;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     white-space: nowrap;
     overflow: hidden;
     margin: 1px 6px;
     position: relative;
   }
-  .nav-item:hover { background: rgba(255,255,255,0.04); }
-  .nav-item.active { background: var(--accent-dim); }
+  .nav-item:hover { background: var(--nh-card); color: var(--text); }
+  .nav-item.active {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: transparent;
+    box-shadow: inset 3px 0 0 var(--nh-accent);
+  }
   .nav-item .nav-icon { line-height: 0; flex-shrink: 0; width: 20px; min-width: 20px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
   .nav-item .nav-icon svg { flex-shrink: 0; width: 16px; height: 16px; }
   .nav-item.active .nav-icon { color: var(--accent); }
   .nav-item:hover .nav-icon { color: var(--text); }
-  .nav-item .nav-text { font-size: 13px; font-weight: 500; color: var(--text-dim); }
-  .nav-item.active .nav-text { color: var(--accent); font-weight: 600; }
+  .nav-item .nav-text { font-size: 14px; font-weight: 500; color: var(--text-dim); }
+  .nav-item.active .nav-text { color: var(--accent); font-weight: 500; }
   .nav-item:hover .nav-text { color: var(--text); }
   .nav-sidebar.collapsed .nav-item { justify-content: center; padding: 10px 4px; margin: 0; }
   .nav-sidebar.collapsed .nav-item .nav-text { display: none; }
@@ -1493,9 +1692,9 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 12px;
+    padding: 6px var(--nh-space-4);
     background: var(--surface);
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--nh-border);
     overflow-x: auto;
     flex-shrink: 0;
     min-height: 36px;
@@ -1519,96 +1718,419 @@
   .agent-pill .status-dot {
     width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
   }
-  .agent-pill.online .status-dot, .agent-pill.working .status-dot { background: #22c55e; }
-  .agent-pill.listening .status-dot { background: #3b82f6; animation: pulse 2s infinite; }
-  .agent-pill.idle .status-dot { background: #f59e0b; }
-  .agent-pill.offline .status-dot { background: #6b7280; opacity: 0.6; }
+  .agent-pill.online .status-dot, .agent-pill.working .status-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .agent-pill.listening .status-dot { background: var(--nh-blue); animation: pulse 2s infinite; box-shadow: 0 0 6px var(--nh-blue); }
+  .agent-pill.idle .status-dot { background: var(--accent); }
+  .agent-pill.offline .status-dot { background: var(--nh-text-muted); opacity: 0.65; }
   .agent-pill .agent-name { font-weight: 600; color: var(--text); }
   .agent-pill .agent-activity { color: var(--text-muted); font-size: 12px; }
   .agent-pill.offline .agent-name { color: var(--text-muted); opacity: 0.6; }
 
   /* ===== OVERVIEW PAGE ===== */
-  .overview-area { display: none; flex-direction: column; gap: 24px; padding: 28px 32px; overflow-y: auto; }
+  .overview-area {
+    display: none;
+    flex-direction: column;
+    gap: var(--nh-space-6);
+    padding: var(--nh-space-6) var(--nh-space-8);
+    overflow-y: auto;
+    background: var(--nh-bg);
+  }
   .overview-area.visible { display: flex; }
 
   .overview-welcome {
     margin-bottom: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--nh-space-4);
+  }
+  .overview-welcome > div:first-child {
+    flex: 1;
+    min-width: min(100%, 220px);
   }
   .overview-welcome h2 {
-    font-size: 22px;
-    font-weight: 700;
+    font-size: 20px;
+    font-weight: 600;
     color: var(--text);
-    margin-bottom: 4px;
-    letter-spacing: -0.3px;
+    margin-bottom: var(--nh-space-1);
+    letter-spacing: -0.02em;
   }
   .overview-welcome p {
-    font-size: 13px;
-    color: var(--text-muted);
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+
+  .overview-coordinator {
+    display: flex;
+    align-items: center;
+    gap: var(--nh-space-2);
+    flex-shrink: 0;
+  }
+  .overview-coordinator-label {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .overview-coordinator-toggle {
+    display: flex;
+    border: 1px solid var(--nh-border);
+    border-radius: var(--nh-radius-sm);
+    overflow: hidden;
+    font-size: 12px;
+  }
+  .overview-coordinator-btn {
+    padding: 6px 14px;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    font-weight: 400;
+    background: var(--nh-card);
+    color: var(--text-dim);
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .overview-coordinator-btn + .overview-coordinator-btn {
+    border-left: 1px solid var(--nh-border);
+  }
+  .overview-coordinator-btn:hover {
+    color: var(--text);
+  }
+  /* Stitch: selected “Stay with me” = dark graphite; “Run autonomously” selected = solid amber */
+  .overview-coordinator-btn--mode-responsive {
+    font-weight: 600;
+    background: var(--nh-graphite);
+    color: var(--nh-text-primary);
+    border-color: var(--nh-border);
+  }
+  .overview-coordinator-btn--mode-autonomous {
+    font-weight: 600;
+    background: var(--nh-accent);
+    color: var(--nh-on-accent);
+    border-color: var(--nh-accent);
   }
 
   .overview-metrics {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--nh-space-4);
   }
   .metric-card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    padding: 20px 22px; display: flex; flex-direction: column; gap: 6px;
-    position: relative; overflow: hidden;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    background: var(--nh-card);
+    border: 1px solid var(--nh-border);
+    border-radius: var(--nh-radius-lg);
+    padding: var(--nh-space-5) var(--nh-space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--nh-space-2);
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
-  .metric-card:hover { border-color: var(--border-light); box-shadow: var(--shadow-sm); }
+  .metric-card:hover {
+    border-color: rgba(156, 163, 175, 0.45);
+    box-shadow: var(--nh-shadow-card);
+  }
   .metric-card .metric-icon {
-    width: 36px; height: 36px; border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    margin-bottom: 4px; flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--nh-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2px;
+    flex-shrink: 0;
   }
-  .metric-card .metric-label { font-size: 12px; color: var(--text-muted); font-weight: 500; letter-spacing: 0.02em; }
-  .metric-card .metric-value { font-size: 32px; font-weight: 800; color: var(--text); line-height: 1.1; letter-spacing: -0.5px; }
-  .metric-card .metric-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .metric-card .metric-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .metric-card .metric-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+  }
+  .metric-card .metric-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  .metric-card__progress {
+    height: 6px;
+    background: var(--nh-card-hover);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: var(--nh-space-2);
+  }
+  .metric-card__progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--nh-accent);
+    transition: width 0.35s ease;
+  }
+
+  .overview-stitch-rows {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nh-space-4);
+    width: 100%;
+  }
+  .overview-stitch-rows > .overview-panel {
+    width: 100%;
+    box-sizing: border-box;
+  }
 
   .overview-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--nh-space-4);
+  }
+  .overview-grid--pair {
+    align-items: stretch;
+  }
+  @media (max-width: 900px) {
+    .overview-grid--pair {
+      grid-template-columns: 1fr;
+    }
   }
   .overview-panel {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px;
-    transition: border-color 0.2s;
+    background: var(--nh-sidebar);
+    border: 1px solid var(--nh-border);
+    border-radius: var(--nh-radius-xl);
+    padding: var(--nh-space-5);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
   }
-  .overview-panel:hover { border-color: var(--border-light); }
+  [data-theme="light"] .overview-panel {
+    box-shadow: none;
+  }
+  .overview-panel:hover {
+    border-color: rgba(156, 163, 175, 0.45);
+    box-shadow: var(--nh-shadow-card);
+  }
   .overview-panel h3 {
-    font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 14px;
-    display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: var(--nh-space-3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
-  .overview-panel h3 a { font-size: 12px; font-weight: 500; color: var(--text-muted); cursor: pointer; text-decoration: none; transition: color 0.15s; }
-  .overview-panel h3 a:hover { color: var(--accent); }
+  .overview-panel h3 a {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--nh-accent);
+    cursor: pointer;
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+  .overview-panel h3 a:hover { opacity: 0.85; }
+  .overview-panel-empty {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin: 0;
+  }
+  .overview-task-stitch {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nh-space-2);
+    font-size: 14px;
+  }
+  .overview-task-stitch-done { color: var(--text); font-weight: 600; }
+  .overview-task-stitch-rem { color: var(--text-dim); }
   .overview-agent-row {
-    display: flex; align-items: center; gap: 10px; padding: 8px 0;
-    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: var(--nh-space-2);
+    flex-wrap: wrap;
+    padding: var(--nh-space-2) 0;
+    border-bottom: 1px solid var(--nh-border);
   }
   .overview-agent-row:last-child { border-bottom: none; }
-  .overview-agent-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .overview-agent-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+  .overview-agent-name { font-size: 13px; font-weight: 600; color: var(--text); }
   .overview-agent-status { font-size: 12px; color: var(--text-muted); }
-  .overview-msg-row {
-    display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; align-items: baseline;
+  .overview-activity-row {
+    display: flex;
+    gap: var(--nh-space-3);
+    padding: var(--nh-space-2) 0;
+    border-bottom: 1px solid var(--nh-border);
+    font-size: 13px;
+    align-items: flex-start;
   }
-  .overview-msg-row:last-child { border-bottom: none; }
-  .overview-msg-from { font-weight: 600; color: var(--text); min-width: 80px; font-size: 13px; }
-  .overview-msg-text { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; font-size: 13px; }
-  .overview-msg-time { color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
+  .overview-activity-row:last-child { border-bottom: none; }
+  .overview-activity-time {
+    color: var(--text-dim);
+    font-size: 12px;
+    flex-shrink: 0;
+    min-width: 100px;
+    font-variant-numeric: tabular-nums;
+  }
+  .overview-activity-body {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-dim);
+    line-height: 1.45;
+  }
+  .overview-msg-from--agent { font-weight: 600; color: var(--nh-accent); }
+  .overview-msg-from--coord { font-weight: 600; color: var(--nh-yellow); }
+  .overview-msg-from--system { font-weight: 600; color: var(--nh-text-muted); }
+  .overview-activity-preview {
+    color: var(--text-dim);
+    word-break: break-word;
+  }
   .overview-full-width { grid-column: 1 / -1; }
   .overview-task-summary { display: flex; gap: 10px; flex-wrap: wrap; }
   .overview-task-badge {
-    padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.25;
+    border: 1px solid transparent;
   }
-  .overview-task-badge.pending { background: rgba(234, 179, 8, 0.1); color: var(--yellow); }
-  .overview-task-badge.active { background: rgba(245, 158, 11, 0.1); color: var(--accent); }
-  .overview-task-badge.done { background: rgba(63, 185, 80, 0.1); color: var(--green); }
+  .overview-task-badge.pending {
+    background: var(--nh-yellow-10);
+    color: var(--yellow);
+    border-color: var(--nh-yellow-20);
+  }
+  .overview-task-badge.active {
+    background: var(--nh-accent-10);
+    color: var(--accent);
+    border-color: var(--nh-accent-20);
+  }
+  .overview-task-badge.done {
+    background: var(--nh-green-10);
+    color: var(--green);
+    border-color: var(--nh-green-20);
+  }
+  .overview-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px var(--nh-space-5);
+    text-align: center;
+    background: var(--nh-sidebar);
+    border: 1px solid var(--nh-border);
+    border-radius: var(--nh-radius-xl);
+    box-shadow: var(--nh-shadow-card);
+  }
+  .overview-empty-state-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--nh-radius-xl);
+    background: var(--nh-accent-10);
+    border: 1px solid var(--nh-accent-20);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--nh-space-5);
+  }
+  .overview-empty-state-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: var(--nh-space-2);
+  }
+  .overview-empty-state-desc {
+    font-size: 14px;
+    color: var(--text-dim);
+    max-width: 360px;
+    line-height: 1.6;
+    margin-bottom: var(--nh-space-1);
+  }
   .overview-launch-btn {
-    display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px;
-    background: var(--gradient-accent); color: #fff; border: none; border-radius: 10px;
-    font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; margin-top: 12px;
-    transition: all 0.2s; box-shadow: 0 2px 8px var(--accent-glow);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--nh-space-2);
+    padding: 10px var(--nh-space-5);
+    background: var(--nh-accent);
+    color: var(--nh-on-accent);
+    border: none;
+    border-radius: var(--nh-radius-sm);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    margin-top: var(--nh-space-3);
+    transition: background-color 0.15s ease, box-shadow 0.2s ease, transform 0.15s ease;
+    box-shadow: 0 2px 12px var(--nh-accent-20);
   }
-  .overview-launch-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px var(--accent-glow); }
+  .overview-launch-btn:hover {
+    background: var(--nh-accent-90);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px var(--nh-accent-20);
+  }
+  .overview-notif-row-stitch {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--nh-space-3);
+    padding: var(--nh-space-2) 0;
+    border-bottom: 1px solid var(--nh-border);
+    font-size: 13px;
+  }
+  .overview-notif-row-stitch:last-child { border-bottom: none; }
+  .overview-notif-icon-stitch {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--nh-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .overview-notif--success .overview-notif-icon-stitch {
+    background: var(--nh-green-10);
+    color: var(--nh-green);
+  }
+  .overview-notif--info .overview-notif-icon-stitch {
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--nh-blue);
+  }
+  .overview-notif--neutral .overview-notif-icon-stitch {
+    background: var(--nh-card-hover);
+    color: var(--text-dim);
+  }
+  .overview-notif--warn .overview-notif-icon-stitch {
+    background: var(--nh-orange-10);
+    color: var(--nh-orange);
+  }
+  .overview-notif-tag {
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 6px;
+  }
+  .overview-notif--success .overview-notif-tag { color: var(--nh-green); }
+  .overview-notif--info .overview-notif-tag { color: var(--nh-blue); }
+  .overview-notif--neutral .overview-notif-tag { color: var(--text-dim); }
+  .overview-notif--warn .overview-notif-tag { color: var(--nh-orange); }
+  .overview-notif-msg { color: var(--text-dim); line-height: 1.4; }
+  .overview-notif-time-stitch {
+    font-size: 11px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    margin-left: auto;
+    padding-left: var(--nh-space-2);
+  }
+  .overview-role-pill {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--nh-accent-10);
+    color: var(--nh-accent);
+    border: 1px solid var(--nh-accent-20);
+    margin-left: var(--nh-space-2);
+    vertical-align: middle;
+  }
 
   /* ===== TOAST NOTIFICATIONS ===== */
   .toast-container {
@@ -1631,7 +2153,11 @@
   @keyframes toast-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(12px); } }
 
   /* ===== USER MESSAGES ===== */
-  .message.user-msg { background: rgba(245, 158, 11, 0.04); border-left: 2px solid var(--accent); }
+  .message.user-msg.nh-msg-card {
+    background: var(--nh-accent-5);
+    border-left: 3px solid var(--nh-accent);
+    padding-left: calc(var(--nh-space-5) - 2px);
+  }
 
   /* Hide old view-tabs (replaced by nav sidebar) */
   .view-tabs { display: none !important; }
@@ -2182,10 +2708,11 @@
   }
 
   /* ===== HANDOFF MESSAGE ===== */
-  .message.handoff-msg {
-    background: var(--purple-dim);
-    border: 1px solid rgba(188, 140, 255, 0.2);
-    border-left: 3px solid var(--purple);
+  .message.handoff-msg.nh-msg-card {
+    background: var(--nh-purple-10);
+    border-color: var(--nh-purple-20);
+    border-left: 3px solid var(--nh-purple);
+    padding-left: calc(var(--nh-space-5) - 2px);
   }
 
   .handoff-banner {
@@ -2194,10 +2721,10 @@
     gap: 6px;
     font-size: 11px;
     font-weight: 600;
-    color: var(--purple);
+    color: var(--nh-purple);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin-bottom: 4px;
+    margin-bottom: var(--nh-space-2);
   }
 
   /* ===== FILE SHARE MESSAGE ===== */
@@ -2205,37 +2732,38 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    background: var(--nh-card-hover);
+    border: 1px solid var(--nh-border);
+    border-radius: var(--nh-radius-sm);
     padding: 4px 10px;
     font-size: 11px;
-    color: var(--text-dim);
-    margin-bottom: 6px;
+    color: var(--nh-text-secondary);
+    margin-bottom: var(--nh-space-2);
   }
 
   .file-icon { font-size: 14px; }
 
   .file-size {
-    color: var(--text-muted);
+    color: var(--nh-text-muted);
     font-size: 10px;
   }
 
   /* ===== SYSTEM MESSAGE ===== */
-  .message.system-msg {
+  .message.system-msg.nh-msg-card {
     justify-content: center;
-    padding: 6px 14px;
+    padding: var(--nh-space-3) var(--nh-space-5);
   }
 
   .message.system-msg .msg-body {
-    max-width: 600px;
+    max-width: 36rem;
     text-align: center;
+    width: 100%;
   }
 
   .message.system-msg .msg-content {
-    color: var(--text-dim);
+    color: var(--nh-text-secondary);
     font-style: italic;
-    font-size: 12px;
+    font-size: 13px;
   }
 
   /* ===== RESPONSIVE ===== */
@@ -2305,9 +2833,14 @@
     .mobile-project-select:focus { border-color: var(--orange); }
 
     /* Messages: better mobile spacing */
-    .messages-area { padding: 8px; gap: 1px; }
-    .message { padding: 8px 10px; gap: 8px; }
+    .messages-area { padding: 8px; }
+    .messages-area > * + * {
+      margin-top: 8px;
+      margin-top: var(--nh-space-2, 8px);
+    }
+    .message.nh-msg-card { padding: var(--nh-space-3); }
     .msg-avatar { width: 28px; height: 28px; font-size: 11px; }
+    .msg-avatar-img { width: 28px; height: 28px; }
     .msg-from { font-size: 12px; }
     .msg-content { font-size: 13px; line-height: 1.5; }
     .msg-time { font-size: 9px; }
@@ -2384,8 +2917,12 @@
 
     /* Messages: tighter for small screens */
     .messages-area { padding: 6px; }
-    .message { padding: 6px 8px; gap: 6px; border-radius: 6px; }
-    .msg-avatar { width: 24px; height: 24px; font-size: 10px; }
+    .messages-area > * + * {
+      margin-top: 6px;
+      margin-top: var(--nh-space-2, 6px);
+    }
+    .message.nh-msg-card { padding: var(--nh-space-2) var(--nh-space-3); }
+    .msg-avatar { width: 28px; height: 28px; font-size: 10px; }
     .msg-header { gap: 4px; }
     .msg-from { font-size: 11px; }
     .msg-to { font-size: 11px; }
@@ -2434,12 +2971,13 @@
   }
 
   .msg-avatar-img {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
     margin-top: 2px;
+    border: 1px solid var(--nh-border);
   }
 
   .role-badge {
@@ -3242,7 +3780,7 @@
   }
   .launch-status-item .ls-dot.pending { background: var(--text-muted); }
   .launch-status-item .ls-dot.launching { background: var(--yellow); animation: pulse-dot 1s infinite; }
-  .launch-status-item .ls-dot.launched { background: var(--orange, #f59e0b); }
+  .launch-status-item .ls-dot.launched { background: var(--nh-accent); }
   .launch-status-item .ls-dot.registered { background: var(--green); }
   .launch-status-item .ls-dot.failed { background: var(--red); }
   @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
@@ -3523,7 +4061,7 @@
 <div class="header">
   <div class="header-left">
     <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
-    <svg width="18" height="18" viewBox="0 0 32 32" style="flex-shrink:0"><defs><linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#f97316"/></linearGradient></defs><path d="M16 2L27.6 9v14L16 30 4.4 23V9z" fill="url(#hg)" opacity="0.9"/><path d="M16 7L23 11v8l-7 4-7-4v-8z" fill="#09090b" opacity="0.6"/><circle cx="16" cy="15.5" r="3" fill="#fff" opacity="0.9"/></svg>
+    <svg width="18" height="18" viewBox="0 0 32 32" style="flex-shrink:0"><defs><linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="var(--nh-accent)"/><stop offset="100%" stop-color="var(--nh-orange)"/></linearGradient></defs><path d="M16 2L27.6 9v14L16 30 4.4 23V9z" fill="url(#hg)" opacity="0.9"/><path d="M16 7L23 11v8l-7 4-7-4v-8z" fill="var(--nh-bg)" opacity="0.6"/><circle cx="16" cy="15.5" r="3" fill="var(--nh-on-dark)" opacity="0.9"/></svg>
     <div class="logo">Neohive</div>
     <!-- Hidden stat elements for JS compatibility -->
     <span id="stat-messages" style="display:none">0</span>
@@ -3534,7 +4072,10 @@
     <div id="managed-badge" style="display:none"><span id="managed-phase"></span><span id="managed-floor-info"></span></div>
   </div>
   <div class="header-actions">
-    <span class="conn-dot" title="Connected"></span>
+    <div class="header-conn" title="Live updates connected">
+      <span class="conn-dot" aria-hidden="true"></span>
+      <span>Connected</span>
+    </div>
     <!-- Settings dropdown -->
     <div style="position:relative;display:inline-block">
       <button class="header-settings-btn" onclick="toggleSettingsMenu()" title="Settings">
@@ -3590,7 +4131,7 @@
   <!-- UNIFIED NAV SIDEBAR -->
   <nav class="nav-sidebar expanded" id="nav-sidebar">
     <div class="nav-sidebar-header">
-      <span class="nav-sidebar-logo"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="var(--accent)" stroke-width="1.5" style="vertical-align:-2px;margin-right:6px"><path d="M8 1.5L14 5v6l-6 3.5L2 11V5z"/></svg>Neohive</span>
+      <span class="nav-sidebar-logo"><span class="nh-brand-mark" aria-hidden="true">N</span>Neohive</span>
       <button class="nav-sidebar-toggle" onclick="toggleNavSidebar()" title="Collapse sidebar">&#x25C0;</button>
     </div>
     <!-- Navigation -->
@@ -4181,6 +4722,28 @@ function formatTime(ts) {
   return new Date(ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
 }
 
+function formatShortTime(ts) {
+  return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+/** Message card header: name, To line, clock time, badges (Stitch-style). */
+function buildMsgCardHead(fromDisplay, toDisplay, color, ts, badgesHtml, opt) {
+  opt = opt || {};
+  var showTo = opt.showTo !== false;
+  var timeStr = formatShortTime(ts);
+  var badges = badgesHtml || '';
+  return '<div class="msg-card-head">' +
+    '<div class="msg-card-ident">' +
+      '<span class="msg-from" style="color:' + color + '">' + escapeHtml(fromDisplay) + '</span>' +
+      (showTo ? '<div class="msg-to-line"><span class="msg-to-label">To</span> ' + escapeHtml(toDisplay) + '</div>' : '') +
+    '</div>' +
+    '<div class="msg-card-head-right">' +
+      '<span class="msg-time" title="' + formatTime(ts) + '">' + timeStr + '</span>' +
+      (badges ? '<div class="msg-badges">' + badges + '</div>' : '') +
+    '</div>' +
+  '</div>';
+}
+
 function timeAgo(ts) {
   var secs = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
   if (secs < 5) return 'just now';
@@ -4372,12 +4935,13 @@ function renderTable(rows) {
 
 // ==================== AGENT MONITORING ====================
 
-var PROVIDER_COLORS = { claude: '#d97706', anthropic: '#d97706', openai: '#10b981', gemini: '#3b82f6', google: '#3b82f6', cursor: '#6366f1' };
+/* Provider label colors: use design-system tokens (theme-aware). */
+var PROVIDER_COLOR_VARS = { claude: 'var(--nh-accent)', anthropic: 'var(--nh-accent)', openai: 'var(--nh-green)', gemini: 'var(--nh-blue)', google: 'var(--nh-blue)', cursor: 'var(--nh-purple)' };
 
 function getProviderBadge(provider) {
   if (!provider) return '';
   var key = provider.toLowerCase();
-  var c = PROVIDER_COLORS[key] || 'var(--text-muted)';
+  var c = PROVIDER_COLOR_VARS[key] || 'var(--text-muted)';
   return '<span style="color:' + c + ';font-size:9px;font-weight:600;margin-right:4px">' + escapeHtml(provider) + '</span>';
 }
 
@@ -4439,7 +5003,7 @@ function renderAgents(agents) {
   // Group by role
   var ROLE_ORDER = ['lead', 'backend', 'frontend', 'quality', 'monitor', 'advisor', ''];
   var ROLE_LABELS = { lead: 'Lead', backend: 'Backend', frontend: 'Frontend', quality: 'Quality', monitor: 'Monitor', advisor: 'Advisor', '': 'Unassigned' };
-  var ROLE_COLORS = { lead: 'var(--accent)', backend: '#f59e0b', frontend: '#8b5cf6', quality: 'var(--green)', monitor: 'var(--red,#ef4444)', advisor: 'var(--purple,#a855f7)', '': 'var(--text-muted)' };
+  var ROLE_COLORS = { lead: 'var(--nh-accent)', backend: 'var(--nh-amber)', frontend: 'var(--nh-purple)', quality: 'var(--nh-green)', monitor: 'var(--nh-red)', advisor: 'var(--nh-purple)', '': 'var(--nh-text-muted)' };
   var roleGroups = {};
   for (var g = 0; g < filtered.length; g++) {
     var gname = filtered[g];
@@ -4920,28 +5484,24 @@ function renderMessages(messages) {
     if (m.channel && m.channel !== 'general') badges += '<span class="badge-channel" onclick="filterChannel(\'' + escapeHtml(m.channel) + '\')" title="Channel: #' + escapeHtml(m.channel) + '">#' + escapeHtml(m.channel) + '</span>';
     if (m.acked) badges += '<span class="badge badge-ack">ACK</span>';
     if (m.thread_id) badges += '<span class="badge badge-thread">Thread</span>';
-    if (m.edited) badges += '<span class="badge" style="background:var(--orange-dim);color:var(--orange)" title="Edited ' + (m.edited_at ? new Date(m.edited_at).toLocaleString() : '') + '">edited</span>';
+    if (m.edited) badges += '<span class="nh-pill nh-pill--review nh-pill--sm" title="Edited ' + (m.edited_at ? new Date(m.edited_at).toLocaleString() : '') + '">edited</span>';
 
     var msgAvatarHtml = getMsgAvatar(m.from, color);
 
     if (isSystem) {
-      html += '<div class="message system-msg' + newClass + '">' +
+      html += '<div class="message nh-msg-card system-msg' + newClass + '">' +
         '<div class="msg-body">' +
           '<div class="msg-content">' + renderMarkdown(m.content) + '</div>' +
         '</div></div>';
       lastFrom = '';
       lastTo = '';
     } else if (m.type === 'handoff') {
-      html += '<div class="message handoff-msg' + newClass + '">' +
+      var handoffBadges = '<span class="nh-pill nh-pill--review nh-pill--sm">Handoff</span>' + badges;
+      html += '<div class="message nh-msg-card handoff-msg' + newClass + '">' +
         buildMsgActions(m.id) +
         msgAvatarHtml +
         '<div class="msg-body">' +
-          '<div class="handoff-banner">Handoff: ' + escapeHtml(fromDisplay) + ' &rarr; ' + escapeHtml(toDisplay) + '</div>' +
-          '<div class="msg-header">' +
-            '<span class="msg-from" style="color:' + color + '" title="@' + escapeHtml(m.from) + '">' + escapeHtml(fromDisplay) + '</span>' +
-            '<span class="msg-time" title="' + formatTime(m.timestamp) + '">' + relativeTime(m.timestamp) + '</span>' +
-            '<div class="msg-badges">' + badges + '</div>' +
-          '</div>' +
+          buildMsgCardHead(fromDisplay, toDisplay, color, m.timestamp, handoffBadges) +
           '<div class="msg-content">' + renderMarkdown(m.content) + '</div>' +
           buildReactionsHtml(m.id) +
           buildReadReceipts(m.id) +
@@ -4952,17 +5512,11 @@ function renderMessages(messages) {
       var fileMeta = m.file || {};
       var fileName = fileMeta.name || 'file';
       var fileSize = fileMeta.size ? (fileMeta.size > 1024 ? Math.round(fileMeta.size / 1024) + ' KB' : fileMeta.size + ' B') : '';
-      html += '<div class="message' + newClass + '">' +
+      html += '<div class="message nh-msg-card' + newClass + '">' +
         buildMsgActions(m.id) +
         msgAvatarHtml +
         '<div class="msg-body">' +
-          '<div class="msg-header">' +
-            '<span class="msg-from" style="color:' + color + '" title="@' + escapeHtml(m.from) + '">' + escapeHtml(fromDisplay) + '</span>' +
-            '<span class="msg-arrow">&rarr;</span>' +
-            '<span class="msg-to">' + escapeHtml(toDisplay) + '</span>' +
-            '<span class="msg-time" title="' + formatTime(m.timestamp) + '">' + relativeTime(m.timestamp) + '</span>' +
-            '<div class="msg-badges">' + badges + '</div>' +
-          '</div>' +
+          buildMsgCardHead(fromDisplay, toDisplay, color, m.timestamp, badges) +
           '<div class="file-meta"><span class="file-icon" style="opacity:0.5">[ ]</span>' + escapeHtml(fileName) + '<span class="file-size">' + fileSize + '</span></div>' +
           '<div class="msg-content">' + renderMarkdown(m.content) + '</div>' +
           buildReactionsHtml(m.id) +
@@ -4972,18 +5526,12 @@ function renderMessages(messages) {
       lastTo = m.to;
     } else {
       var userMsgClass = isUserMsg ? ' user-msg' : '';
-      var replyBadge = isReplyToUser ? '<span class="badge" style="background:var(--accent-dim);color:var(--accent)">Reply to you</span>' : '';
-      html += '<div class="message' + newClass + groupClass + userMsgClass + '">' +
+      var replyBadge = isReplyToUser ? '<span class="nh-pill nh-pill--review nh-pill--sm">Reply to you</span>' : '';
+      html += '<div class="message nh-msg-card' + newClass + groupClass + userMsgClass + '">' +
         buildMsgActions(m.id) +
         msgAvatarHtml +
         '<div class="msg-body">' +
-          '<div class="msg-header">' +
-            '<span class="msg-from" style="color:' + color + '" title="@' + escapeHtml(m.from) + '">' + escapeHtml(fromDisplay) + '</span>' +
-            '<span class="msg-arrow">&rarr;</span>' +
-            '<span class="msg-to">' + escapeHtml(toDisplay) + '</span>' +
-            '<span class="msg-time" title="' + formatTime(m.timestamp) + '">' + relativeTime(m.timestamp) + '</span>' +
-            '<div class="msg-badges">' + replyBadge + badges + '</div>' +
-          '</div>' +
+          buildMsgCardHead(fromDisplay, toDisplay, color, m.timestamp, replyBadge + badges) +
           '<div class="msg-content">' + renderMarkdown(m.content) + '</div>' +
           buildReactionsHtml(m.id) +
           buildReadReceipts(m.id) +
@@ -5029,20 +5577,19 @@ function renderMessages(messages) {
     var prevTo = lastRenderedIds.length > 0 ? filtered[appendStart - 1].to : '';
     for (var ni = appendStart; ni < filtered.length; ni++) {
       var nm = filtered[ni];
-      var nColor = getColor(nm.from);
-      var nIsSystem = nm.system === true;
-      var nMsgDate = new Date(nm.timestamp).toLocaleDateString();
-      // Simplified: render each new message with full formatting
-      var nDisplayName = nm.from;
+      var nColor = nm.from === '__user__' ? 'var(--accent)' : getColor(nm.from);
+      var nFromDisp = nm.from === '__user__' ? 'You' : (cachedAgents[nm.from] && cachedAgents[nm.from].display_name) || nm.from;
+      var nToDisp = nm.to === '__user__' ? 'You' : (cachedAgents[nm.to] && cachedAgents[nm.to].display_name) || nm.to;
       var nContent = renderMarkdown(nm.content);
-      var nTime = formatTime(nm.timestamp);
-      var nToLabel = nm.to === '__group__' ? '' : ' &rarr; ' + escapeHtml(nm.to);
-      newMsgHtml += '<div class="message message-new" data-id="' + nm.id + '">' +
-        '<div class="msg-body"><div class="msg-header">' +
-          '<span class="msg-from" style="color:' + nColor + '">' + escapeHtml(nDisplayName) + '</span>' +
-          '<span class="msg-to">' + nToLabel + '</span>' +
-          '<span class="msg-time">' + nTime + '</span>' +
-        '</div>' +
+      if (nm.system === true) {
+        newMsgHtml += '<div class="message nh-msg-card system-msg message-new" data-id="' + escapeHtml(nm.id) + '"><div class="msg-body"><div class="msg-content">' + nContent + '</div></div></div>';
+        continue;
+      }
+      var nAvatar = getMsgAvatar(nm.from, nColor);
+      newMsgHtml += '<div class="message nh-msg-card message-new" data-id="' + escapeHtml(nm.id) + '">' +
+        nAvatar +
+        '<div class="msg-body">' +
+        buildMsgCardHead(nFromDisp, nToDisp, nColor, nm.timestamp, '') +
         '<div class="msg-content">' + nContent + '</div>' +
         '</div></div>';
     }
@@ -5418,10 +5965,12 @@ function renderPinnedMessages() {
     var m = cachedHistory[i];
     if (!pins[m.id]) continue;
     var color = getColor(m.from);
-    html += '<div class="message">' +
-      '<div class="msg-avatar" style="background:' + color + ';width:20px;height:20px;font-size:9px">' + initial(m.from) + '</div>' +
+    var pFrom = (cachedAgents[m.from] && cachedAgents[m.from].display_name) || m.from;
+    var pTo = (cachedAgents[m.to] && cachedAgents[m.to].display_name) || m.to;
+    html += '<div class="message nh-msg-card">' +
+      '<div class="msg-avatar" style="background:' + color + ';width:24px;height:24px;font-size:9px">' + initial(m.from) + '</div>' +
       '<div class="msg-body">' +
-        '<div class="msg-header"><span class="msg-from" style="color:' + color + ';font-size:11px">' + escapeHtml(m.from) + '</span></div>' +
+        buildMsgCardHead(pFrom, pTo, color, m.timestamp, '') +
         '<div class="msg-content">' + escapeHtml(m.content.substring(0, 120)) + (m.content.length > 120 ? '...' : '') + '</div>' +
       '</div></div>';
   }
@@ -5897,7 +6446,11 @@ function exportJSON() {
 
 // ==================== VIEW SWITCHING ====================
 
-var activeView = localStorage.getItem('neohive_activeView') || 'overview';
+var activeView = 'overview';
+try {
+  var _savedView = localStorage.getItem('neohive_activeView');
+  if (_savedView) activeView = _savedView;
+} catch (e) { /* Safari / private mode: storage can throw; keep default */ }
 
 function switchView(view) {
   activeView = view;
@@ -6271,7 +6824,7 @@ function onKanbanDrop(e) {
 
 // ==================== STATS VIEW ====================
 
-var AGENT_COLORS = ['#f59e0b', '#f97316', '#7ee787', '#d29922', '#ffa657', '#14b8a6', '#f778ba', '#56d364'];
+var AGENT_COLORS = ['var(--nh-accent)', 'var(--nh-orange)', 'var(--nh-green)', 'var(--nh-blue)', 'var(--nh-purple)', 'var(--nh-red)', 'var(--nh-amber)', 'var(--nh-yellow)'];
 
 function fetchStats() {
   var pq = activeProject ? '?project=' + encodeURIComponent(activeProject) : '';
@@ -7647,7 +8200,7 @@ function renderMonitorPanel(data) {
     for (var i = 0; i < agentNames.length; i++) {
       var name = agentNames[i];
       var a = agents[name];
-      var color = a.status === 'working' ? 'var(--green)' : a.status === 'listening' ? '#3b82f6' : a.status === 'idle' ? 'var(--orange)' : 'var(--red,#ef4444)';
+      var color = a.status === 'working' ? 'var(--nh-green)' : a.status === 'listening' ? 'var(--nh-blue)' : a.status === 'idle' ? 'var(--nh-accent)' : 'var(--nh-red)';
       var role = a.role ? ' (' + a.role + ')' : '';
       html += '<div style="padding:4px 8px;background:var(--surface-2);border-left:3px solid ' + color + ';border-radius:4px;font-size:11px">' +
         '<span style="font-weight:600">' + escapeHtml(name) + '</span>' +
@@ -9531,7 +10084,7 @@ function renderOverview() {
   if (!area) return;
   var savedScroll = area.scrollTop;
   var pq = projectParam();
-  var histQ = pq + (pq ? '&' : '?') + 'limit=5' + (activeBranch && activeBranch !== 'main' ? '&branch=' + encodeURIComponent(activeBranch) : '');
+  var histQ = pq + (pq ? '&' : '?') + 'limit=12' + (activeBranch && activeBranch !== 'main' ? '&branch=' + encodeURIComponent(activeBranch) : '');
   Promise.all([
     lttFetch('/api/status' + pq).then(function(r) { return r.json(); }),
     lttFetch('/api/agents' + pq).then(function(r) { return r.json(); }),
@@ -9550,7 +10103,7 @@ function renderOverview() {
     var agentEntries = Object.entries(agents).filter(function(e) { return e[0] !== '__system__'; });
 
     // Data hash to skip unnecessary rebuilds (excludes timestamps)
-    var overviewHash = (status.aliveCount || 0) + ':' + (status.messageCount || 0) + ':' + agentEntries.length + ':' + tasks.map(function(t) { return t.status; }).join(',') + ':' + workflows.map(function(w) { return w.status; }).join(',') + ':' + history.length + ':' + notifications.length + ':b:' + (activeBranch || 'main');
+    var overviewHash = (status.aliveCount || 0) + ':' + (status.messageCount || 0) + ':' + agentEntries.length + ':' + tasks.map(function(t) { return t.status; }).join(',') + ':' + workflows.map(function(w) { return w.status; }).join(',') + ':' + history.length + ':' + notifications.length + ':b:' + (activeBranch || 'main') + ':c:' + (status.coordinator_mode || 'responsive');
     if (overviewHash === renderOverview._lastHash) { return; }
     renderOverview._lastHash = overviewHash;
 
@@ -9568,137 +10121,152 @@ function renderOverview() {
 
     // Welcome header with coordinator mode toggle
     var coordMode = status.coordinator_mode || 'responsive';
-    html += '<div class="overview-welcome" style="display:flex;justify-content:space-between;align-items:flex-start">';
+    var regTotal = agentEntries.length || (status.agentCount || 0);
+    var aliveN = status.aliveCount || 0;
+    html += '<div class="overview-welcome">';
     html += '<div><h2>Dashboard</h2>';
-    html += '<p>' + (status.conversation_mode === 'managed' ? 'Managed mode' : 'Direct mode') + ' &middot; ' + (status.agentCount || 0) + ' agents registered</p></div>';
-    html += '<div style="display:flex;align-items:center;gap:8px;padding-top:4px">';
-    html += '<span style="font-size:12px;color:var(--text-muted)">Coordinator</span>';
-    html += '<div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:12px">';
-    html += '<button onclick="setCoordinatorMode(\'responsive\')" style="padding:5px 12px;border:none;cursor:pointer;font-size:12px;font-weight:' + (coordMode === 'responsive' ? '600' : '400') + ';background:' + (coordMode === 'responsive' ? 'var(--accent-dim)' : 'var(--surface-2)') + ';color:' + (coordMode === 'responsive' ? 'var(--accent)' : 'var(--text-muted)') + ';transition:all 0.15s">Stay with me</button>';
-    html += '<button onclick="setCoordinatorMode(\'autonomous\')" style="padding:5px 12px;border:none;border-left:1px solid var(--border);cursor:pointer;font-size:12px;font-weight:' + (coordMode === 'autonomous' ? '600' : '400') + ';background:' + (coordMode === 'autonomous' ? 'var(--green-dim)' : 'var(--surface-2)') + ';color:' + (coordMode === 'autonomous' ? 'var(--green)' : 'var(--text-muted)') + ';transition:all 0.15s">Run autonomously</button>';
+    html += '<p>' + (status.conversation_mode === 'managed' ? 'Managed mode' : 'Direct mode') + ' — ' + regTotal + ' agent' + (regTotal === 1 ? '' : 's') + ' registered</p></div>';
+    html += '<div class="overview-coordinator">';
+    html += '<span class="overview-coordinator-label">Coordinator</span>';
+    html += '<div class="overview-coordinator-toggle" role="group" aria-label="Coordinator mode">';
+    html += '<button type="button" class="overview-coordinator-btn' + (coordMode === 'responsive' ? ' overview-coordinator-btn--mode-responsive' : '') + '" onclick="setCoordinatorMode(\'responsive\')">Stay with me</button>';
+    html += '<button type="button" class="overview-coordinator-btn' + (coordMode === 'autonomous' ? ' overview-coordinator-btn--mode-autonomous' : '') + '" onclick="setCoordinatorMode(\'autonomous\')">Run autonomously</button>';
     html += '</div></div>';
     html += '</div>';
 
-    // Metric cards with icons
     html += '<div class="overview-metrics">';
     html += '<div class="metric-card">';
     html += '<div class="metric-icon" style="background:var(--green-dim)"><svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="var(--green)" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg></div>';
-    html += '<div class="metric-label">Active Agents</div>';
-    html += '<div class="metric-value">' + (status.aliveCount || 0) + '</div>';
-    html += '<div class="metric-sub">' + (status.sleepingCount || 0) + ' sleeping</div>';
+    html += '<div class="metric-label">Active agents</div>';
+    html += '<div class="metric-value">' + aliveN + '/' + regTotal + '</div>';
+    html += '<div class="metric-sub">' + regTotal + ' registered</div>';
     html += '</div>';
 
     html += '<div class="metric-card">';
     html += '<div class="metric-icon" style="background:var(--accent-dim)"><svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M2 3h12v8H6l-3 2.5V11H2z" stroke-linejoin="round"/></svg></div>';
     html += '<div class="metric-label">Messages</div>';
     html += '<div class="metric-value">' + (status.messageCount || 0) + '</div>';
-    html += '<div class="metric-sub">' + (status.threadCount || 0) + ' threads</div>';
+    html += '<div class="metric-sub">Total exchanged</div>';
     html += '</div>';
 
     html += '<div class="metric-card">';
     html += '<div class="metric-icon" style="background:' + (taskPct === 100 ? 'var(--green-dim)' : 'var(--purple-dim)') + '"><svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="' + (taskPct === 100 ? 'var(--green)' : 'var(--purple)') + '" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8l2 2 4-4"/></svg></div>';
-    html += '<div class="metric-label">Task Progress</div>';
+    html += '<div class="metric-label">Task progress</div>';
     html += '<div class="metric-value">' + taskPct + '<span style="font-size:18px;font-weight:600;color:var(--text-muted);margin-left:2px">%</span></div>';
+    html += '<div class="metric-card__progress"><div class="metric-card__progress-fill" style="width:' + taskPct + '%"></div></div>';
     html += '<div class="metric-sub">' + done + ' done, ' + inProgress + ' active, ' + pending + ' pending</div>';
     html += '</div>';
     html += '</div>';
 
     if (!hasAgents && !hasMessages && !hasWorkflows && !hasTasks) {
-      // Empty state with branded feel
-      html += '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:16px">';
-      html += '<div style="width:64px;height:64px;border-radius:16px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;margin-bottom:20px"><svg viewBox="0 0 16 16" width="28" height="28" fill="none" stroke="var(--accent)" stroke-width="1.2"><path d="M8 1.5L14 5v6l-6 3.5L2 11V5z"/></svg></div>';
-      html += '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px">No agents online yet</div>';
-      html += '<div style="font-size:13px;color:var(--text-muted);max-width:360px;line-height:1.6;margin-bottom:4px">Open a CLI terminal and register an agent to start collaborating.</div>';
-      html += '<button class="overview-launch-btn" onclick="switchView(\'launch\')"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v12M2 8h12"/></svg> Launch Agents</button>';
+      html += '<div class="overview-empty-state">';
+      html += '<div class="overview-empty-state-icon"><svg viewBox="0 0 16 16" width="28" height="28" fill="none" stroke="var(--accent)" stroke-width="1.2"><path d="M8 1.5L14 5v6l-6 3.5L2 11V5z"/></svg></div>';
+      html += '<div class="overview-empty-state-title">No agents online yet</div>';
+      html += '<div class="overview-empty-state-desc">Open a CLI terminal and register an agent to start collaborating.</div>';
+      html += '<button type="button" class="overview-launch-btn" onclick="switchView(\'launch\')"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v12M2 8h12"/></svg> Launch Agents</button>';
       html += '</div>';
     } else {
-      html += '<div class="overview-grid">';
+      html += '<div class="overview-stitch-rows">';
 
-      // Active agents panel
-      if (hasAgents) {
-        html += '<div class="overview-panel"><h3>Agents <a onclick="switchView(\'messages\')">View messages &rarr;</a></h3>';
-        for (var i = 0; i < agentEntries.length; i++) {
-          var aName = agentEntries[i][0];
-          var aInfo = agentEntries[i][1];
-          var dotColor = !aInfo.alive ? '#6b7280' : aInfo.is_listening ? '#3b82f6' : aInfo.status === 'idle' ? '#f59e0b' : '#22c55e';
-          var dotGlow = !aInfo.alive ? '' : ';box-shadow:0 0 6px ' + dotColor;
-          var statusText = !aInfo.alive ? 'offline' : aInfo.is_listening ? 'listening' : aInfo.status === 'idle' ? 'idle' : 'working';
-          html += '<div class="overview-agent-row"><span class="overview-agent-dot" style="background:' + dotColor + dotGlow + '"></span><span class="overview-agent-name">' + aName + '</span><span class="overview-agent-status">' + statusText + ' &middot; ' + (aInfo.provider || '?') + '</span></div>';
-        }
-        html += '</div>';
-      }
-
-      // Workflow progress panel
       if (hasWorkflows) {
-        html += '<div class="overview-panel"><h3>Workflows <a onclick="switchView(\'workflows\')">View all &rarr;</a></h3>';
+        html += '<div class="overview-panel overview-full-width"><h3>Workflows <a onclick="switchView(\'workflows\')">View all</a></h3>';
         for (var w = 0; w < activeWfs.length; w++) {
           var wf = activeWfs[w];
           var wfDone = wf.steps ? wf.steps.filter(function(s) { return s.status === 'done'; }).length : 0;
           var wfTotal = wf.steps ? wf.steps.length : 1;
           var wfPct = Math.round((wfDone / wfTotal) * 100);
           html += '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span style="font-size:13px;font-weight:600;color:var(--text)">' + (wf.name || 'Workflow') + '</span><span style="font-size:12px;color:var(--text-muted)">' + wfPct + '<span style="font-size:0.8em;margin-left:1px">%</span></span></div>';
-          html += '<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + wfPct + '%;background:var(--gradient-accent);border-radius:3px;transition:width 0.3s"></div></div></div>';
+          html += '<div class="metric-card__progress"><div class="metric-card__progress-fill" style="width:' + wfPct + '%"></div></div></div>';
         }
         html += '</div>';
       }
 
-      // Task summary
-      if (hasTasks && !hasWorkflows) {
-        html += '<div class="overview-panel"><h3>Tasks <a onclick="switchView(\'tasks\')">View board &rarr;</a></h3>';
-        html += '<div class="overview-task-summary">';
+      html += '<div class="overview-grid overview-grid--pair">';
+      html += '<div class="overview-panel"><h3>Agents <a onclick="switchView(\'messages\')">View details</a></h3>';
+      if (hasAgents) {
+        for (var i = 0; i < agentEntries.length; i++) {
+          var aName = agentEntries[i][0];
+          var aInfo = agentEntries[i][1];
+          var dotMod = !aInfo.alive ? 'offline' : aInfo.is_listening ? 'listening' : aInfo.status === 'idle' ? 'idle' : 'working';
+          var statusText = !aInfo.alive ? 'offline' : aInfo.is_listening ? 'listening' : aInfo.status === 'idle' ? 'idle' : 'working';
+          var role = aInfo.role || '';
+          html += '<div class="overview-agent-row"><span class="nh-presence-dot nh-presence-dot--' + dotMod + '" aria-hidden="true"></span><span class="overview-agent-name">' + aName + '</span>';
+          if (role) html += '<span class="overview-role-pill">' + escapeHtml(role) + '</span>';
+          html += '<span class="overview-agent-status" style="margin-left:auto">' + statusText + '</span></div>';
+        }
+      } else {
+        html += '<p class="overview-panel-empty">No agents registered</p>';
+      }
+      html += '</div>';
+
+      html += '<div class="overview-panel"><h3>Tasks <a onclick="switchView(\'tasks\')">View board</a></h3>';
+      if (hasTasks) {
+        var rem = pending + inProgress;
+        html += '<div class="overview-task-stitch"><span class="overview-task-stitch-done">' + done + ' done</span><span class="overview-task-stitch-rem">' + rem + ' remaining</span></div>';
+        html += '<div class="overview-task-summary" style="margin-top:10px">';
         if (pending > 0) html += '<span class="overview-task-badge pending">' + pending + ' pending</span>';
         if (inProgress > 0) html += '<span class="overview-task-badge active">' + inProgress + ' active</span>';
-        if (done > 0) html += '<span class="overview-task-badge done">' + done + ' done</span>';
         html += '</div>';
-        html += '</div>';
+      } else {
+        html += '<p class="overview-panel-empty">No tasks yet</p>';
       }
+      html += '</div>';
+      html += '</div>';
 
-      // Recent messages
+      html += '<div class="overview-grid overview-grid--pair">';
+      html += '<div class="overview-panel"><h3>Recent Activity <a onclick="switchView(\'messages\')">View all</a></h3>';
       if (hasMessages) {
-        html += '<div class="overview-panel overview-full-width"><h3>Recent Activity <a onclick="switchView(\'messages\')">View all &rarr;</a></h3>';
         for (var m = 0; m < history.length; m++) {
           var msg = history[m];
-          var time = new Date(msg.timestamp);
-          var timeStr = time.getHours() + ':' + String(time.getMinutes()).padStart(2, '0');
-          var preview = (msg.content || '').replace(/[#*`_~\[\]]/g, '').substring(0, 100);
-          html += '<div class="overview-msg-row"><span class="overview-msg-from">' + (msg.from || '?') + '</span><span class="overview-msg-text">' + preview + '</span><span class="overview-msg-time">' + timeStr + '</span></div>';
+          var fromN = msg.from || '?';
+          var fromL = fromN.toLowerCase();
+          var fk = fromL === 'coordinator' ? 'coord' : (fromL === 'system' || fromL === '__system__') ? 'system' : 'agent';
+          var t = new Date(msg.timestamp);
+          var th = t.getHours();
+          var tm = String(t.getMinutes()).padStart(2, '0');
+          var ap = th >= 12 ? 'PM' : 'AM';
+          var th12 = th % 12;
+          if (th12 === 0) th12 = 12;
+          var timeBracket = '[' + th12 + ':' + tm + ' ' + ap + ']';
+          var preview = (msg.content || '').replace(/[#*`_~\[\]]/g, '').substring(0, 120);
+          html += '<div class="overview-activity-row"><span class="overview-activity-time">' + timeBracket + '</span><span class="overview-activity-body"><span class="overview-msg-from--' + fk + '">' + escapeHtml(fromN) + '</span><span class="overview-activity-preview">: ' + escapeHtml(preview) + '</span></span></div>';
         }
-        html += '</div>';
+      } else {
+        html += '<p class="overview-panel-empty">No recent messages</p>';
       }
-
-      // Task summary (if workflows already shown, put tasks as full width)
-      if (hasTasks && hasWorkflows) {
-        html += '<div class="overview-panel overview-full-width"><h3>Tasks <a onclick="switchView(\'tasks\')">View board &rarr;</a></h3>';
-        html += '<div class="overview-task-summary">';
-        if (pending > 0) html += '<span class="overview-task-badge pending">' + pending + ' pending</span>';
-        if (inProgress > 0) html += '<span class="overview-task-badge active">' + inProgress + ' active</span>';
-        if (done > 0) html += '<span class="overview-task-badge done">' + done + ' done</span>';
-        html += '</div>';
-        html += '</div>';
-      }
-
       html += '</div>';
-    }
 
-    // Notifications feed (always show if there are recent notifications)
-    if (notifications.length > 0) {
-      var NOTIF_ICONS = { task_done: '&#x2713;', workflow_advanced: '&#x25B6;', agent_online: '+', agent_offline: '-', approval_needed: '!' };
-      var NOTIF_COLORS = { task_done: 'var(--green)', workflow_advanced: 'var(--accent)', agent_online: 'var(--green)', agent_offline: 'var(--text-muted)', approval_needed: 'var(--orange)' };
-      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 20px">';
-      html += '<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px">Recent Notifications</div>';
-      var recent = notifications.slice(-8).reverse();
-      for (var ni = 0; ni < recent.length; ni++) {
-        var n = recent[ni];
-        var ntime = new Date(n.timestamp);
-        var ntimeStr = ntime.getHours() + ':' + String(ntime.getMinutes()).padStart(2, '0');
-        var ncolor = NOTIF_COLORS[n.type] || 'var(--text-muted)';
-        var nicon = NOTIF_ICONS[n.type] || '&#x2022;';
-        html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">';
-        html += '<span style="width:22px;height:22px;border-radius:6px;background:' + ncolor + '15;color:' + ncolor + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">' + nicon + '</span>';
-        html += '<span style="flex:1;color:var(--text-dim)">' + (n.summary || n.type) + '</span>';
-        html += '<span style="font-size:11px;color:var(--text-muted);flex-shrink:0">' + ntimeStr + '</span>';
-        html += '</div>';
+      html += '<div class="overview-panel"><h3>Recent Notifications</h3>';
+      if (notifications.length > 0) {
+        var NOTIF_STITCH = {
+          task_done: { icon: '&#x2713;', label: 'Success', cls: 'overview-notif--success' },
+          agent_online: { icon: '&#x2713;', label: 'Success', cls: 'overview-notif--success' },
+          workflow_advanced: { icon: 'i', label: 'Info', cls: 'overview-notif--info' },
+          agent_listening: { icon: 'i', label: 'Info', cls: 'overview-notif--info' },
+          agent_busy: { icon: 'i', label: 'Info', cls: 'overview-notif--info' },
+          agent_offline: { icon: '&#x2013;', label: 'Info', cls: 'overview-notif--neutral' },
+          approval_needed: { icon: '!', label: 'Warning', cls: 'overview-notif--warn' }
+        };
+        var recentN = notifications.slice(-8).reverse();
+        for (var ni = 0; ni < recentN.length; ni++) {
+          var nv = recentN[ni];
+          var meta = NOTIF_STITCH[nv.type] || { icon: '&#x2022;', label: 'Info', cls: 'overview-notif--neutral' };
+          var ntime = new Date(nv.timestamp);
+          var nth = ntime.getHours();
+          var ntm = String(ntime.getMinutes()).padStart(2, '0');
+          var nap = nth >= 12 ? 'PM' : 'AM';
+          var nth12 = nth % 12;
+          if (nth12 === 0) nth12 = 12;
+          var ntimeStr = nth12 + ':' + ntm + ' ' + nap;
+          var nbody = escapeHtml(nv.message || nv.summary || nv.type || '');
+          html += '<div class="overview-notif-row-stitch ' + meta.cls + '"><span class="overview-notif-icon-stitch">' + meta.icon + '</span><div style="flex:1;min-width:0"><span class="overview-notif-tag">[' + meta.label + ']</span><span class="overview-notif-msg">' + nbody + '</span></div><span class="overview-notif-time-stitch">' + ntimeStr + '</span></div>';
+        }
+      } else {
+        html += '<p class="overview-panel-empty">No notifications</p>';
       }
+      html += '</div>';
+      html += '</div>';
+
       html += '</div>';
     }
 

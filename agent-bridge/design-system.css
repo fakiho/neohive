@@ -2,9 +2,13 @@
  * Neohive design system — color tokens and UI components aligned with
  * the Stitch reference (amber accent, dark surfaces, kanban cards).
  *
- * Usage: link this stylesheet and apply classes below, or use --nh-* variables
- * in custom CSS. Scope demos with .nh-ds on a container to avoid clashing
- * with legacy dashboard styles.
+ * Usage: link this stylesheet and use --nh-* variables or nh-* classes.
+ * The dashboard loads this file and maps its legacy variables (--bg, --surface, …)
+ * to --nh-* on :root. Light mode: set data-theme="light" on <html> (see [data-theme="light"]).
+ * Scope demos with .nh-ds on a container to avoid clashing with unrelated markup.
+ *
+ * “Molecules” here = small components whose styles reference only --nh-* tokens
+ * (e.g. .nh-presence-dot, .nh-pill) so the dashboard and this page stay in sync.
  */
 
 :root {
@@ -16,6 +20,10 @@
   --nh-green: #10b981;
   --nh-amber: #f59e0b;
   --nh-blue: #3b82f6;
+  --nh-red: #ef4444;
+  --nh-orange: #f97316;
+  --nh-purple: #a78bfa;
+  --nh-yellow: #eab308;
 
   /* —— Application surfaces —— */
   --nh-bg: #0f0f10;
@@ -27,9 +35,14 @@
   /* —— Typography —— */
   --nh-text-primary: #f3f4f6;
   --nh-text-secondary: #9ca3af;
+  /* Tertiary / disabled / offline chrome (dashboard lists, dots) */
+  --nh-text-muted: #6b7280;
 
   /* —— Borders —— */
   --nh-border: #27272a;
+  /* Softer dividers for dense app chrome (header rows, lists) */
+  --nh-divider: rgba(255, 255, 255, 0.08);
+  --nh-divider-strong: rgba(255, 255, 255, 0.14);
 
   /* —— Success / “done” lane (kanban) —— */
   --nh-success-surface: #1a2622;
@@ -47,6 +60,18 @@
   --nh-green-20: rgba(16, 185, 129, 0.2);
   --nh-green-30: rgba(16, 185, 129, 0.3);
   --nh-green-glow: 0 0 8px rgba(16, 185, 129, 0.5);
+  --nh-blue-glow: 0 0 8px rgba(59, 130, 246, 0.45);
+  --nh-red-10: rgba(239, 68, 68, 0.12);
+  --nh-red-20: rgba(239, 68, 68, 0.22);
+  --nh-purple-10: rgba(167, 139, 250, 0.12);
+  --nh-purple-20: rgba(167, 139, 250, 0.22);
+  --nh-orange-10: rgba(249, 115, 22, 0.12);
+  --nh-orange-20: rgba(249, 115, 22, 0.22);
+  --nh-yellow-10: rgba(234, 179, 8, 0.12);
+  --nh-yellow-20: rgba(234, 179, 8, 0.22);
+
+  /* —— Surfaces on top of accents (badges, gradient buttons) —— */
+  --nh-on-dark: #ffffff;
 
   /* —— Layout / type scale —— */
   --nh-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
@@ -59,7 +84,84 @@
   --nh-space-2: 8px;
   --nh-space-3: 12px;
   --nh-space-4: 16px;
+  --nh-space-5: 20px;
   --nh-space-6: 24px;
+  --nh-space-8: 32px;
+
+  /* —— Elevation (dashboard / modals) —— */
+  --nh-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
+  --nh-shadow-panel: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+
+  /* —— Markdown inside message cards —— */
+  --nh-code-block-bg: var(--nh-bg);
+  --nh-code-inline-fg: var(--nh-orange);
+}
+
+/* Message feed: one card per message (dashboard Messages view) */
+.nh-msg-card {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--nh-space-3);
+  background: var(--nh-card);
+  border: 1px solid var(--nh-border);
+  border-radius: var(--nh-radius-xl);
+  padding: var(--nh-space-4) var(--nh-space-5);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nh-msg-card:hover {
+  border-color: rgba(156, 163, 175, 0.45);
+  box-shadow: var(--nh-shadow-card);
+}
+
+/* Light theme: same tokens, flipped for dashboard + design-system demos */
+[data-theme="light"] {
+  --nh-accent: #d97706;
+  --nh-on-accent: #fff;
+  --nh-charcoal: #fafaf9;
+  --nh-graphite: #e7e5e4;
+  --nh-gray: #78716c;
+  --nh-green: #16a34a;
+  --nh-amber: #d97706;
+  --nh-blue: #2563eb;
+  --nh-red: #dc2626;
+  --nh-orange: #ea580c;
+  --nh-purple: #7c3aed;
+  --nh-yellow: #ca8a04;
+  --nh-bg: #fafaf9;
+  --nh-sidebar: #ffffff;
+  --nh-card: #f4f4f5;
+  --nh-card-hover: #e4e4e7;
+  --nh-card-muted: rgba(244, 244, 245, 0.65);
+  --nh-text-primary: #18181b;
+  --nh-text-secondary: #71717a;
+  --nh-text-muted: #71717a;
+  --nh-border: #e4e4e7;
+  --nh-code-block-bg: #e4e4e7;
+  --nh-success-surface: #ecfdf5;
+  --nh-success-card: #d1fae5;
+  --nh-divider: rgba(0, 0, 0, 0.08);
+  --nh-divider-strong: rgba(0, 0, 0, 0.12);
+  --nh-accent-5: rgba(217, 119, 6, 0.06);
+  --nh-accent-10: rgba(217, 119, 6, 0.1);
+  --nh-accent-20: rgba(217, 119, 6, 0.2);
+  --nh-accent-90: #b45309;
+  --nh-green-10: rgba(22, 163, 74, 0.1);
+  --nh-green-20: rgba(22, 163, 74, 0.2);
+  --nh-green-30: rgba(22, 163, 74, 0.35);
+  --nh-green-glow: 0 0 8px rgba(22, 163, 74, 0.35);
+  --nh-blue-glow: 0 0 8px rgba(37, 99, 235, 0.35);
+  --nh-red-10: rgba(220, 38, 38, 0.1);
+  --nh-red-20: rgba(220, 38, 38, 0.2);
+  --nh-purple-10: rgba(124, 58, 237, 0.1);
+  --nh-purple-20: rgba(124, 58, 237, 0.2);
+  --nh-orange-10: rgba(234, 88, 12, 0.1);
+  --nh-orange-20: rgba(234, 88, 12, 0.2);
+  --nh-yellow-10: rgba(202, 138, 4, 0.1);
+  --nh-yellow-20: rgba(202, 138, 4, 0.2);
+  --nh-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08);
+  --nh-shadow-panel: 0 25px 50px -12px rgba(0, 0, 0, 0.12);
 }
 
 /* —— Base (optional scoped shell) —— */
@@ -115,6 +217,12 @@
 .nh-pill--lg {
   padding: 4px 10px;
   font-size: 12px;
+}
+
+.nh-pill--sm {
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 600;
 }
 
 /* —— Buttons —— */
@@ -299,6 +407,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   background: rgba(15, 15, 16, 0.8);
   border-radius: var(--nh-radius-xl) var(--nh-radius-xl) 0 0;
@@ -502,7 +611,7 @@
   background: var(--nh-sidebar);
   border: 1px solid var(--nh-border);
   border-radius: var(--nh-radius-xl);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--nh-shadow-panel);
   padding: var(--nh-space-6);
 }
 
@@ -529,4 +638,48 @@
 .nh-dot--live {
   background: var(--nh-green);
   box-shadow: var(--nh-green-glow);
+}
+
+@keyframes nh-pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Activity / presence (dashboard lists, agent rows) — tokens only, no hex */
+.nh-presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  background: var(--nh-text-muted);
+  opacity: 0.7;
+}
+
+.nh-presence-dot--working {
+  background: var(--nh-green);
+  opacity: 1;
+  box-shadow: var(--nh-green-glow);
+}
+
+.nh-presence-dot--listening {
+  background: var(--nh-blue);
+  opacity: 1;
+  box-shadow: var(--nh-blue-glow);
+  animation: nh-pulse-dot 2s infinite;
+}
+
+.nh-presence-dot--idle {
+  background: var(--nh-accent);
+  opacity: 1;
+  animation: nh-pulse-dot 2s infinite;
+}
+
+.nh-presence-dot--offline {
+  background: var(--nh-text-muted);
+  opacity: 0.65;
 }

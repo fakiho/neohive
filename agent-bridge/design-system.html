@@ -134,8 +134,37 @@
                   <span>#3B82F6<br>Info</span>
                 </div>
               </div>
-              <p class="nh-ds-label" style="margin-top: var(--nh-space-3);">Done lane: <code style="color: var(--nh-text-secondary);">--nh-success-surface</code> / <code style="color: var(--nh-text-secondary);">--nh-success-card</code></p>
+              <div class="nh-ds-swatch-row" style="margin-top: var(--nh-space-3);">
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-red);"></div>
+                  <span>Error / danger</span>
+                </div>
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-orange);"></div>
+                  <span>Orange</span>
+                </div>
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-purple);"></div>
+                  <span>Purple</span>
+                </div>
+                <div class="nh-ds-swatch-item">
+                  <div class="nh-swatch" style="background: var(--nh-yellow);"></div>
+                  <span>Yellow</span>
+                </div>
+              </div>
+              <p class="nh-ds-label" style="margin-top: var(--nh-space-3);">Done lane: <code style="color: var(--nh-text-secondary);">--nh-success-surface</code> / <code style="color: var(--nh-text-secondary);">--nh-success-card</code>. Dividers: <code style="color: var(--nh-text-secondary);">--nh-divider</code> / <code style="color: var(--nh-text-secondary);">--nh-divider-strong</code>. Light theme: <code style="color: var(--nh-text-secondary);">data-theme="light"</code> on <code style="color: var(--nh-text-secondary);">&lt;html&gt;</code> (dashboard sets this via Theme).</p>
             </div>
+          </div>
+        </section>
+
+        <section class="nh-ds-stack" style="margin-bottom: var(--nh-space-6);">
+          <h2 class="nh-ds-h2" style="font-size: 18px;">Presence dots (token-backed)</h2>
+          <p class="nh-ds-label">Use <code style="color: var(--nh-text-primary);">nh-presence-dot</code> + modifier; no hex in JS.</p>
+          <div class="nh-ds-row" style="gap: var(--nh-space-4); flex-wrap: wrap;">
+            <span class="nh-presence-dot nh-presence-dot--working" title="working"></span>
+            <span class="nh-presence-dot nh-presence-dot--listening" title="listening"></span>
+            <span class="nh-presence-dot nh-presence-dot--idle" title="idle"></span>
+            <span class="nh-presence-dot nh-presence-dot--offline" title="offline"></span>
           </div>
         </section>
 
@@ -226,6 +255,7 @@
         <p style="font-size: 12px; color: var(--nh-text-secondary); margin-top: var(--nh-space-6); max-width: 720px;">
           CSS variables live on <code style="color: var(--nh-text-primary);">:root</code> (prefix <code style="color: var(--nh-text-primary);">--nh-</code>).
           Components use the <code style="color: var(--nh-text-primary);">nh-</code> prefix. Source: <code style="color: var(--nh-text-primary);">design-system.css</code>.
+          The live dashboard links the same file and aliases its legacy tokens to <code style="color: var(--nh-text-primary);">--nh-*</code> so the UI stays on one palette.
         </p>
       </div>
     </div>
