@@ -18,6 +18,7 @@ const _fileIo = require('./lib/file-io');
 const _agents = require('./lib/agents');
 const _messaging = require('./lib/messaging');
 const _compact = require('./lib/compact');
+const { readIdeActivity, applyIdeActivityHint } = require('./lib/ide-activity');
 
 const DATA_DIR = _config.DATA_DIR;
 
@@ -453,14 +454,39 @@ function saveAgents(agents) {
 // --- Per-agent heartbeat files (scale fix: eliminates agents.json write contention at 100+ agents) ---
 function heartbeatFile(name) { return path.join(DATA_DIR, `heartbeat-${name}.json`); }
 
+let _lastStdinActivity = null;
+
 function touchHeartbeat(name) {
   if (!name) return;
   try {
-    fs.writeFileSync(heartbeatFile(name), JSON.stringify({
+    const payload = {
       last_activity: new Date().toISOString(),
       pid: process.pid,
-    }));
+    };
+    if (_lastStdinActivity) payload.last_stdin_activity = _lastStdinActivity;
+    const target = heartbeatFile(name);
+    const tmp = target + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(payload));
+    fs.renameSync(tmp, target);
   } catch (e) { log.debug("heartbeat write failed:", e.message); }
+}
+
+/**
+ * Passive stdin activity tracker.
+ * Listens for data on process.stdin and timestamps it into the heartbeat file.
+ * Throttled: writes at most once per 2s to avoid disk thrash.
+ */
+let _stdinThrottleTimer = null;
+function startStdinActivityTracker() {
+  if (!process.stdin || !process.stdin.readable) return;
+  process.stdin.on('data', () => {
+    _lastStdinActivity = new Date().toISOString();
+    if (_stdinThrottleTimer || !registeredName) return;
+    _stdinThrottleTimer = setTimeout(() => {
+      _stdinThrottleTimer = null;
+      if (registeredName) touchHeartbeat(registeredName);
+    }, 2000);
+  });
 }
 
 
@@ -1651,6 +1677,9 @@ function toolListAgents() {
       const ws = getWorkspace(name);
       if (ws._status) result[name].current_status = ws._status;
     } catch (e) { log.debug("workspace status read failed:", e.message); }
+
+    const ide = readIdeActivity(DATA_DIR, name);
+    if (ide) applyIdeActivityHint(result[name], ide, { dataDir: DATA_DIR, agentName: name });
   }
   return { agents: result };
 }
@@ -7886,6 +7915,7 @@ async function main() {
   } else {
     // Default: stdio transport (one agent per process)
     try {
+      startStdinActivityTracker();
       const transport = new StdioServerTransport();
       await server.connect(transport);
     } catch (e) {

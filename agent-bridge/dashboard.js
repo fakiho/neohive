@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
 const { upsertNeohiveMcpInToml } = require('./lib/codex-neohive-toml');
+const { readIdeActivity, applyIdeActivityHint } = require('./lib/ide-activity');
 
 function findCursorProjectRootWithNeohive(startDir) {
   let dir = path.resolve(startDir);
@@ -493,6 +494,10 @@ function apiAgents(query) {
         if (ws._status) result[name].current_status = ws._status;
       }
     } catch {}
+
+    const dataDir = resolveDataDir(projectPath);
+    const ide = readIdeActivity(dataDir, name);
+    if (ide) applyIdeActivityHint(result[name], ide, { dataDir, agentName: name });
   }
   return result;
 }
