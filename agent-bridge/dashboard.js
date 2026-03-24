@@ -463,8 +463,21 @@ function apiAgents(query) {
     const alive = isPidAlive(info.pid, info.last_activity);
     const lastActivity = info.last_activity || info.timestamp;
     const idleSeconds = Math.floor((Date.now() - new Date(lastActivity).getTime()) / 1000);
+    const hasHeartbeat = fs.existsSync(path.join(resolveDataDir(projectPath), `heartbeat-${name}.json`));
     const profile = profiles[name] || {};
     const isLocal = (() => { try { process.kill(info.pid, 0); return true; } catch { return false; } })();
+
+    let status;
+    if (alive) {
+      status = (info.listening_since) ? 'listening' : idleSeconds > 30 ? 'idle' : 'working';
+    } else if (!hasHeartbeat) {
+      status = 'unknown';
+    } else if (idleSeconds <= 120) {
+      status = 'stale';
+    } else {
+      status = 'offline';
+    }
+
     result[name] = {
       pid: info.pid,
       alive,
@@ -472,7 +485,7 @@ function apiAgents(query) {
       last_activity: lastActivity,
       last_message: lastMessageTime[name] || null,
       idle_seconds: alive ? idleSeconds : null,
-      status: !alive ? 'offline' : (info.listening_since && alive) ? 'listening' : idleSeconds > 30 ? 'idle' : 'working',
+      status,
       listening_since: info.listening_since || null,
       is_listening: !!(info.listening_since && alive),
       provider: info.provider || 'unknown',
@@ -1119,6 +1132,25 @@ function apiInjectMessage(body, query) {
 
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
   const now = new Date().toISOString();
+
+  // Touch sender's heartbeat so inject activity keeps the agent alive in the dashboard
+  if (fromName !== '__user__') {
+    try {
+      const hbFile = path.join(dataDir, `heartbeat-${fromName}.json`);
+      const agentsFile = path.join(dataDir, 'agents.json');
+      const payload = { last_activity: now, pid: process.pid };
+      const tmp = hbFile + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(payload));
+      fs.renameSync(tmp, hbFile);
+      if (fs.existsSync(agentsFile)) {
+        const agents = JSON.parse(fs.readFileSync(agentsFile, 'utf8'));
+        if (agents[fromName]) {
+          agents[fromName].last_activity = now;
+          fs.writeFileSync(agentsFile, JSON.stringify(agents, null, 2));
+        }
+      }
+    } catch {}
+  }
 
   // Broadcast to all agents — single __group__ message instead of per-agent
   if (body.to === '__all__') {

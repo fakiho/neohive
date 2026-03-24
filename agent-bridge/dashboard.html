@@ -411,6 +411,14 @@
   .agent-card.dead, .agent-card.offline {
     opacity: 0.5;
   }
+  .agent-card.unknown {
+    opacity: 0.4;
+    border-left: 3px solid var(--nh-text-muted);
+  }
+  .agent-card.stale {
+    opacity: 0.65;
+    border-left: 3px solid var(--orange);
+  }
 
   .agent-top {
     display: flex;
@@ -443,6 +451,8 @@
   .agent-status-dot.listening { background: var(--nh-blue); box-shadow: 0 0 6px var(--nh-blue); animation: pulse 2s infinite; }
   .agent-status-dot.sleeping, .agent-status-dot.idle { background: var(--nh-accent); animation: pulse 2s infinite; }
   .agent-status-dot.dead, .agent-status-dot.offline { background: var(--nh-text-muted); }
+  .agent-status-dot.unknown { background: var(--nh-text-muted); opacity: 0.5; }
+  .agent-status-dot.stale { background: var(--orange); animation: pulse 2s infinite; }
 
   .agent-name {
     font-weight: 600;
@@ -1732,9 +1742,13 @@
   .agent-pill.listening .status-dot { background: var(--nh-blue); animation: pulse 2s infinite; box-shadow: 0 0 6px var(--nh-blue); }
   .agent-pill.idle .status-dot { background: var(--accent); }
   .agent-pill.offline .status-dot { background: var(--nh-text-muted); opacity: 0.65; }
+  .agent-pill.unknown .status-dot { background: var(--nh-text-muted); opacity: 0.4; }
+  .agent-pill.stale .status-dot { background: var(--accent); opacity: 0.8; }
   .agent-pill .agent-name { font-weight: 600; color: var(--text); }
   .agent-pill .agent-activity { color: var(--text-muted); font-size: 12px; }
   .agent-pill.offline .agent-name { color: var(--text-muted); opacity: 0.6; }
+  .agent-pill.unknown .agent-name { color: var(--text-muted); opacity: 0.4; }
+  .agent-pill.stale .agent-name { color: var(--text-muted); opacity: 0.7; }
 
   /* ===== OVERVIEW PAGE ===== */
   .overview-area {
@@ -5051,12 +5065,16 @@ function renderAgents(agents) {
       var name = agentNames[i];
       var info = agents[name];
       var color = getColor(name);
-      var state = !info.alive ? 'offline' : info.is_listening ? 'listening' : (info.status === 'idle' || info.status === 'sleeping') ? 'idle' : 'working';
-      if (state === 'idle') sleepCount++;
+      var state = info.status || (!info.alive ? 'offline' : info.is_listening ? 'listening' : (info.status === 'idle' || info.status === 'sleeping') ? 'idle' : 'working');
+      if (state === 'idle' || state === 'stale') sleepCount++;
 
       // Compact activity text
       var activityText = '';
-      if (state === 'offline' || state === 'dead') {
+      if (state === 'unknown') {
+        activityText = 'never started';
+      } else if (state === 'stale') {
+        activityText = 'stale';
+      } else if (state === 'offline' || state === 'dead') {
         activityText = 'offline';
       } else if (info.idle_seconds != null) {
         if (info.idle_seconds < 5) activityText = 'just now';
@@ -5125,7 +5143,7 @@ function renderAgents(agents) {
       var pCard = el.querySelector('[data-agent="' + pName + '"]');
       if (!pCard) { didPatch = false; break; }
       var pInfo = agents[pName];
-      var pState = !pInfo.alive ? 'offline' : pInfo.is_listening ? 'listening' : (pInfo.status === 'idle' || pInfo.status === 'sleeping') ? 'idle' : 'working';
+      var pState = pInfo.status || (!pInfo.alive ? 'offline' : pInfo.is_listening ? 'listening' : (pInfo.status === 'idle' || pInfo.status === 'sleeping') ? 'idle' : 'working');
       var dot = pCard.querySelector('.agent-status-dot');
       if (dot) { dot.className = 'agent-status-dot ' + pState; dot.title = pState; }
       var sub = pCard.querySelector('.agent-subtitle');
@@ -10132,12 +10150,16 @@ function updateAgentBar(agents) {
     var name = sorted[i][0];
     var agent = sorted[i][1];
     if (name === '__system__' || name === 'Dashboard') continue;
-    var cls = 'offline';
-    var activity = 'offline';
+    var cls = agent.status || 'offline';
+    var activity = cls;
     if (agent.alive) {
       if (agent.is_listening || agent.status === 'listening') { cls = 'listening'; activity = 'listening'; }
       else if (agent.status === 'idle') { cls = 'idle'; activity = 'idle'; }
       else { cls = 'working'; activity = agent.status === 'working' ? 'working' : 'active'; }
+    } else if (agent.status === 'unknown') {
+      activity = 'never started';
+    } else if (agent.status === 'stale') {
+      activity = 'stale';
     }
     // Toast on state change
     var prevState = prevAgentBarState[name];

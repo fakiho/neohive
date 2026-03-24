@@ -1655,13 +1655,26 @@ function toolListAgents() {
     const alive = isPidAlive(info.pid, info.last_activity);
     const lastActivity = info.last_activity || info.timestamp;
     const idleSeconds = Math.floor((Date.now() - new Date(lastActivity).getTime()) / 1000);
+    const hasHeartbeat = fs.existsSync(heartbeatFile(name));
     const profile = profiles[name] || {};
+
+    let status;
+    if (alive) {
+      status = (info.listening_since) ? 'listening' : idleSeconds > 30 ? 'idle' : 'working';
+    } else if (!hasHeartbeat) {
+      status = 'unknown';
+    } else if (idleSeconds <= 120) {
+      status = 'stale';
+    } else {
+      status = 'offline';
+    }
+
     result[name] = {
       alive,
       registered_at: info.timestamp,
       last_activity: lastActivity,
       idle_seconds: alive ? idleSeconds : null,
-      status: !alive ? 'offline' : (info.listening_since && alive) ? 'listening' : idleSeconds > 30 ? 'idle' : 'working',
+      status,
       listening_since: info.listening_since || null,
       is_listening: !!(info.listening_since && alive),
       last_listened_at: info.last_listened_at || null,
@@ -7779,6 +7792,59 @@ process.on('exit', () => {
 process.on('SIGTERM', () => process.exit(0));
 process.on('SIGINT', () => process.exit(0));
 
+/**
+ * Auto-reclaim a dead agent's identity on MCP process startup.
+ * Scans agents.json for entries whose PID is dead, picks the most recently
+ * active one, updates its PID to the current process, and restarts heartbeat.
+ * Avoids the need for an explicit register() call on session reconnect.
+ */
+function autoReclaimDeadSeat() {
+  try {
+    if (!fs.existsSync(AGENTS_FILE)) return;
+    const agents = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'));
+    let bestName = null;
+    let bestTime = 0;
+
+    for (const [name, entry] of Object.entries(agents)) {
+      if (!entry || !entry.pid) continue;
+      let alive = false;
+      try { process.kill(entry.pid, 0); alive = true; } catch {}
+      if (alive) continue;
+
+      const hbFile = heartbeatFile(name);
+      let lastActivity = entry.last_activity;
+      try {
+        const hb = JSON.parse(fs.readFileSync(hbFile, 'utf8'));
+        if (hb.last_activity) lastActivity = hb.last_activity;
+      } catch {}
+
+      const ts = lastActivity ? new Date(lastActivity).getTime() : 0;
+      if (ts > bestTime) {
+        bestTime = ts;
+        bestName = name;
+      }
+    }
+
+    if (!bestName) return;
+
+    const now = new Date().toISOString();
+    agents[bestName].pid = process.pid;
+    agents[bestName].ppid = process.ppid;
+    agents[bestName].last_activity = now;
+    saveAgents(agents);
+    registeredName = bestName;
+    registeredToken = agents[bestName].token || '';
+    touchHeartbeat(bestName);
+    // Start 10s heartbeat interval so the agent stays alive past the first 30s window
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    heartbeatInterval = setInterval(() => { touchHeartbeat(registeredName); }, 10000);
+    heartbeatInterval.unref();
+    console.error(`[neohive] Auto-reclaimed seat "${bestName}" (previous PID dead)`);
+  } catch (e) {
+    console.error('[neohive] Auto-reclaim failed:', e.message);
+  }
+}
+
 async function main() {
   try {
     ensureDataDir();
@@ -7915,6 +7981,7 @@ async function main() {
   } else {
     // Default: stdio transport (one agent per process)
     try {
+      autoReclaimDeadSeat();
       startStdinActivityTracker();
       const transport = new StdioServerTransport();
       await server.connect(transport);
