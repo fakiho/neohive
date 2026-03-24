@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "neohive": {
+      "command": "/usr/bin/env",
+      "args": ["npx", "-y", "neohive", "mcp"],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}
