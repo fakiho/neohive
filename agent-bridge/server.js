@@ -69,6 +69,7 @@ const AGENT_CARDS_FILE = path.join(DATA_DIR, 'agent-cards.json');
 // In-memory state for this process
 let registeredName = null;
 let registeredToken = null; // auth token for re-registration
+let autoReclaimedName = false; // true when registeredName was set by autoReclaimDeadSeat() — overridable by explicit register()
 let lastReadOffset = 0; // byte offset into messages.jsonl for efficient polling
 const channelOffsets = new Map(); // per-channel byte offsets for efficient reads
 let heartbeatInterval = null; // heartbeat timer reference
@@ -1437,9 +1438,25 @@ function toolRegister(name, provider = null, skills = null) {
     }
 
     // Prevent re-registration under a different name from the same process
+    // Exception: if registeredName was set by autoReclaimDeadSeat() (not an explicit call), allow override
     if (registeredName && registeredName !== name) {
-      unlockAgentsFile();
-      return { error: `Already registered as "${registeredName}". Cannot change name mid-session.`, current_name: registeredName };
+      if (!autoReclaimedName) {
+        unlockAgentsFile();
+        return { error: `Already registered as "${registeredName}". Cannot change name mid-session.`, current_name: registeredName };
+      }
+      // Auto-reclaimed identity: clean up the old seat before taking the new name
+      const oldName = registeredName;
+      log.info(`Auto-reclaimed seat "${oldName}" overridden by explicit register("${name}")`);
+      // Stop the auto-reclaim heartbeat
+      if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+      // Delete the stale heartbeat file for the old agent so it shows as offline
+      try {
+        const oldHbFile = heartbeatFile(oldName);
+        if (fs.existsSync(oldHbFile)) fs.unlinkSync(oldHbFile);
+      } catch (e) { log.debug(`cleanup heartbeat for "${oldName}" failed:`, e.message); }
+      registeredName = null;
+      registeredToken = null;
+      autoReclaimedName = false;
     }
 
     const now = new Date().toISOString();
@@ -7833,6 +7850,7 @@ function autoReclaimDeadSeat() {
     agents[bestName].last_activity = now;
     saveAgents(agents);
     registeredName = bestName;
+    autoReclaimedName = true; // mark as auto-reclaimed so toolRegister() can override it
     registeredToken = agents[bestName].token || '';
     touchHeartbeat(bestName);
     // Start 10s heartbeat interval so the agent stays alive past the first 30s window
