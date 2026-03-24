@@ -5040,7 +5040,7 @@ function renderAgents(agents) {
     _lastAgentsHash = layoutHash;
     var alertEl0 = document.getElementById('alert-count');
     if (alertEl0) alertEl0.style.display = 'none';
-    updateInjectTargets(keys);
+    updateInjectTargets(agents);
     return;
   }
 
@@ -5181,7 +5181,7 @@ function renderAgents(agents) {
   }
 
   // Update inject target dropdown
-  updateInjectTargets(keys);
+  updateInjectTargets(agents);
 }
 
 function sendNudge(agentName) {
@@ -5291,18 +5291,23 @@ function copyRespawnPrompt() {
 
 var lastAgentKeys = '';
 
-function updateInjectTargets(keys) {
+function updateInjectTargets(agents) {
+  // Build sorted list of real agents (exclude system/internal names)
+  var keys = Object.keys(agents).filter(function(k) {
+    return k !== '__system__' && k !== '__user__' && k !== 'Dashboard';
+  }).sort();
   var joined = keys.join(',');
   if (joined === lastAgentKeys) return;
   lastAgentKeys = joined;
 
   var sel = document.getElementById('inject-target');
+  if (!sel) return;
   var current = sel.value;
   sel.innerHTML = '<option value="">Select agent...</option>';
   for (var i = 0; i < keys.length; i++) {
     var opt = document.createElement('option');
     opt.value = keys[i];
-    opt.textContent = keys[i];
+    opt.textContent = (agents[keys[i]] && agents[keys[i]].display_name) || keys[i];
     sel.appendChild(opt);
   }
   // Broadcast option
@@ -6554,6 +6559,7 @@ function switchView(view) {
   // Reset render hashes so switching tabs forces a fresh render
   _lastTasksHash = '';
   _lastAgentsHash = '';
+  if (view === 'messages') lastAgentKeys = '';
   if (renderOverview._lastHash) renderOverview._lastHash = '';
   // Update nav sidebar active state
   var navItems = document.querySelectorAll('.nav-item');

@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  The MCP collaboration layer for Claude Code, Gemini CLI, and Codex CLI.
+  The MCP collaboration layer for Claude Code, Gemini CLI, Cursor, VS Code Copilot, and more.
 </p>
 
 <br />
@@ -52,7 +52,7 @@ You open Claude Code in one terminal and Gemini CLI in another. Both are powerfu
 - [Quick Start](#-quick-start)
 - [Features](#-features)
 - [How It Works](#-how-it-works)
-- [Supported CLIs](#-supported-clis)
+- [Supported IDEs & CLIs](#-supported-ides--clis)
 - [Team Templates](#-team-templates)
 - [Dashboard](#-dashboard)
 - [MCP Tools](#-mcp-tools)
@@ -113,28 +113,30 @@ npx neohive dashboard    # opens http://localhost:3000
 | 🌿 | **Branching** | Fork conversations at any point with isolated history |
 | 📡 | **Channels** | Sub-team communication with dedicated message streams |
 | 🗳️ | **Voting & Reviews** | Team decisions and structured code review workflows |
-| 🔌 | **Multi-CLI** | Works across Claude Code, Gemini CLI, Codex CLI, and Ollama |
+| 👁 | **Agent Liveness** | Passive stdin tracking, PID checks, auto-reclaim dead seats, unknown/stale/offline states |
+| 🔌 | **Multi-CLI** | Works across Claude Code, Gemini CLI, Cursor, VS Code Copilot, Antigravity, Codex CLI, and Ollama |
 
 <br />
 
 ## 🏗 How It Works
 
 ```
-  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-  │ Claude Code  │   │ Gemini CLI  │   │  Codex CLI  │
-  │  Terminal 1  │   │  Terminal 2  │   │  Terminal 3  │
-  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘
-         │                  │                   │
-    MCP Server         MCP Server          MCP Server
-    (stdio)            (stdio)             (stdio)
-         │                  │                   │
-         └──────────────────┼───────────────────┘
-                            │
-                   ┌────────▼────────┐
-                   │   .neohive/     │
-                   │                 │
-                   │  messages.jsonl │
-                   │  agents.json    │
+  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+  │ Claude Code  │   │ Gemini CLI  │   │   Cursor    │   │ VS Code +   │
+  │  Terminal 1  │   │  Terminal 2  │   │  Terminal 3  │   │  Copilot    │
+  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘   └──────┬───────┘
+         │                  │                   │                  │
+    MCP Server         MCP Server          MCP Server         MCP Server
+    (stdio)            (stdio)             (stdio)            (stdio)
+         │                  │                   │                  │
+         └──────────────────┼───────────────────┼──────────────────┘
+                            │                   │
+                   ┌────────▼────────┐   ┌──────▼──────┐
+                   │   .neohive/     │   │  Extension  │
+                   │                 │   │  (liveness) │
+                   │  messages.jsonl │   └──────┬──────┘
+                   │  agents.json    │          │
+                   │  heartbeat-*.json│─────────┘
                    │  tasks.json     │
                    │  workflows.json │
                    │  ...            │
@@ -151,15 +153,17 @@ Each CLI spawns its own MCP server process. All processes share a `.neohive/` di
 
 <br />
 
-## 🔌 Supported CLIs
+## 🔌 Supported IDEs & CLIs
 
-| CLI | Config Location | Auto-detected | Init Flag |
-|-----|----------------|:---:|-----------|
-| [Claude Code](https://claude.ai/code) | `.mcp.json` | ✅ | `--claude` |
-| [Cursor](https://cursor.com) | `.cursor/mcp.json` | ✅ | `--cursor` |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `.gemini/settings.json` | ✅ | `--gemini` |
-| [Codex CLI](https://github.com/openai/codex) | `.codex/config.toml` | ✅ | `--codex` |
-| [Ollama](https://ollama.com) | `.neohive/ollama-agent.js` | ✅ | `--ollama` |
+| Tool | Config File | Rules File | Init Flag |
+|------|------------|------------|-----------|
+| [Claude Code](https://claude.ai/code) | `.mcp.json` | `CLAUDE.md` | `--claude` |
+| [Cursor](https://cursor.com) | `.cursor/mcp.json` | `.cursor/rules/neohive.mdc` | `--cursor` |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `.gemini/settings.json` | `GEMINI.md` | `--gemini` |
+| [VS Code Copilot](https://code.visualstudio.com) | `.vscode/mcp.json` | `.github/copilot-instructions.md` | `--vscode` |
+| [Antigravity](https://antigravity.dev) | `~/.gemini/antigravity/mcp_config.json` | `.agent/skills/neohive/SKILL.md` | `--antigravity` |
+| [Codex CLI](https://github.com/openai/codex) | `.codex/config.toml` | — | `--codex` |
+| [Ollama](https://ollama.com) | `.neohive/ollama-agent.js` | — | `--ollama` |
 
 ```bash
 npx neohive init --all    # configure all detected CLIs at once
@@ -203,7 +207,7 @@ npx neohive dashboard --lan    # accessible from your phone
 | **Stats** | Per-agent scores, response times, hourly activity charts |
 | **Docs** | In-dashboard tool reference and mode guides |
 
-Plus: agent status monitoring, profile popups, message injection, conversation export (HTML/JSON/replay), multi-project support, dark/light theme, mobile responsive.
+Plus: agent liveness monitoring (working/listening/idle/stale/unknown/offline), auto-reclaim on session reconnect, profile popups, message injection, conversation export (HTML/JSON/replay), multi-project support, dark/light theme, mobile responsive.
 
 <br />
 
@@ -255,7 +259,8 @@ Plus: agent status monitoring, profile popups, message injection, conversation e
 ## ⌨️ CLI Reference
 
 ```bash
-neohive init [--claude|--gemini|--codex|--cursor|--all|--ollama] [--template <name>]
+neohive init [--claude|--gemini|--codex|--cursor|--vscode|--antigravity|--all|--ollama] [--template <name>]
+neohive mcp                 # start MCP stdio server (used internally by IDE configs)
 neohive dashboard [--lan]
 neohive status              # active agents, tasks, workflows
 neohive msg <agent> <text>  # send message from CLI

@@ -19,7 +19,10 @@ function printUsage() {
     npx neohive init --gemini       Configure for Gemini CLI only
     npx neohive init --codex        Configure for Codex CLI only
     npx neohive init --cursor       Configure for Cursor IDE only (.cursor/mcp.json)
+    npx neohive init --vscode       Configure for VS Code GitHub Copilot
+    npx neohive init --antigravity  Configure for Antigravity IDE
     npx neohive init --all          Configure for all supported CLIs
+    npx neohive mcp                 Start MCP stdio server (used internally by IDE configs)
     npx neohive init --ollama       Setup Ollama local LLM bridge
     npx neohive init --template T   Initialize with a team template
     npx neohive serve               Run MCP server in HTTP mode (port 4321)
@@ -142,8 +145,185 @@ function setupGemini(serverPath, cwd) {
     trust: true,
   };
 
+  if (!settings.context) settings.context = {};
+  if (!settings.context.files) settings.context.files = [];
+  if (!settings.context.files.includes('GEMINI.md')) {
+    settings.context.files.push('GEMINI.md');
+  }
+
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
   console.log('  [ok] Gemini CLI: .gemini/settings.json updated');
+
+  // Write GEMINI.md agent rules if not already present
+  const geminiMdPath = path.join(cwd, 'GEMINI.md');
+  if (!fs.existsSync(geminiMdPath)) {
+    fs.writeFileSync(geminiMdPath, geminiMdTemplate());
+    console.log('  [ok] Gemini CLI: GEMINI.md created with agent rules');
+  } else {
+    console.log('  [skip] GEMINI.md already exists — not overwriting');
+  }
+}
+
+function geminiMdTemplate() {
+  return `# Neohive Agent — Gemini CLI
+
+You are a Neohive team agent. Follow these rules exactly, every session, no exceptions.
+
+## First thing to do — always
+
+1. Call \`register\` with your assigned name (e.g. \`register(name="Gemini")\`)
+2. Call \`get_briefing\` to load project context and current work
+3. Call \`listen\` to wait for messages from the Coordinator
+
+Do NOT explore the codebase, ask questions, or take initiative before completing these 3 steps.
+
+## Core rules
+
+- **After every action** — call \`listen()\`. This is how you receive your next task.
+- **Before starting a task** — call \`update_task(id, status="in_progress")\`
+- **After finishing a task** — call \`update_task(id, status="done")\`, then report to Coordinator
+- **Before editing a file** — call \`lock_file(path)\`. Call \`unlock_file(path)\` when done.
+- **Check tasks first** — call \`list_tasks()\` before starting anything new. Never work on another agent's task.
+- **Keep messages short** — 2–3 paragraphs max. Lead with what changed, then files, then decisions.
+
+## Workflow
+
+\`\`\`
+register → get_briefing → listen → [receive task] → update_task(in_progress)
+→ do work → update_task(done) → send_message(Coordinator, summary) → listen
+\`\`\`
+
+Repeat the last 5 steps for every task. Never exit the listen loop.
+
+## Available MCP tools
+
+**Messaging:** \`register\`, \`send_message\`, \`broadcast\`, \`listen\`, \`check_messages\`, \`get_history\`, \`handoff\`
+**Tasks:** \`create_task\`, \`update_task\`, \`list_tasks\`
+**Workflows:** \`create_workflow\`, \`advance_workflow\`, \`workflow_status\`
+**Workspaces:** \`workspace_write\`, \`workspace_read\`, \`workspace_list\`
+**Branching:** \`fork_conversation\`, \`switch_branch\`, \`list_branches\`
+
+## What NOT to do
+
+- Do not self-assign tasks
+- Do not modify files without a task assigned to you
+- Do not skip \`listen()\` after responding
+- Do not send long messages — be concise
+- Do not ask the Coordinator for permission before starting an assigned task — just do it
+`;
+}
+
+// Configure for VS Code GitHub Copilot (.vscode/mcp.json + copilot instructions)
+function setupVSCode(cwd) {
+  const vscodeDir = path.join(cwd, '.vscode');
+  const mcpPath = path.join(vscodeDir, 'mcp.json');
+  if (!fs.existsSync(vscodeDir)) fs.mkdirSync(vscodeDir, { recursive: true });
+
+  let config = { servers: {} };
+  if (fs.existsSync(mcpPath)) {
+    try {
+      config = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+      if (!config.servers) config.servers = {};
+    } catch {
+      fs.copyFileSync(mcpPath, mcpPath + '.backup');
+      console.log('  [warn] Existing .vscode/mcp.json was invalid — backed up');
+    }
+  }
+
+  config.servers['neohive'] = {
+    command: '/usr/bin/env',
+    args: ['npx', '-y', 'neohive', 'mcp'],
+    cwd: cwd,
+  };
+
+  fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n');
+  console.log('  [ok] VS Code: .vscode/mcp.json updated');
+
+  // Write copilot instructions
+  const githubDir = path.join(cwd, '.github');
+  const instructionsPath = path.join(githubDir, 'copilot-instructions.md');
+  if (!fs.existsSync(githubDir)) fs.mkdirSync(githubDir, { recursive: true });
+  if (!fs.existsSync(instructionsPath)) {
+    fs.writeFileSync(instructionsPath, neohiveAgentRules('Copilot'));
+    console.log('  [ok] VS Code: .github/copilot-instructions.md created');
+  }
+}
+
+// Configure for Antigravity (~/.gemini/antigravity/mcp_config.json + skill)
+function setupAntigravity(cwd) {
+  const antigravityDir = path.join(os.homedir(), '.gemini', 'antigravity');
+  const mcpPath = path.join(antigravityDir, 'mcp_config.json');
+  if (!fs.existsSync(antigravityDir)) fs.mkdirSync(antigravityDir, { recursive: true });
+
+  let config = { mcpServers: {} };
+  if (fs.existsSync(mcpPath)) {
+    try {
+      // Strip JS-style comments before parsing (Antigravity writes JSONC)
+      const raw = fs.readFileSync(mcpPath, 'utf8').replace(/\/\/[^\n]*/g, '');
+      config = JSON.parse(raw);
+      if (!config.mcpServers) config.mcpServers = {};
+    } catch {
+      fs.copyFileSync(mcpPath, mcpPath + '.backup');
+      console.log('  [warn] Existing mcp_config.json was invalid — backed up');
+    }
+  }
+
+  config.mcpServers['neohive'] = {
+    command: 'npx',
+    args: ['-y', 'neohive', 'mcp'],
+  };
+
+  fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n');
+  console.log('  [ok] Antigravity: ~/.gemini/antigravity/mcp_config.json updated');
+
+  // Write skill
+  const skillDir = path.join(cwd, '.agent', 'skills', 'neohive');
+  if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
+  const skillPath = path.join(skillDir, 'SKILL.md');
+  if (!fs.existsSync(skillPath)) {
+    fs.writeFileSync(skillPath, neohiveAgentRules('Gemini'));
+    console.log('  [ok] Antigravity: .agent/skills/neohive/SKILL.md created');
+  }
+}
+
+function neohiveAgentRules(defaultName) {
+  return `# Neohive Multi-Agent Coordination
+
+You are a Neohive team agent. Follow these rules every session.
+
+## On session start — always do this first
+
+1. Call \`register\` with your assigned name (e.g. \`register(name="${defaultName}")\`)
+2. Call \`get_briefing\` to load project context and active work
+3. Call \`listen\` to wait for messages from the Coordinator
+
+Do NOT explore the codebase or take initiative before completing these 3 steps.
+
+## Core rules
+
+- **After every action** — call \`listen()\`. This is how you receive your next task.
+- **Before starting a task** — call \`update_task(id, status="in_progress")\`
+- **After finishing** — call \`update_task(id, status="done")\`, report to Coordinator
+- **Before editing a file** — call \`lock_file(path)\`. Call \`unlock_file(path)\` when done.
+- **Check tasks first** — call \`list_tasks()\` before starting anything. Never take another agent's task.
+- **Keep messages short** — 2–3 paragraphs max: what changed, files, decisions.
+
+## Workflow loop
+
+\`\`\`
+register → get_briefing → listen → [receive task] → update_task(in_progress)
+→ do work → update_task(done) → send_message(Coordinator, summary) → listen
+\`\`\`
+
+Never exit the listen loop.
+
+## Available MCP tools
+
+**Messaging:** \`register\`, \`send_message\`, \`broadcast\`, \`listen\`, \`check_messages\`, \`get_history\`
+**Tasks:** \`create_task\`, \`update_task\`, \`list_tasks\`
+**Workflows:** \`create_workflow\`, \`advance_workflow\`, \`workflow_status\`
+**Workspaces:** \`workspace_write\`, \`workspace_read\`, \`workspace_list\`
+`;
 }
 
 // Configure for Codex CLI (uses .codex/config.toml)
@@ -365,8 +545,12 @@ function init() {
     targets = ['codex'];
   } else if (flag === '--cursor') {
     targets = ['cursor'];
+  } else if (flag === '--vscode') {
+    targets = ['vscode'];
+  } else if (flag === '--antigravity') {
+    targets = ['antigravity'];
   } else if (flag === '--all') {
-    targets = ['claude', 'gemini', 'codex', 'cursor'];
+    targets = ['claude', 'gemini', 'codex', 'cursor', 'vscode', 'antigravity'];
   } else if (flag === '--ollama') {
     const ollama = detectOllama();
     if (!ollama.installed) {
@@ -395,10 +579,12 @@ function init() {
 
   for (const target of targets) {
     switch (target) {
-      case 'claude': setupClaude(serverPath, cwd); break;
-      case 'gemini': setupGemini(serverPath, cwd); break;
-      case 'codex':  setupCodex(serverPath, cwd);  break;
-      case 'cursor': setupCursor(serverPath, cwd); break;
+      case 'claude':      setupClaude(serverPath, cwd);   break;
+      case 'gemini':      setupGemini(serverPath, cwd);   break;
+      case 'codex':       setupCodex(serverPath, cwd);    break;
+      case 'cursor':      setupCursor(serverPath, cwd);   break;
+      case 'vscode':      setupVSCode(cwd);               break;
+      case 'antigravity': setupAntigravity(cwd);          break;
     }
   }
 
@@ -999,6 +1185,10 @@ switch (command) {
     break;
   case 'templates':
     listTemplates();
+    break;
+  case 'mcp':
+    // Start stdio MCP server — used as the command in all MCP configs: npx neohive mcp
+    require('./server.js');
     break;
   case 'serve':
     serve();
