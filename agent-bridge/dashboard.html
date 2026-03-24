@@ -747,18 +747,24 @@
   }
 
   .message .msg-actions {
-    top: var(--nh-space-3);
+    top: -10px;
     right: var(--nh-space-3);
   }
 
   /* ===== REACTIONS ===== */
   .msg-actions {
     position: absolute;
-    top: 6px;
+    top: -10px;
     right: 6px;
     display: none;
     gap: 2px;
     align-items: center;
+    z-index: 2;
+    background: var(--nh-card, #1c1c1f);
+    border: 1px solid var(--nh-border, #27272a);
+    border-radius: var(--nh-radius-md, 8px);
+    padding: 2px 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   }
 
   .message:hover .msg-actions { display: flex; }
@@ -867,17 +873,20 @@
 
   .bookmark-btn {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    background: none;
-    border: none;
+    top: -10px;
+    right: 40px;
+    background: var(--nh-card, #1c1c1f);
+    border: 1px solid var(--nh-border, #27272a);
+    border-radius: var(--nh-radius-md, 8px);
     cursor: pointer;
     font-size: 14px;
     opacity: 0;
     transition: opacity 0.15s;
     color: var(--text-muted);
-    padding: 2px;
+    padding: 2px 4px;
     line-height: 1;
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   }
 
   .message:hover .bookmark-btn { opacity: 0.6; }
@@ -1221,6 +1230,7 @@
     font-size: 12px;
     font-family: inherit;
     resize: none;
+    width: 100%;
     height: 34px;
     max-height: 80px;
     outline: none;
@@ -2789,6 +2799,24 @@
 
     .sidebar.open { transform: translateX(0); }
 
+    .nav-sidebar {
+      position: fixed;
+      top: var(--header-h);
+      left: 0;
+      bottom: 0;
+      z-index: 90;
+      transform: translateX(-100%);
+      box-shadow: 4px 0 20px rgba(0,0,0,0.3);
+      transition: transform 0.25s ease;
+    }
+
+    .nav-sidebar.open {
+      display: flex !important;
+      width: var(--sidebar-w) !important;
+      min-width: var(--sidebar-w) !important;
+      transform: translateX(0);
+    }
+
     .sidebar-overlay {
       display: none;
       position: fixed;
@@ -2852,6 +2880,7 @@
     /* Input bar: stack vertically */
     .msg-input-bar {
       flex-direction: column;
+      align-items: stretch;
       padding: 8px 10px;
       gap: 6px;
     }
@@ -4129,6 +4158,7 @@
 <!-- APP LAYOUT -->
 <div class="app">
   <!-- UNIFIED NAV SIDEBAR -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
   <nav class="nav-sidebar expanded" id="nav-sidebar">
     <div class="nav-sidebar-header">
       <span class="nav-sidebar-logo"><span class="nh-brand-mark" aria-hidden="true">N</span>Neohive</span>
@@ -5730,14 +5760,32 @@ function renderChannelBar(messages) {
 
 function toggleSidebar() {
   var sb = document.getElementById('sidebar') || document.getElementById('nav-sidebar');
-  if (sb) sb.classList.toggle('open');
+  if (!sb) return;
+  var isOpen = sb.classList.toggle('open');
+  if (isOpen) {
+    sb.style.display = 'flex';
+    sb.style.width = 'var(--sidebar-w)';
+    sb.style.minWidth = 'var(--sidebar-w)';
+    sb.style.transform = 'translateX(0)';
+  } else {
+    sb.style.display = '';
+    sb.style.width = '';
+    sb.style.minWidth = '';
+    sb.style.transform = '';
+  }
   var ov = document.getElementById('sidebar-overlay');
   if (ov) ov.classList.toggle('open');
 }
 
 function closeSidebar() {
   var sb = document.getElementById('sidebar') || document.getElementById('nav-sidebar');
-  if (sb) sb.classList.remove('open');
+  if (sb) {
+    sb.classList.remove('open');
+    sb.style.display = '';
+    sb.style.width = '';
+    sb.style.minWidth = '';
+    sb.style.transform = '';
+  }
   var ov = document.getElementById('sidebar-overlay');
   if (ov) ov.classList.remove('open');
 }
