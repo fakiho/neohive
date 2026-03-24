@@ -368,19 +368,21 @@ class WorkflowTreeProvider {
 
 // --- Status Bar ---
 
+const EXT_VERSION = require('./package.json').version;
+
 function createStatusBar() {
   const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   item.command = 'neohive.showAgents';
-  item.text = '$(symbol-misc) Neohive';
-  item.tooltip = 'Neohive - Connecting...';
+  item.text = `$(symbol-misc) Neohive v${EXT_VERSION}`;
+  item.tooltip = `Neohive v${EXT_VERSION} - Connecting...`;
   item.show();
   return item;
 }
 
 function updateStatusBar(statusBar, agents, connected) {
   if (!connected) {
-    statusBar.text = '$(symbol-misc) Neohive $(circle-slash)';
-    statusBar.tooltip = 'Neohive - Not connected';
+    statusBar.text = `$(symbol-misc) Neohive v${EXT_VERSION} $(circle-slash)`;
+    statusBar.tooltip = `Neohive v${EXT_VERSION} - Not connected`;
     statusBar.color = new vscode.ThemeColor('statusBarItem.warningForeground');
     return;
   }
@@ -389,8 +391,8 @@ function updateStatusBar(statusBar, agents, connected) {
   const alive = entries.filter(([, a]) => a.alive).length;
   const total = entries.length;
 
-  statusBar.text = `$(symbol-misc) Neohive: ${alive}/${total}`;
-  statusBar.tooltip = `Neohive - ${alive} agents online, ${total} total`;
+  statusBar.text = `$(symbol-misc) Neohive v${EXT_VERSION}: ${alive}/${total}`;
+  statusBar.tooltip = `Neohive v${EXT_VERSION} - ${alive} agents online, ${total} total`;
   statusBar.color = undefined;
 }
 
