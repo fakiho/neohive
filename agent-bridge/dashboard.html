@@ -7296,11 +7296,29 @@ function showProfilePopup(agentName, event) {
     if (cachedHistory[i].from === agentName) sent++;
     if (cachedHistory[i].to === agentName) received++;
   }
-  document.getElementById('pp-stats').innerHTML =
+  var statsHtml =
     '<div class="profile-popup-stat">Sent: <span>' + sent + '</span></div>' +
     '<div class="profile-popup-stat">Received: <span>' + received + '</span></div>' +
     '<div class="profile-popup-stat">Provider: <span>' + escapeHtml(agent.provider || 'unknown') + '</span></div>' +
     '<div class="profile-popup-stat">Branch: <span>' + escapeHtml(agent.branch || 'main') + '</span></div>';
+  document.getElementById('pp-stats').innerHTML = statsHtml;
+
+  // Fetch token usage (Claude agents only)
+  var pq = projectParam();
+  lttFetch('/api/token-usage' + pq).then(function(r) { return r.json(); }).then(function(data) {
+    if (!data || !data.agents || !data.agents[agentName]) return;
+    var tu = data.agents[agentName];
+    var tokenHtml = '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">' +
+      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:4px">Token Usage</div>' +
+      '<div class="profile-popup-stat">Model: <span>' + escapeHtml(tu.model || 'unknown') + '</span></div>' +
+      '<div class="profile-popup-stat">Input: <span>' + (tu.input_tokens || 0).toLocaleString() + '</span></div>' +
+      '<div class="profile-popup-stat">Output: <span>' + (tu.output_tokens || 0).toLocaleString() + '</span></div>' +
+      '<div class="profile-popup-stat">Cache: <span>' + ((tu.cache_creation_tokens || 0) + (tu.cache_read_tokens || 0)).toLocaleString() + '</span></div>' +
+      '<div class="profile-popup-stat" style="font-weight:600">Cost: <span style="color:var(--accent)">$' + (tu.estimated_cost_usd || 0).toFixed(2) + '</span></div>' +
+      '</div>';
+    var el = document.getElementById('pp-stats');
+    if (el) el.innerHTML += tokenHtml;
+  }).catch(function() { /* no token data available */ });
 
   // Position near click
   var rect = event.target.closest('.agent-top').getBoundingClientRect();
@@ -7309,9 +7327,17 @@ function showProfilePopup(agentName, event) {
   popup.classList.add('open');
 }
 
+function showAgentPopup(agentName) {
+  var popup = document.getElementById('profile-popup');
+  var agent = cachedAgents[agentName];
+  if (!agent) return;
+  showProfilePopup(agentName, { stopPropagation: function(){}, target: { closest: function() {
+    return { getBoundingClientRect: function() { return { bottom: 60, left: Math.min(window.innerWidth / 2, window.innerWidth - 280) }; } };
+  }}});
+}
+
 document.addEventListener('click', function() {
   document.getElementById('profile-popup').classList.remove('open');
-  // Reset delete button if popup closes
   var delBtn = document.getElementById('pp-delete-btn');
   if (delBtn) { delBtn.textContent = 'Delete Agent'; delBtn._confirming = false; }
 });
