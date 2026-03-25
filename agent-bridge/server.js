@@ -463,6 +463,7 @@ function touchHeartbeat(name) {
     const payload = {
       last_activity: new Date().toISOString(),
       pid: process.pid,
+      ppid: process.ppid,
     };
     if (_lastStdinActivity) payload.last_stdin_activity = _lastStdinActivity;
     const target = heartbeatFile(name);

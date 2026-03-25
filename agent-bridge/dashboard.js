@@ -446,6 +446,7 @@ function apiAgents(query) {
           const hb = JSON.parse(fs.readFileSync(path.join(dataDir, f), 'utf8'));
           if (hb.last_activity) agents[name].last_activity = hb.last_activity;
           if (hb.pid) agents[name].pid = hb.pid;
+          if (hb.ppid) agents[name].ppid = hb.ppid;
         } catch {}
       }
     }
