@@ -5170,6 +5170,9 @@ function renderAgents(agents) {
     _lastAgentsHash = layoutHash;
   }
 
+  // Update inject target dropdown — must run BEFORE the alertEl guard which may early-return
+  updateInjectTargets(agents);
+
   // Update alert badge
   var alertEl = document.getElementById('alert-count');
   if (!alertEl) return;
@@ -5179,9 +5182,6 @@ function renderAgents(agents) {
   } else {
     alertEl.style.display = 'none';
   }
-
-  // Update inject target dropdown
-  updateInjectTargets(agents);
 }
 
 function sendNudge(agentName) {
