@@ -2,7 +2,7 @@
   "servers": {
     "neohive": {
       "command": "/usr/bin/env",
-      "args": ["npx", "-y", "neohive", "mcp"],
+      "args": ["npx", "-y", "neohive", "serve", "--port", "4321"],
       "cwd": "${workspaceFolder}"
     }
   }
