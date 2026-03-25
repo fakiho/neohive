@@ -1,8 +1,8 @@
 {
   "servers": {
     "neohive": {
-      "command": "/usr/bin/env",
-      "args": ["npx", "-y", "neohive", "serve", "--port", "4321"],
+      "command": "/Users/alifakih/.volta/tools/image/node/24.14.0/bin/node",
+      "args": ["agent-bridge/server.js"],
       "cwd": "${workspaceFolder}"
     }
   }

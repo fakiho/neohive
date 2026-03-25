@@ -7977,6 +7977,17 @@ async function main() {
         }
       });
 
+      httpServer.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+          console.error(`ERROR: Port ${PORT} is already in use.`);
+          console.error(`Another neohive HTTP server may be running. Try:`);
+          console.error(`  kill $(lsof -ti :${PORT})  # free the port`);
+          console.error(`  NEOHIVE_SERVER_PORT=4322 npx neohive serve  # use different port`);
+          process.exit(1);
+        }
+        throw err;
+      });
+
       httpServer.listen(PORT, () => {
         console.error(`Neohive MCP server v6.0.0 running in HTTP mode on port ${PORT}`);
         console.error(`Endpoint: http://localhost:${PORT}/mcp`);
