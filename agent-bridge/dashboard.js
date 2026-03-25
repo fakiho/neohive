@@ -669,6 +669,27 @@ function generateNotifications(currentAgents) {
 }
 
 // --- Token Usage Tracking ---
+
+// Walk the process tree upward from startPid, returning the first PID
+// that has a session file in sessionsDir. Stops after maxDepth levels.
+function findSessionPidInTree(startPid, sessionsDir, maxDepth = 5) {
+  let pid = startPid;
+  for (let i = 0; i < maxDepth; i++) {
+    if (!pid || pid <= 1) break;
+    const candidate = path.join(sessionsDir, pid + '.json');
+    if (fs.existsSync(candidate)) return pid;
+    // Get parent pid via ps
+    try {
+      const { execSync } = require('child_process');
+      const ppidStr = execSync(`ps -o ppid= -p ${pid} 2>/dev/null`, { timeout: 1000 }).toString().trim();
+      const next = parseInt(ppidStr, 10);
+      if (!next || next === pid) break;
+      pid = next;
+    } catch { break; }
+  }
+  return null;
+}
+
 // Pricing per 1M tokens (USD)
 const TOKEN_PRICING = {
   'claude-opus-4-6': { input: 15.00, output: 75.00, cache_write: 18.75, cache_read: 1.50 },
@@ -725,10 +746,12 @@ function apiTokenUsage(query) {
   for (const [name, info] of Object.entries(agents)) {
     if (!info.pid) continue;
     try {
-      // Map CLI PID (ppid) → session ID → session file. Fall back to pid if ppid not available.
-      const cliPid = info.ppid || info.pid;
+      // Walk process tree from ppid (or pid) upward until we find a Claude session file.
+      const startPid = info.ppid || info.pid;
+      const cliPid = findSessionPidInTree(startPid, sessionsDir) ||
+                     findSessionPidInTree(info.pid, sessionsDir);
+      if (!cliPid) continue;
       const pidFile = path.join(sessionsDir, cliPid + '.json');
-      if (!fs.existsSync(pidFile)) continue;
       const session = readJson(pidFile);
       if (!session || !session.sessionId) continue;
       const sessionFile = path.join(projectSessionDir, session.sessionId + '.jsonl');
