@@ -55,12 +55,14 @@
   --nh-accent-5: rgba(245, 158, 11, 0.05);
   --nh-accent-10: rgba(245, 158, 11, 0.1);
   --nh-accent-20: rgba(245, 158, 11, 0.2);
+  --nh-accent-50: rgba(245, 158, 11, 0.5);
   --nh-accent-90: rgba(245, 158, 11, 0.9);
+  --nh-accent-glow: 0 0 12px rgba(245, 158, 11, 0.35);
   --nh-green-10: rgba(16, 185, 129, 0.1);
   --nh-green-20: rgba(16, 185, 129, 0.2);
   --nh-green-30: rgba(16, 185, 129, 0.3);
-  --nh-green-glow: 0 0 8px rgba(16, 185, 129, 0.5);
-  --nh-blue-glow: 0 0 8px rgba(59, 130, 246, 0.45);
+  --nh-green-glow: 0 0 12px rgba(16, 185, 129, 0.5);
+  --nh-blue-glow: 0 0 12px rgba(59, 130, 246, 0.45);
   --nh-red-10: rgba(239, 68, 68, 0.12);
   --nh-red-20: rgba(239, 68, 68, 0.22);
   --nh-purple-10: rgba(167, 139, 250, 0.12);
@@ -89,8 +91,14 @@
   --nh-space-8: 32px;
 
   /* —— Elevation (dashboard / modals) —— */
-  --nh-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
+  --nh-shadow-card: 0 8px 32px rgba(0, 0, 0, 0.45);
   --nh-shadow-panel: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  --nh-shadow-inset: inset 0 1px 1px rgba(255, 255, 255, 0.04);
+
+  /* —— Glassmorphism —— */
+  --nh-glass-bg: rgba(20, 20, 22, 0.82);
+  --nh-glass-border: rgba(255, 255, 255, 0.05);
+  --nh-blur: blur(14px);
 
   /* —— Markdown inside message cards —— */
   --nh-code-block-bg: var(--nh-bg);
@@ -104,15 +112,19 @@
   align-items: flex-start;
   gap: var(--nh-space-3);
   background: var(--nh-card);
-  border: 1px solid var(--nh-border);
+  backdrop-filter: var(--nh-blur);
+  -webkit-backdrop-filter: var(--nh-blur);
+  border: 1px solid var(--nh-glass-border);
+  box-shadow: var(--nh-shadow-inset);
   border-radius: var(--nh-radius-xl);
   padding: var(--nh-space-4) var(--nh-space-5);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .nh-msg-card:hover {
-  border-color: rgba(156, 163, 175, 0.45);
-  box-shadow: var(--nh-shadow-card);
+  transform: translateY(-2px);
+  border-color: var(--nh-accent-50);
+  box-shadow: var(--nh-shadow-card), 0 0 15px var(--nh-accent-10);
 }
 
 /* Light theme: same tokens, flipped for dashboard + design-system demos */
@@ -162,6 +174,8 @@
   --nh-yellow-20: rgba(202, 138, 4, 0.2);
   --nh-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08);
   --nh-shadow-panel: 0 25px 50px -12px rgba(0, 0, 0, 0.12);
+  --nh-glass-bg: rgba(255, 255, 255, 0.72);
+  --nh-glass-border: rgba(0, 0, 0, 0.06);
 }
 
 /* —— Base (optional scoped shell) —— */
@@ -322,6 +336,7 @@
   margin: 0 0 var(--nh-space-4);
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -641,13 +656,18 @@
 }
 
 @keyframes nh-pulse-dot {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.92); }
+}
+
+@keyframes nh-glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(16, 185, 129, 0.35); }
+  50% { box-shadow: 0 0 16px rgba(16, 185, 129, 0.65); }
+}
+
+@keyframes nh-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }
 
 /* Activity / presence (dashboard lists, agent rows) — tokens only, no hex */
@@ -658,28 +678,31 @@
   flex-shrink: 0;
   background: var(--nh-text-muted);
   opacity: 0.7;
+  transition: all 0.3s ease;
 }
 
 .nh-presence-dot--working {
   background: var(--nh-green);
   opacity: 1;
   box-shadow: var(--nh-green-glow);
+  animation: nh-glow-pulse 2s infinite ease-in-out;
 }
 
 .nh-presence-dot--listening {
   background: var(--nh-blue);
   opacity: 1;
   box-shadow: var(--nh-blue-glow);
-  animation: nh-pulse-dot 2s infinite;
+  animation: nh-pulse-dot 2s infinite ease-in-out;
 }
 
 .nh-presence-dot--idle {
   background: var(--nh-accent);
   opacity: 1;
-  animation: nh-pulse-dot 2s infinite;
+  animation: nh-pulse-dot 3s infinite ease-in-out;
 }
 
 .nh-presence-dot--offline {
   background: var(--nh-text-muted);
-  opacity: 0.65;
+  opacity: 0.45;
+  filter: grayscale(1);
 }
