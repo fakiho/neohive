@@ -973,6 +973,25 @@ function findReadySteps(workflow) {
   });
 }
 
+const PLATFORM_SKILLS = {
+  claude:       ['terminal', 'file-editing', 'mcp', 'long-context', 'code-generation'],
+  anthropic:    ['terminal', 'file-editing', 'mcp', 'long-context', 'code-generation'],
+  gemini:       ['terminal', 'file-editing', 'mcp', 'web-search', 'multimodal'],
+  google:       ['terminal', 'file-editing', 'mcp', 'web-search', 'multimodal'],
+  cursor:       ['ide-integrated', 'file-editing', 'mcp', 'code-generation', 'linting'],
+  vscode:       ['ide-integrated', 'file-editing', 'mcp', 'code-completion'],
+  copilot:      ['ide-integrated', 'file-editing', 'mcp', 'code-completion'],
+  antigravity:  ['ide-integrated', 'file-editing', 'mcp', 'agentic'],
+  openai:       ['terminal', 'file-editing', 'sandboxed', 'code-generation'],
+  codex:        ['terminal', 'file-editing', 'sandboxed', 'code-generation'],
+  ollama:       ['local-model', 'offline', 'customizable'],
+};
+
+function getPlatformSkills(provider) {
+  if (!provider) return [];
+  return PLATFORM_SKILLS[provider.toLowerCase()] || [];
+}
+
 function findUnassignedTasks(skills) {
   const tasks = getTasks();
   // Exclude blocked_permanent tasks and tasks this agent already failed
@@ -997,6 +1016,8 @@ function findUnassignedTasks(skills) {
   const cards = readJsonFile(AGENT_CARDS_FILE) || {};
   const myCard = cards[registeredName];
   if (myCard && myCard.skills) myCard.skills.forEach(s => historyKeywords.add(s));
+  // Platform skills get half weight (shared across agents, less differentiating)
+  const platformSkillSet = new Set(myCard && myCard.platform_skills ? myCard.platform_skills : []);
 
   // Score each task by affinity (keyword overlap with agent's history + skills)
   // Scale fix: cache task keyword sets to avoid O(N*M) recomputation at 100 agents
@@ -1005,8 +1026,8 @@ function findUnassignedTasks(skills) {
     const bKey = 'taskwords_' + b.id;
     const aWords = cachedRead(aKey, () => ((a.title || '') + ' ' + (a.description || '')).toLowerCase().split(/\W+/).filter(w => w.length > 3), 30000);
     const bWords = cachedRead(bKey, () => ((b.title || '') + ' ' + (b.description || '')).toLowerCase().split(/\W+/).filter(w => w.length > 3), 30000);
-    const aScore = aWords.filter(w => historyKeywords.has(w)).length;
-    const bScore = bWords.filter(w => historyKeywords.has(w)).length;
+    const aScore = aWords.reduce((s, w) => s + (historyKeywords.has(w) ? (platformSkillSet.has(w) ? 0.5 : 1) : 0), 0);
+    const bScore = bWords.reduce((s, w) => s + (historyKeywords.has(w) ? (platformSkillSet.has(w) ? 0.5 : 1) : 0), 0);
     return bScore - aScore;
   });
 }
@@ -1477,12 +1498,16 @@ function toolRegister(name, provider = null, skills = null) {
       saveProfiles(profiles);
     }
 
-    // Save agent card with skills
+    // Save agent card with skills (merge platform defaults + explicit)
     const cards = readJsonFile(AGENT_CARDS_FILE) || {};
+    const explicitSkills = Array.isArray(skills) ? skills.map(s => String(s).toLowerCase().substring(0, 30)).slice(0, 20) : [];
+    const platformSkills = getPlatformSkills(provider);
+    const mergedSkills = [...new Set([...explicitSkills, ...platformSkills])];
     cards[name] = {
       name,
       provider: provider || 'unknown',
-      skills: Array.isArray(skills) ? skills.map(s => String(s).toLowerCase().substring(0, 30)).slice(0, 20) : [],
+      skills: mergedSkills,
+      platform_skills: platformSkills,
       registered_at: now,
     };
     writeJsonFile(AGENT_CARDS_FILE, cards);
