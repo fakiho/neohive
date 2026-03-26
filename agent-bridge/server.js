@@ -988,8 +988,8 @@ const PLATFORM_SKILLS = {
 };
 
 function getPlatformSkills(provider) {
-  if (!provider) return [];
-  return PLATFORM_SKILLS[provider.toLowerCase()] || [];
+  if (!provider || provider === 'unknown') return [];
+  return PLATFORM_SKILLS[provider.toLowerCase()] || ['code-generation', 'file-editing'];
 }
 
 function findUnassignedTasks(skills) {
