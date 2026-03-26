@@ -483,6 +483,90 @@
     text-overflow: ellipsis;
   }
 
+  /* ===== AGENT SKILLS ===== */
+  .agent-skills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .skill-tag {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    background: var(--surface-3);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    transition: all 0.2s ease;
+  }
+
+  /* Platform colors */
+  .platform-claude { background: var(--nh-accent-10); color: var(--nh-accent); border-color: var(--nh-accent-20); }
+  .platform-gemini { background: rgba(59, 130, 246, 0.1); color: var(--nh-blue); border-color: rgba(59, 130, 246, 0.2); }
+  .platform-openai { background: var(--nh-green-10); color: var(--nh-green); border-color: var(--nh-green-20); }
+  .platform-deepseek { background: var(--nh-purple-10); color: var(--nh-purple); border-color: var(--nh-purple-20); }
+  .platform-llama { background: var(--nh-orange-10); color: var(--nh-orange); border-color: var(--nh-orange-20); }
+  .platform-mistral { background: var(--nh-red-10); color: var(--nh-red); border-color: var(--nh-red-20); }
+
+  /* Skill Editor in Profile */
+  .skill-editor {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--surface-2);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  .skill-editor-tag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 8px;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+  }
+
+  .remove-skill-btn {
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .remove-skill-btn:hover { opacity: 1; color: var(--red); }
+
+  .add-skill-box {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .add-skill-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--text);
+    outline: none;
+  }
+
+  .add-skill-input:focus { border-color: var(--accent); }
+
   .nudge-btn {
     background: var(--orange-dim);
     color: var(--orange);
@@ -4342,6 +4426,7 @@
   <div id="pp-role"></div>
   <div class="profile-popup-bio" id="pp-bio"></div>
   <div class="profile-popup-stats" id="pp-stats"></div>
+  <div id="pp-skills-container" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"></div>
   <button class="btn btn-primary" style="width:100%;margin-top:10px" id="pp-edit-btn" onclick="openProfileEditor()">Edit Profile</button>
   <button class="btn btn-danger" style="width:100%;margin-top:6px" id="pp-delete-btn" onclick="confirmDeleteAgent()">Delete Agent</button>
 </div>
@@ -5047,7 +5132,7 @@ function renderAgents(agents) {
   }
 
   var collapsedSig = Object.keys(collapsedRoleGroups).filter(function(k) { return collapsedRoleGroups[k]; }).sort().join(',');
-  var structuralPart = keys.map(function(k) { var a = agents[k]; return k + ':' + (a.alive ? '1' : '0') + ':' + (a.is_listening ? 'L' : 'W') + ':' + (a.role || '') + ':' + (a.status || ''); }).join('|');
+  var structuralPart = keys.map(function(k) { var a = agents[k]; return k + ':' + (a.alive ? '1' : '0') + ':' + (a.is_listening ? 'L' : 'W') + ':' + (a.role || '') + ':' + (a.status || '') + ':' + (a.skills || []).join(','); }).join('|');
   var useGrouping = filtered.length > 6;
   var layoutHash = structuralPart + '|F:' + agentFilterSearch + ':' + agentFilterRole + ':' + agentFilterStatus + '|C:' + collapsedSig + '|G:' + (useGrouping ? '1' : '0');
 
@@ -5112,12 +5197,30 @@ function renderAgents(agents) {
       if (activityText) subtitleParts.push(activityText);
       var subtitleText = subtitleParts.join(' \u00B7 ');
 
+      // Skills: limited to 3 for sidebar cards
+      var skillsHtml = '';
+      if (info.skills && info.skills.length > 0) {
+        var platformClass = 'platform-' + (info.provider || 'unknown').toLowerCase();
+        var platformSkills = info.platform_skills || [];
+        skillsHtml = '<div class="agent-skills">';
+        for (var s = 0; s < Math.min(info.skills.length, 3); s++) {
+          var skill = info.skills[s];
+          var isPlatform = platformSkills.indexOf(skill) !== -1;
+          skillsHtml += '<span class="skill-tag' + (isPlatform ? ' ' + platformClass : '') + '">' + escapeHtml(skill) + '</span>';
+        }
+        if (info.skills.length > 3) {
+          skillsHtml += '<span class="skill-tag" style="opacity:0.5">+' + (info.skills.length - 3) + '</span>';
+        }
+        skillsHtml += '</div>';
+      }
+
       cardHtml += '<div class="' + cardClass + '" data-agent="' + escapeHtml(name) + '" onclick="showProfilePopup(\'' + escapeHtml(name) + '\', event)">' +
         '<div class="agent-top">' +
           avatarHtml +
           '<div class="agent-info">' +
             '<div class="agent-name" style="color:' + color + '">' + escapeHtml(displayName) + '</div>' +
             '<div class="agent-subtitle">' + escapeHtml(subtitleText) + '</div>' +
+            skillsHtml +
           '</div>' +
           '<span class="agent-status-dot ' + state + '" title="' + state + '"></span>' +
         '</div>' +
@@ -7325,6 +7428,84 @@ function showProfilePopup(agentName, event) {
   popup.style.top = Math.min(rect.bottom + 4, window.innerHeight - 280) + 'px';
   popup.style.left = Math.min(rect.left, window.innerWidth - 280) + 'px';
   popup.classList.add('open');
+  renderSkillEditor(agentName);
+}
+
+function renderSkillEditor(agentName) {
+  var agent = cachedAgents[agentName];
+  var container = document.getElementById('pp-skills-container');
+  if (!agent || !container) return;
+
+  var platformClass = 'platform-' + (agent.provider || 'unknown').toLowerCase();
+  var skills = agent.skills || [];
+  var platformSkills = agent.platform_skills || [];
+  
+  var html = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px">Skills & Expertise</div>';
+  html += '<div class="skill-editor">';
+  
+  // Existing skills
+  html += '<div class="skill-tags-inline">';
+  for (var i = 0; i < skills.length; i++) {
+    var skill = skills[i];
+    var isPlatform = platformSkills.indexOf(skill) !== -1;
+    html += '<span class="skill-tag' + (isPlatform ? ' ' + platformClass : '') + '">' + 
+            escapeHtml(skill) + 
+            '<span class="skill-remove" onclick="removeSkill(\'' + escapeHtml(agentName) + '\', ' + i + ')">&times;</span>' +
+            '</span>';
+  }
+  html += '</div>';
+
+  // Add new skill input
+  html += '<div class="skill-input-row" style="margin-top:8px;display:flex;gap:4px">' +
+          '<input type="text" id="new-skill-input" placeholder="Add skill..." onkeydown="if(event.key===' + "'Enter'" + ') addSkill(\'' + escapeHtml(agentName) + '\')" style="flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:11px;color:var(--text)">' +
+          '<button onclick="addSkill(\'' + escapeHtml(agentName) + '\')" style="background:var(--nh-accent-dim);border:1px solid var(--nh-accent);border-radius:4px;padding:0 8px;color:var(--nh-accent);cursor:pointer;font-size:14px">+</button>' +
+          '</div>';
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function addSkill(agentName) {
+  var input = document.getElementById('new-skill-input');
+  var skill = input.value.trim();
+  if (!skill) return;
+
+  var agent = cachedAgents[agentName];
+  var newSkills = (agent.skills || []).slice();
+  if (newSkills.indexOf(skill) === -1) {
+    newSkills.push(skill);
+    updateAgentSkills(agentName, newSkills);
+  }
+  input.value = '';
+}
+
+function removeSkill(agentName, index) {
+  var agent = cachedAgents[agentName];
+  var newSkills = (agent.skills || []).slice();
+  newSkills.splice(index, 1);
+  updateAgentSkills(agentName, newSkills);
+}
+
+function updateAgentSkills(agentName, skills) {
+  var pq = projectParam();
+  lttFetch('/api/agent-cards' + pq, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: agentName, skills: skills })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.error) {
+      showToast('!', 'Update failed: ' + data.error);
+    } else {
+      // Optimistic update of cache
+      if (cachedAgents[agentName]) {
+        cachedAgents[agentName].skills = skills;
+        renderAgents(cachedAgents); // Refresh sidebar
+        renderSkillEditor(agentName); // Refresh popup
+      }
+    }
+  }).catch(function() {
+    showToast('!', 'Update failed');
+  });
 }
 
 function showAgentPopup(agentName) {

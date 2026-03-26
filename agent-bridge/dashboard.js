@@ -499,6 +499,7 @@ function apiAgents(query) {
       appearance: profile.appearance || {},
       hostname: info.hostname || null,
       is_remote: !isLocal && alive,
+      platform_skills: (cards && cards[name] && cards[name].platform_skills) || [],
       skills: (cards && cards[name] && cards[name].skills) || [],
     };
     // Include workspace status for agent intent board
@@ -2812,6 +2813,29 @@ const server = http.createServer(async (req, res) => {
       if (body.role !== undefined) profiles[body.agent].role = (body.role || '').substring(0, 30);
       profiles[body.agent].updated_at = new Date().toISOString();
       fs.writeFileSync(profilesFile, JSON.stringify(profiles, null, 2));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true }));
+    }
+    else if (url.pathname === '/api/agent-cards' && req.method === 'POST') {
+      const body = await parseBody(req);
+      const projectPath = url.searchParams.get('project') || null;
+      const cardsFile = filePath('agent-cards.json', projectPath);
+      const cards = readJson(cardsFile);
+      if (!body.name || !/^[a-zA-Z0-9_-]{1,20}$/.test(body.name)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid agent name' }));
+        return;
+      }
+      if (body.skills !== undefined && !Array.isArray(body.skills)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'skills must be an array' }));
+        return;
+      }
+      if (!cards[body.name]) cards[body.name] = {};
+      if (body.skills !== undefined) {
+        cards[body.name].skills = body.skills.map(s => String(s).toLowerCase().substring(0, 50));
+      }
+      fs.writeFileSync(cardsFile, JSON.stringify(cards, null, 2));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true }));
     }
