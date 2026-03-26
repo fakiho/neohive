@@ -466,6 +466,7 @@ function touchHeartbeat(name) {
       ppid: process.ppid,
     };
     if (_lastStdinActivity) payload.last_stdin_activity = _lastStdinActivity;
+    if (process.env.CLAUDE_SESSION_ID) payload.claude_session_id = process.env.CLAUDE_SESSION_ID;
     const target = heartbeatFile(name);
     const tmp = target + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(payload));
@@ -1462,7 +1463,9 @@ function toolRegister(name, provider = null, skills = null) {
 
     const now = new Date().toISOString();
     const token = (agents[name] && agents[name].token) || generateToken();
-    agents[name] = { pid: process.pid, ppid: process.ppid, timestamp: now, last_activity: now, provider: provider || 'unknown', branch: currentBranch, token, started_at: now };
+    const agentEntry = { pid: process.pid, ppid: process.ppid, timestamp: now, last_activity: now, provider: provider || 'unknown', branch: currentBranch, token, started_at: now };
+    if (process.env.CLAUDE_SESSION_ID) agentEntry.claude_session_id = process.env.CLAUDE_SESSION_ID;
+    agents[name] = agentEntry;
     saveAgents(agents);
     registeredName = name;
     registeredToken = token;

@@ -784,13 +784,29 @@ function apiTokenUsage(query) {
 
   const result = { agents: {}, total_cost_usd: 0, total_tokens: 0 };
 
-  // Phase 1: process-tree lookup for each agent
   const agentSessions = {};
   const claimedFiles = new Set();
 
   for (const [name, info] of Object.entries(agents)) {
     if (!info.pid) continue;
     try {
+      // Priority 0: direct session ID from env var (written to agents.json + heartbeat)
+      const sessionId = info.claude_session_id || (() => {
+        try {
+          const hb = JSON.parse(fs.readFileSync(path.join(dataDir, `heartbeat-${name}.json`), 'utf8'));
+          return hb.claude_session_id || null;
+        } catch { return null; }
+      })();
+      if (sessionId) {
+        const candidate = path.join(projectSessionDir, sessionId + '.jsonl');
+        if (fs.existsSync(candidate)) {
+          agentSessions[name] = candidate;
+          claimedFiles.add(candidate);
+          continue;
+        }
+      }
+
+      // Priority 1: process-tree lookup
       const cliPid = findSessionPidInTree(info.pid, sessionsDir) ||
                      (info.ppid ? findSessionPidInTree(info.ppid, sessionsDir) : null);
       if (cliPid) {
