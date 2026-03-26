@@ -481,6 +481,7 @@ function apiAgents(query) {
 
     result[name] = {
       pid: info.pid,
+      ppid: info.ppid || null,
       alive,
       registered_at: info.timestamp,
       last_activity: lastActivity,
@@ -671,21 +672,38 @@ function generateNotifications(currentAgents) {
 // --- Token Usage Tracking ---
 
 // Walk the process tree upward from startPid, returning the first PID
-// that has a session file in sessionsDir. Stops after maxDepth levels.
+// that has a session file in sessionsDir. At each level also checks
+// sibling processes (children of the same parent) to handle the VS Code
+// MCP topology where the claude binary and MCP server share a parent.
 function findSessionPidInTree(startPid, sessionsDir, maxDepth = 5) {
+  const { execSync } = require('child_process');
+  const getParent = (pid) => {
+    try {
+      const s = execSync(`ps -o ppid= -p ${pid} 2>/dev/null`, { timeout: 1000 }).toString().trim();
+      const n = parseInt(s, 10);
+      return (n && n !== pid) ? n : null;
+    } catch { return null; }
+  };
+  const getSiblings = (parentPid) => {
+    try {
+      return execSync(`pgrep -P ${parentPid} 2>/dev/null`, { timeout: 1000 })
+        .toString().trim().split('\n').map(s => parseInt(s, 10)).filter(Boolean);
+    } catch { return []; }
+  };
+
   let pid = startPid;
   for (let i = 0; i < maxDepth; i++) {
     if (!pid || pid <= 1) break;
-    const candidate = path.join(sessionsDir, pid + '.json');
-    if (fs.existsSync(candidate)) return pid;
-    // Get parent pid via ps
-    try {
-      const { execSync } = require('child_process');
-      const ppidStr = execSync(`ps -o ppid= -p ${pid} 2>/dev/null`, { timeout: 1000 }).toString().trim();
-      const next = parseInt(ppidStr, 10);
-      if (!next || next === pid) break;
-      pid = next;
-    } catch { break; }
+    // Check this pid directly
+    if (fs.existsSync(path.join(sessionsDir, pid + '.json'))) return pid;
+    const parent = getParent(pid);
+    if (!parent) break;
+    // Check siblings (handles VS Code: MCP server and claude binary share same parent)
+    for (const sibling of getSiblings(parent)) {
+      if (sibling === pid) continue;
+      if (fs.existsSync(path.join(sessionsDir, sibling + '.json'))) return sibling;
+    }
+    pid = parent;
   }
   return null;
 }
@@ -746,10 +764,11 @@ function apiTokenUsage(query) {
   for (const [name, info] of Object.entries(agents)) {
     if (!info.pid) continue;
     try {
-      // Walk process tree from ppid (or pid) upward until we find a Claude session file.
-      const startPid = info.ppid || info.pid;
-      const cliPid = findSessionPidInTree(startPid, sessionsDir) ||
-                     findSessionPidInTree(info.pid, sessionsDir);
+      // Walk process tree from the MCP server pid upward (including sibling scan).
+      // Start from the actual MCP server pid so the sibling scan checks its siblings
+      // (e.g. VS Code: MCP server and claude binary share the same parent process).
+      const cliPid = findSessionPidInTree(info.pid, sessionsDir) ||
+                     (info.ppid ? findSessionPidInTree(info.ppid, sessionsDir) : null);
       if (!cliPid) continue;
       const pidFile = path.join(sessionsDir, cliPid + '.json');
       const session = readJson(pidFile);
