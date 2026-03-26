@@ -748,36 +748,93 @@ function parseSessionUsage(sessionFile, maxBytes) {
   return usage;
 }
 
+/**
+ * Score all .jsonl session files in the project dir by birthtime proximity to
+ * an agent's started_at. Returns sorted array of { file, delta } (ascending).
+ */
+function scoreSessionsByProximity(projectSessionDir, agentStartedAt) {
+  if (!agentStartedAt || !fs.existsSync(projectSessionDir)) return [];
+  const agentTs = new Date(agentStartedAt).getTime();
+  if (isNaN(agentTs)) return [];
+
+  const scored = [];
+  try {
+    const files = fs.readdirSync(projectSessionDir).filter(f => f.endsWith('.jsonl'));
+    for (const f of files) {
+      const fp = path.join(projectSessionDir, f);
+      try {
+        const stat = fs.statSync(fp);
+        scored.push({ file: fp, delta: Math.abs(stat.birthtimeMs - agentTs) });
+      } catch { /* skip unreadable */ }
+    }
+  } catch { return []; }
+  scored.sort((a, b) => a.delta - b.delta);
+  return scored;
+}
+
 function apiTokenUsage(query) {
   const projectPath = query.get('project') || null;
   const dataDir = resolveDataDir(projectPath);
   const agents = readJson(filePath('agents.json', projectPath));
   const home = os.homedir();
   const sessionsDir = path.join(home, '.claude', 'sessions');
-  // Build project slug matching Claude Code's format
   const projectAbsPath = projectPath ? path.resolve(projectPath) : path.resolve(process.cwd());
   const projectSlug = projectAbsPath.replace(/\//g, '-');
   const projectSessionDir = path.join(home, '.claude', 'projects', projectSlug);
 
   const result = { agents: {}, total_cost_usd: 0, total_tokens: 0 };
 
+  // Phase 1: process-tree lookup for each agent
+  const agentSessions = {};
+  const claimedFiles = new Set();
+
   for (const [name, info] of Object.entries(agents)) {
     if (!info.pid) continue;
     try {
-      // Walk process tree from the MCP server pid upward (including sibling scan).
-      // Start from the actual MCP server pid so the sibling scan checks its siblings
-      // (e.g. VS Code: MCP server and claude binary share the same parent process).
       const cliPid = findSessionPidInTree(info.pid, sessionsDir) ||
                      (info.ppid ? findSessionPidInTree(info.ppid, sessionsDir) : null);
-      if (!cliPid) continue;
-      const pidFile = path.join(sessionsDir, cliPid + '.json');
-      const session = readJson(pidFile);
-      if (!session || !session.sessionId) continue;
-      const sessionFile = path.join(projectSessionDir, session.sessionId + '.jsonl');
-      if (!fs.existsSync(sessionFile)) continue;
+      if (cliPid) {
+        const pidFile = path.join(sessionsDir, cliPid + '.json');
+        const session = readJson(pidFile);
+        if (session && session.sessionId) {
+          const candidate = path.join(projectSessionDir, session.sessionId + '.jsonl');
+          if (fs.existsSync(candidate)) {
+            agentSessions[name] = candidate;
+            claimedFiles.add(candidate);
+          }
+        }
+      }
+    } catch { /* skip */ }
+  }
 
+  // Phase 2: fallback — greedy assignment by birthtime proximity (closest-first wins)
+  const needFallback = Object.entries(agents)
+    .filter(([name, info]) => info.pid && !agentSessions[name])
+    .map(([name, info]) => {
+      const scored = scoreSessionsByProximity(projectSessionDir, info.started_at || info.timestamp);
+      return { name, scored };
+    })
+    .sort((a, b) => {
+      const aMin = a.scored.length ? a.scored[0].delta : Infinity;
+      const bMin = b.scored.length ? b.scored[0].delta : Infinity;
+      return aMin - bMin;
+    });
+
+  for (const { name, scored } of needFallback) {
+    for (const { file } of scored) {
+      if (!claimedFiles.has(file)) {
+        agentSessions[name] = file;
+        claimedFiles.add(file);
+        break;
+      }
+    }
+  }
+
+  // Phase 3: compute usage + cost
+  for (const [name, sessionFile] of Object.entries(agentSessions)) {
+    try {
+      const info = agents[name];
       const usage = parseSessionUsage(sessionFile);
-      // Calculate cost
       const pricing = TOKEN_PRICING[usage.model] || TOKEN_PRICING['claude-opus-4-6'];
       const cost = (usage.input_tokens * pricing.input + usage.output_tokens * pricing.output + usage.cache_creation_tokens * pricing.cache_write + usage.cache_read_tokens * pricing.cache_read) / 1000000;
 
@@ -794,7 +851,7 @@ function apiTokenUsage(query) {
       };
       result.total_cost_usd += cost;
       result.total_tokens += result.agents[name].total_tokens;
-    } catch { /* skip agents without session data */ }
+    } catch { /* skip */ }
   }
   result.total_cost_usd = Math.round(result.total_cost_usd * 100) / 100;
   return result;
