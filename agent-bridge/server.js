@@ -3431,9 +3431,50 @@ function toolUpdateTask(taskId, status, notes = null) {
     return { success: true, task_id: task.id, status: 'blocked_permanent', circuit_breaker: true, message: 'Task permanently blocked — too many agents failed. Needs human review.' };
   }
 
+  // Review gate: block 'done' if a quality/reviewer agent is online and no approved review exists
+  if (status === 'done') {
+    const agents = getAgents();
+    const profiles = getProfiles();
+    const hasReviewer = Object.keys(agents).some(n => {
+      if (n === registeredName) return false;
+      if (!isPidAlive(agents[n].pid, agents[n].last_activity)) return false;
+      const role = (profiles[n] && profiles[n].role) || '';
+      return role === 'quality' || role === 'reviewer';
+    });
+    if (hasReviewer) {
+      const reviews = getReviews();
+      const hasApproval = reviews.some(r =>
+        r.status === 'approved' &&
+        (r.requested_by === registeredName || (r.file && task.title && task.title.includes(r.file)))
+      );
+      if (!hasApproval) {
+        const reviewId = 'review_' + generateId();
+        reviews.push({
+          id: reviewId,
+          file: task.title,
+          requested_by: registeredName,
+          status: 'pending',
+          requested_at: new Date().toISOString(),
+        });
+        writeJsonFile(REVIEWS_FILE, reviews);
+        task.status = 'in_review';
+        task.updated_at = new Date().toISOString();
+        saveTasks(tasks);
+        broadcastSystemMessage(`[REVIEW GATE] ${registeredName} tried to mark "${task.title}" done but no review exists. Auto-created review ${reviewId}. A reviewer must approve before this task can be completed.`, registeredName);
+        touchActivity();
+        return {
+          blocked: true,
+          task_id: task.id,
+          status: 'in_review',
+          review_id: reviewId,
+          message: `Cannot mark done — a reviewer is online and no approval exists. Review ${reviewId} auto-created. Wait for approval, then try again.`,
+        };
+      }
+    }
+  }
+
   task.status = status;
   task.updated_at = new Date().toISOString();
-  // Clear escalation flag when task is unblocked
   if (status !== 'blocked' && task.escalated_at) delete task.escalated_at;
   if (notes) {
     task.notes.push({ by: registeredName, text: notes, at: new Date().toISOString() });
@@ -5956,6 +5997,12 @@ function fireEvent(eventName, data) {
       }
       break;
     }
+    case 'review_approved': {
+      if (data.author && agents[data.author] && isPidAlive(agents[data.author].pid, agents[data.author].last_activity)) {
+        sendSystemMessage(data.author, `[EVENT] "${data.file}" approved by ${data.reviewer}. You should commit your changes now.`);
+      }
+      break;
+    }
   }
 }
 
@@ -6327,11 +6374,12 @@ function toolSubmitReview(reviewId, status, feedback) {
       rep[review.requested_by].demoted = false;
       writeJsonFile(REPUTATION_FILE, rep);
     }
-    // Notify requester
+    // Notify requester and fire review_approved event
     const agents = getAgents();
     if (agents[review.requested_by]) {
       sendSystemMessage(review.requested_by, `[REVIEW] ${registeredName} approved "${review.file}": ${review.feedback || 'Looks good!'}`);
     }
+    fireEvent('review_approved', { file: review.file, reviewer: registeredName, author: review.requested_by });
   }
 
   // Auto-approve check: if this is a re-submission and auto_approve_next is set
