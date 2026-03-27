@@ -50,6 +50,10 @@
       {
         "command": "neohive.showWorkflows",
         "title": "Neohive: Show Workflows"
+      },
+      {
+        "command": "neohive.setupMcp",
+        "title": "Neohive: Set Up MCP for Copilot Chat"
       }
     ],
     "menus": {
@@ -83,6 +87,11 @@
           "type": "string",
           "default": "",
           "description": "Neohive agent name for this workspace (1–20 chars, alphanumeric/_/-). When set, the extension writes .neohive/ide-activity-{name}.json so the server can layer IDE focus/idle on agent status."
+        },
+        "neohive.devMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "When enabled, MCP setup uses local server.js instead of the published npm package. Also activates when a .neohive-dev file exists in the workspace root."
         }
       }
     }

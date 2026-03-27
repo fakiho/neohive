@@ -396,6 +396,228 @@ function updateStatusBar(statusBar, agents, connected) {
   statusBar.color = undefined;
 }
 
+// --- MCP Auto-Setup ---
+
+function detectIde() {
+  const appName = (vscode.env.appName || '').toLowerCase();
+  if (appName.includes('cursor')) return 'cursor';
+  if (appName.includes('antigravity')) return 'antigravity';
+  if (appName.includes('windsurf')) return 'windsurf';
+  if (appName.includes('visual studio code') || appName.includes('vscode')) return 'vscode';
+  return 'unknown';
+}
+
+const SUPPORTED_IDES = { vscode: true, cursor: true };
+
+function isDevMode() {
+  const setting = vscode.workspace.getConfiguration('neohive').get('devMode', false);
+  if (setting) return true;
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || !folders.length) return false;
+  return fs.existsSync(path.join(folders[0].uri.fsPath, '.neohive-dev'));
+}
+
+function getMcpConfigPath() {
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || !folders.length) return null;
+  const root = folders[0].uri.fsPath;
+  const ide = detectIde();
+  if (ide === 'vscode') return path.join(root, '.vscode', 'mcp.json');
+  if (ide === 'cursor') return path.join(root, '.cursor', 'mcp.json');
+  return null;
+}
+
+function detectNodePath() {
+  const { execSync } = require('child_process');
+  try {
+    const voltaNode = execSync('volta which node', { encoding: 'utf8', timeout: 5000 }).trim();
+    if (voltaNode && fs.existsSync(voltaNode)) return voltaNode;
+  } catch {}
+  try {
+    const whichNode = execSync('which node', { encoding: 'utf8', timeout: 5000 }).trim();
+    if (whichNode && fs.existsSync(whichNode)) return whichNode;
+  } catch {}
+  return process.execPath;
+}
+
+function getMcpStatus() {
+  const ide = detectIde();
+  if (!SUPPORTED_IDES[ide]) return 'unsupported_ide';
+  const mcpPath = getMcpConfigPath();
+  if (!mcpPath) return 'no_workspace';
+  if (!fs.existsSync(mcpPath)) return 'not_configured';
+  try {
+    const config = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+    if (ide === 'cursor') {
+      if (config.mcpServers && config.mcpServers.neohive) return 'ready';
+    } else {
+      if (config.servers && config.servers.neohive) return 'ready';
+    }
+    return 'missing_entry';
+  } catch {
+    return 'invalid';
+  }
+}
+
+function writeMcpConfig() {
+  const ide = detectIde();
+  if (!SUPPORTED_IDES[ide]) return false;
+  const mcpPath = getMcpConfigPath();
+  if (!mcpPath) return false;
+
+  const configDir = path.dirname(mcpPath);
+  if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+
+  const nodePath = detectNodePath();
+  const dev = isDevMode();
+
+  if (ide === 'cursor') {
+    let config = { mcpServers: {} };
+    if (fs.existsSync(mcpPath)) {
+      try {
+        config = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+        if (!config.mcpServers) config.mcpServers = {};
+      } catch {
+        try { fs.copyFileSync(mcpPath, mcpPath + '.backup'); } catch {}
+      }
+    }
+    if (dev) {
+      const folders = vscode.workspace.workspaceFolders;
+      const abDataDir = path.join(folders[0].uri.fsPath, '.neohive').replace(/\\/g, '/');
+      config.mcpServers.neohive = {
+        command: nodePath,
+        args: [path.join(folders[0].uri.fsPath, 'agent-bridge', 'server.js')],
+        env: { NEOHIVE_DATA_DIR: abDataDir },
+        timeout: 300,
+      };
+    } else {
+      config.mcpServers.neohive = {
+        command: '/usr/bin/env',
+        args: ['npx', '-y', 'neohive', 'mcp'],
+        timeout: 300,
+      };
+    }
+    fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n');
+  } else {
+    let config = { servers: {} };
+    if (fs.existsSync(mcpPath)) {
+      try {
+        config = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+        if (!config.servers) config.servers = {};
+      } catch {
+        try { fs.copyFileSync(mcpPath, mcpPath + '.backup'); } catch {}
+      }
+    }
+    if (dev) {
+      const folders = vscode.workspace.workspaceFolders;
+      config.servers.neohive = {
+        command: nodePath,
+        args: [path.join(folders[0].uri.fsPath, 'agent-bridge', 'server.js')],
+        cwd: '${workspaceFolder}',
+      };
+    } else {
+      config.servers.neohive = {
+        command: '/usr/bin/env',
+        args: ['npx', '-y', 'neohive', 'mcp'],
+        cwd: '${workspaceFolder}',
+      };
+    }
+    fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n');
+  }
+  return true;
+}
+
+let mcpStatusBarItem = null;
+
+function updateMcpStatusBar(status) {
+  if (!mcpStatusBarItem) return;
+  const ide = detectIde();
+  const ideName = ide === 'cursor' ? 'Cursor' : ide === 'vscode' ? 'Copilot Chat' : ide;
+  switch (status) {
+    case 'ready':
+      mcpStatusBarItem.text = '$(check) MCP Ready';
+      mcpStatusBarItem.tooltip = `Neohive MCP is configured for ${ideName}`;
+      mcpStatusBarItem.backgroundColor = undefined;
+      break;
+    case 'not_configured':
+    case 'missing_entry':
+    case 'invalid':
+      mcpStatusBarItem.text = '$(warning) MCP Not Set Up';
+      mcpStatusBarItem.tooltip = `Click to set up Neohive MCP for ${ideName}`;
+      mcpStatusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+      break;
+    case 'unsupported_ide':
+      mcpStatusBarItem.text = '$(info) MCP Manual';
+      mcpStatusBarItem.tooltip = `${vscode.env.appName}: auto-setup not available. Run "npx neohive init" in terminal.`;
+      mcpStatusBarItem.backgroundColor = undefined;
+      break;
+    default:
+      mcpStatusBarItem.text = '$(circle-slash) MCP';
+      mcpStatusBarItem.tooltip = 'No workspace open';
+      mcpStatusBarItem.backgroundColor = undefined;
+      break;
+  }
+}
+
+async function checkMcpOnActivate() {
+  const ide = detectIde();
+  const status = getMcpStatus();
+  updateMcpStatusBar(status);
+
+  if (status === 'unsupported_ide') {
+    vscode.window.showInformationMessage(
+      `Neohive MCP auto-setup is not available for ${vscode.env.appName}. Run "npx neohive init" in your terminal to configure manually.`
+    );
+    return;
+  }
+
+  if (status === 'not_configured' || status === 'missing_entry' || status === 'invalid') {
+    const ideName = ide === 'cursor' ? 'Cursor' : 'VS Code Copilot Chat';
+    const action = await vscode.window.showInformationMessage(
+      `Neohive MCP server is not configured for ${ideName}. Set it up now?`,
+      'Set Up Now',
+      'Later'
+    );
+    if (action === 'Set Up Now') {
+      await vscode.commands.executeCommand('neohive.setupMcp');
+    }
+  }
+}
+
+async function commandSetupMcp() {
+  const ide = detectIde();
+  if (!SUPPORTED_IDES[ide]) {
+    vscode.window.showErrorMessage(
+      `MCP auto-setup is not supported for ${vscode.env.appName}. Run "npx neohive init" in your terminal.`
+    );
+    return;
+  }
+
+  const ok = writeMcpConfig();
+  if (!ok) {
+    vscode.window.showErrorMessage('No workspace folder open. Open a folder first.');
+    return;
+  }
+
+  updateMcpStatusBar('ready');
+  const mode = isDevMode() ? ' (dev mode: local server.js)' : '';
+
+  if (ide === 'cursor') {
+    vscode.window.showInformationMessage(
+      `Neohive MCP configured for Cursor${mode}! MCP tools are now available in your AI chat.`
+    );
+  } else {
+    const next = await vscode.window.showInformationMessage(
+      `Neohive MCP configured${mode}! To use it: Open Copilot Chat (Ctrl+Shift+I) \u2192 click the tools icon ({}) \u2192 find "neohive" \u2192 toggle it on.`,
+      'Open Copilot Chat',
+      'Done'
+    );
+    if (next === 'Open Copilot Chat') {
+      vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+    }
+  }
+}
+
 // --- Extension Activation ---
 
 function activate(context) {
@@ -410,6 +632,11 @@ function activate(context) {
   const statusBar = createStatusBar();
   context.subscriptions.push(statusBar);
 
+  mcpStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 49);
+  mcpStatusBarItem.command = 'neohive.setupMcp';
+  context.subscriptions.push(mcpStatusBarItem);
+  mcpStatusBarItem.show();
+
   // Commands
   context.subscriptions.push(
     vscode.commands.registerCommand('neohive.refreshAgents', () => pollData()),
@@ -419,8 +646,11 @@ function activate(context) {
     }),
     vscode.commands.registerCommand('neohive.showWorkflows', () => {
       vscode.commands.executeCommand('neohive-workflows.focus');
-    })
+    }),
+    vscode.commands.registerCommand('neohive.setupMcp', commandSetupMcp)
   );
+
+  checkMcpOnActivate();
 
   // Polling loop
   let connected = false;
@@ -463,6 +693,19 @@ function activate(context) {
       }
     })
   );
+
+  // Watch for MCP config changes to update MCP status bar
+  const mcpPath = getMcpConfigPath();
+  if (mcpPath) {
+    const mcpDir = path.dirname(mcpPath);
+    const mcpWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(mcpDir, 'mcp.json')
+    );
+    mcpWatcher.onDidChange(() => updateMcpStatusBar(getMcpStatus()));
+    mcpWatcher.onDidCreate(() => updateMcpStatusBar(getMcpStatus()));
+    mcpWatcher.onDidDelete(() => updateMcpStatusBar(getMcpStatus()));
+    context.subscriptions.push(mcpWatcher);
+  }
 }
 
 function deactivate() {

@@ -1397,46 +1397,33 @@
   [data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
   [data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
 
-  /* ===== SCROLL TO BOTTOM ===== */
+  /* ===== SCROLL TO BOTTOM PILL ===== */
   .scroll-bottom {
     position: absolute;
     bottom: 80px;
-    right: 24px;
-    background: var(--gradient-accent);
-    color: #fff;
-    border: none;
-    border-radius: 50%;
-    width: 36px;
-    height: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    background-image: var(--gradient-surface);
+    color: var(--text);
+    border: 1px solid var(--border-light);
+    border-radius: 20px;
+    padding: 8px 16px;
     display: none;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 16px;
-    box-shadow: 0 4px 16px var(--accent-glow);
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: var(--shadow-lg), 0 4px 16px rgba(0,0,0,0.1);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     z-index: 10;
     transition: all 0.25s ease;
   }
 
-  .scroll-bottom.visible { display: flex; }
-  .scroll-bottom:hover { transform: translateY(-2px); box-shadow: 0 6px 24px var(--accent-glow); }
-
-  .scroll-bottom .new-count {
-    position: absolute;
-    top: -6px;
-    right: -6px;
-    background: var(--red);
-    color: #fff;
-    font-size: 9px;
-    font-weight: 700;
-    min-width: 16px;
-    height: 16px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 4px;
-  }
+  .scroll-bottom.visible { display: flex; transform: translateX(-50%) translateY(0); }
+  .scroll-bottom:hover { transform: translateX(-50%) translateY(-2px); box-shadow: var(--shadow-lg), 0 6px 20px rgba(0,0,0,0.15); color: var(--accent); }
 
   /* ===== SEARCH BAR ===== */
   .search-bar {
@@ -4407,7 +4394,10 @@
     <div class="audit-log-area" id="audit-log-area" style="display:none; padding:16px 20px; overflow-y:auto; flex:1"></div>
     <div class="stats-area" id="stats-area"></div>
     <div class="docs-area" id="docs-area"><div id="docs-content"></div></div>
-    <button class="scroll-bottom" id="scroll-bottom" onclick="scrollToBottom()">&#x2193;<span class="new-count" id="new-msg-count" style="display:none">0</span></button>
+    <button class="scroll-bottom" id="scroll-bottom" onclick="scrollToBottom()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+      <span id="new-msg-count" style="margin-right:4px">0</span> new messages
+    </button>
     <div class="typing-bar" id="typing-bar"></div>
 
     <!-- MESSAGE INPUT -->
@@ -5638,9 +5628,7 @@ function renderMessages(messages) {
   // Track new messages while scrolled up
   if (isNew && !autoScroll) {
     newWhileScrolled += (filtered.length - lastMessageCount);
-    var countEl = document.getElementById('new-msg-count');
-    countEl.textContent = newWhileScrolled;
-    countEl.style.display = '';
+    document.getElementById('new-msg-count').textContent = newWhileScrolled;
     document.getElementById('scroll-bottom').classList.add('visible');
   }
   // Play sound if new messages arrived
@@ -5969,9 +5957,8 @@ document.getElementById('messages').addEventListener('scroll', function() {
   if (atBottom) {
     scrollBtn.classList.remove('visible');
     newWhileScrolled = 0;
-    document.getElementById('new-msg-count').style.display = 'none';
   } else {
-    scrollBtn.classList.add('visible');
+    if (newWhileScrolled > 0) scrollBtn.classList.add('visible');
   }
 });
 
@@ -5981,7 +5968,6 @@ function scrollToBottom() {
   autoScroll = true;
   newWhileScrolled = 0;
   document.getElementById('scroll-bottom').classList.remove('visible');
-  document.getElementById('new-msg-count').style.display = 'none';
 }
 
 // ==================== COMPACT MODE ====================

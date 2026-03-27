@@ -6881,7 +6881,7 @@ function checkPushAutoApprove(requestId) {
 
 const server = new Server(
   { name: 'neohive', version: '6.0.0' },
-  { capabilities: { tools: {} } }
+  { capabilities: { tools: { listChanged: true } } }
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -6916,6 +6916,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: 'object',
           properties: {},
+          additionalProperties: false,
         },
       },
       {
@@ -7193,6 +7194,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: 'object',
           properties: {},
+          additionalProperties: false,
         },
       },
       // --- Phase 1: Profiles ---
@@ -7321,6 +7323,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: 'object',
           properties: {},
+          additionalProperties: false,
         },
       },
       {
@@ -7340,6 +7343,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: 'object',
           properties: {},
+          additionalProperties: false,
         },
       },
       // --- Channels ---
@@ -7356,7 +7360,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'list_channels',
         description: 'List all channels with members, message counts, and your membership status.',
-        inputSchema: { type: 'object', properties: {} },
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       },
       // --- Briefing & Recovery ---
       {
@@ -7367,7 +7371,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'get_briefing',
         description: 'Get a full project briefing: who is online, active tasks, recent decisions, knowledge base, locked files, progress, and project files. Call this when joining a project or after being away. One call = fully onboarded.',
-        inputSchema: { type: 'object', properties: {} },
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       },
       // --- File Locking ---
       {
@@ -7405,7 +7409,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'kb_list',
         description: 'List all keys in the shared knowledge base with metadata.',
-        inputSchema: { type: 'object', properties: {} },
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       },
       // --- Progress Tracking ---
       {
@@ -7416,7 +7420,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'get_progress',
         description: 'Get progress on all features with completion percentages and overall project progress.',
-        inputSchema: { type: 'object', properties: {} },
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       },
       // --- Voting ---
       {
@@ -7460,7 +7464,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'get_compressed_history',
         description: 'Get conversation history with automatic compression. Old messages are summarized into segments, recent messages shown verbatim. Use this when the conversation is long and you need to catch up without overflowing your context.',
-        inputSchema: { type: 'object', properties: {} },
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       },
       // --- Reputation ---
       {
@@ -7471,7 +7475,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'suggest_task',
         description: 'Get a task suggestion based on your strengths, pending tasks, open reviews, and blocked dependencies. Helps you find the most useful thing to do next.',
-        inputSchema: { type: 'object', properties: {} },
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       },
       // --- Rules tools ---
       {
@@ -7498,7 +7502,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'list_rules',
         description: 'List all project rules (active and inactive count).',
-        inputSchema: { type: 'object', properties: {} },
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       },
       {
         name: 'remove_rule',
@@ -7641,6 +7645,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: 'object',
           properties: {},
+          additionalProperties: false,
         },
       },
       {
