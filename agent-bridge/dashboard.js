@@ -1595,6 +1595,26 @@ function apiRules(query) {
   try { return JSON.parse(fs.readFileSync(rulesFile, 'utf8')); } catch { return []; }
 }
 
+function parseScope(scope) {
+  const result = { role: undefined, provider: undefined, agent: undefined };
+  if (!scope) return result;
+  if (typeof scope === 'object') {
+    if (scope.role) result.role = String(scope.role).toLowerCase();
+    if (scope.provider) result.provider = String(scope.provider).toLowerCase();
+    if (scope.agent) result.agent = String(scope.agent);
+  } else if (typeof scope === 'string' && scope !== 'global') {
+    const parts = scope.split(':');
+    if (parts.length === 2) {
+      const type = parts[0].toLowerCase();
+      const val = parts[1];
+      if (type === 'role') result.role = val.toLowerCase();
+      else if (type === 'platform' || type === 'provider') result.provider = val.toLowerCase();
+      else if (type === 'agent') result.agent = val;
+    }
+  }
+  return result;
+}
+
 function apiAddRule(body, query) {
   const projectPath = query.get('project') || null;
   const rulesFile = filePath('rules.json', projectPath);
@@ -1606,11 +1626,15 @@ function apiAddRule(body, query) {
     try { rules = JSON.parse(fs.readFileSync(rulesFile, 'utf8')); } catch {}
   }
 
+  const parsedScope = parseScope(body.scope);
   const rule = {
     id: 'rule_' + crypto.randomBytes(6).toString('hex'),
     text: body.text.trim(),
     category: body.category || 'general',
     priority: body.priority || 'normal',
+    scope_role: parsedScope.role,
+    scope_provider: parsedScope.provider,
+    scope_agent: parsedScope.agent,
     created_by: body.created_by || 'Dashboard',
     created_at: new Date().toISOString(),
     active: true
@@ -1636,6 +1660,12 @@ function apiUpdateRule(body, query) {
   if (body.text !== undefined) rule.text = body.text.trim();
   if (body.category !== undefined) rule.category = body.category;
   if (body.priority !== undefined) rule.priority = body.priority;
+  if (body.scope !== undefined) {
+    const parsedScope = parseScope(body.scope);
+    rule.scope_role = parsedScope.role;
+    rule.scope_provider = parsedScope.provider;
+    rule.scope_agent = parsedScope.agent;
+  }
   if (body.active !== undefined) rule.active = body.active;
   rule.updated_at = new Date().toISOString();
 
@@ -1659,6 +1689,13 @@ function apiDeleteRule(body, query) {
 
   fs.writeFileSync(rulesFile, JSON.stringify(rules, null, 2));
   return { success: true };
+}
+
+// Audit Log API
+function apiAuditLog(query) {
+  const projectPath = query.get('project') || null;
+  // Read entries, take last 100, newest first
+  return readJsonl(filePath('audit_log.jsonl', projectPath)).slice(-100).reverse();
 }
 
 // Auto-discover .neohive directories nearby
@@ -2704,6 +2741,10 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(result.error ? 400 : 200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
     }
+    else if (url.pathname === '/api/audit-log' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(apiAuditLog(url.searchParams)));
+    }
     else if (url.pathname === '/api/search' && req.method === 'GET') {
       const projectPath = url.searchParams.get('project') || null;
       const query = (url.searchParams.get('q') || '').trim();
@@ -3388,65 +3429,6 @@ const server = http.createServer(async (req, res) => {
         knowledge_base: { entries: kbKeys },
         timestamp: new Date().toISOString(),
       }));
-    }
-
-    // ========== Rules API ==========
-
-    else if (url.pathname === '/api/rules' && req.method === 'GET') {
-      const projectPath = url.searchParams.get('project') || null;
-      const rulesFile = filePath('rules.json', projectPath);
-      const rules = fs.existsSync(rulesFile) ? readJson(rulesFile) : [];
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(Array.isArray(rules) ? rules : []));
-    }
-
-    else if (url.pathname === '/api/rules' && req.method === 'POST') {
-      const projectPath = url.searchParams.get('project') || null;
-      const rulesFile = filePath('rules.json', projectPath);
-      try {
-        const body = await parseBody(req);
-        const { text, category } = body;
-        if (!text || !text.trim()) { res.writeHead(400); res.end(JSON.stringify({ error: 'Rule text required' })); return; }
-        const rules = fs.existsSync(rulesFile) ? readJson(rulesFile) : [];
-        const rule = {
-          id: 'rule_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-          text: text.trim(),
-          category: category || 'custom',
-          created_by: 'dashboard',
-          created_at: new Date().toISOString(),
-          active: true,
-        };
-        rules.push(rule);
-        fs.writeFileSync(rulesFile, JSON.stringify(rules));
-        res.writeHead(201, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(rule));
-      } catch (e) { res.writeHead(400); res.end(JSON.stringify({ error: e.message })); }
-    }
-
-    else if (url.pathname.startsWith('/api/rules/') && req.method === 'DELETE') {
-      const projectPath = url.searchParams.get('project') || null;
-      const rulesFile = filePath('rules.json', projectPath);
-      const ruleId = url.pathname.split('/api/rules/')[1];
-      const rules = fs.existsSync(rulesFile) ? readJson(rulesFile) : [];
-      const idx = rules.findIndex(r => r.id === ruleId);
-      if (idx === -1) { res.writeHead(404); res.end(JSON.stringify({ error: 'Rule not found' })); return; }
-      rules.splice(idx, 1);
-      fs.writeFileSync(rulesFile, JSON.stringify(rules));
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true }));
-    }
-
-    else if (url.pathname.startsWith('/api/rules/') && url.pathname.endsWith('/toggle') && req.method === 'POST') {
-      const projectPath = url.searchParams.get('project') || null;
-      const rulesFile = filePath('rules.json', projectPath);
-      const ruleId = url.pathname.split('/api/rules/')[1].replace('/toggle', '');
-      const rules = fs.existsSync(rulesFile) ? readJson(rulesFile) : [];
-      const rule = rules.find(r => r.id === ruleId);
-      if (!rule) { res.writeHead(404); res.end(JSON.stringify({ error: 'Rule not found' })); return; }
-      rule.active = !rule.active;
-      fs.writeFileSync(rulesFile, JSON.stringify(rules));
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(rule));
     }
 
     // ========== End Rules API ==========

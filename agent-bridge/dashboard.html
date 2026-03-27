@@ -3143,6 +3143,8 @@
     border-radius: 14px;
     padding: 18px;
     width: 260px;
+    max-height: 80vh;
+    overflow-y: auto;
     box-shadow: var(--shadow-lg), 0 0 40px rgba(0,0,0,0.2);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
@@ -4331,8 +4333,16 @@
       <div class="nav-item" data-view="plan" onclick="switchView('plan')">
         <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2l10 6-10 6z"/></svg></span><span class="nav-text">Plan</span>
       </div>
+    </div>
+    <div class="nav-sidebar-divider"></div>
+    <!-- Governance -->
+    <div class="nav-sidebar-section nav-sidebar-governance">
+      <div class="nav-sidebar-label">GOVERNANCE</div>
       <div class="nav-item" data-view="rules" onclick="switchView('rules')">
-        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1L2 4v4c0 3.5 2.5 6.5 6 7.5 3.5-1 6-4 6-7.5V4z"/></svg></span><span class="nav-text">Rules</span>
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1L2 4v4c0 3.5 2.5 6.5 6 7.5 3.5-1 6-4 6-7.5V4z"/></svg></span><span class="nav-text">Policies</span>
+      </div>
+      <div class="nav-item" data-view="audit-log" onclick="switchView('audit-log')">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4v8h10V4H3zm2 2h6v1H5V6zm0 2h6v1H5V8z"/></svg></span><span class="nav-text">Audit Log</span>
       </div>
     </div>
   </nav>
@@ -4361,7 +4371,8 @@
       <div class="view-tab" id="tab-workflows" onclick="switchView('workflows')">Workflows</div>
       <div class="view-tab" id="tab-plan" onclick="switchView('plan')">Plan</div>
       <div class="view-tab" id="tab-launch" onclick="switchView('launch')">Launch</div>
-      <div class="view-tab" id="tab-rules" onclick="switchView('rules')">Rules</div>
+      <div class="view-tab" id="tab-rules" onclick="switchView('rules')">Policies</div>
+      <div class="view-tab" id="tab-audit-log" onclick="switchView('audit-log')">Audit Log</div>
       <div class="view-tab" id="tab-stats" onclick="switchView('stats')">Stats</div>
       <div class="view-tab" id="tab-docs" onclick="switchView('docs')">Docs</div>
     </div>
@@ -4390,6 +4401,7 @@
     <div class="plan-area" id="monitor-panel" style="display:none"></div>
     <div class="launch-area" id="launch-area"></div>
     <div class="rules-area" id="rules-area"></div>
+    <div class="audit-log-area" id="audit-log-area" style="display:none; padding:16px 20px; overflow-y:auto; flex:1"></div>
     <div class="stats-area" id="stats-area"></div>
     <div class="docs-area" id="docs-area"><div id="docs-content"></div></div>
     <button class="scroll-bottom" id="scroll-bottom" onclick="scrollToBottom()">&#x2193;<span class="new-count" id="new-msg-count" style="display:none">0</span></button>
@@ -4476,6 +4488,12 @@
       <button class="cd-tab" onclick="cdSwitchTab('face', this)">Face</button>
       <button class="cd-tab" onclick="cdSwitchTab('outfit', this)">Outfit</button>
       <button class="cd-tab" onclick="cdSwitchTab('accessories', this)">Acc.</button>
+      <button class="cd-tab" onclick="cdSwitchTab('stats', this)">Stats</button>
+    </div>
+
+    <!-- Tab: Stats -->
+    <div class="cd-tab-content" id="cd-tab-stats">
+      <div id="pe-stats-container" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:var(--text)"></div>
     </div>
 
     <!-- Tab: Body -->
@@ -6686,7 +6704,7 @@ function switchView(view) {
     navItems[i].classList.toggle('active', navItems[i].getAttribute('data-view') === view);
   }
   // Update old tab active states (kept for compatibility)
-  var tabIds = ['messages','tasks','workspaces','workflows','plan','launch','rules','stats','docs'];
+  var tabIds = ['messages','tasks','workspaces','workflows','plan','launch','rules','audit-log','stats','docs'];
   for (var t = 0; t < tabIds.length; t++) {
     var el = document.getElementById('tab-' + tabIds[t]);
     if (el) el.classList.toggle('active', view === tabIds[t]);
@@ -6701,6 +6719,10 @@ function switchView(view) {
   document.getElementById('monitor-panel').style.display = view === 'plan' ? 'block' : 'none';
   document.getElementById('launch-area').classList.toggle('visible', view === 'launch');
   document.getElementById('rules-area').classList.toggle('visible', view === 'rules');
+  if (document.getElementById('audit-log-area')) {
+    document.getElementById('audit-log-area').classList.toggle('visible', view === 'audit-log');
+    document.getElementById('audit-log-area').style.display = view === 'audit-log' ? 'block' : 'none';
+  }
   document.getElementById('stats-area').classList.toggle('visible', view === 'stats');
   document.getElementById('docs-area').classList.toggle('visible', view === 'docs');
   document.getElementById('search-bar').style.display = view === 'messages' ? 'flex' : 'none';
@@ -6716,6 +6738,7 @@ function switchView(view) {
   if (view === 'docs') renderDocs();
   if (view === 'launch') renderLaunchPanel();
   if (view === 'rules') fetchRules();
+  if (view === 'audit-log') fetchAuditLog();
   if (view === 'stats') fetchStats();
   if (isMobile) closeSidebar();
 }
@@ -7238,6 +7261,7 @@ function renderInsights(decisions, history) {
 // ==================== RULES TAB ====================
 
 var cachedRules = [];
+var cachedAuditLog = [];
 
 function fetchRules() {
   var pq = projectParam();
@@ -7247,47 +7271,101 @@ function fetchRules() {
   }).catch(function() { cachedRules = []; renderRules(); });
 }
 
+function fetchAuditLog() {
+  var pq = projectParam();
+  lttFetch('/api/audit-log' + pq).then(function(r) { return r.json(); }).then(function(log) {
+    cachedAuditLog = Array.isArray(log) ? log : [];
+    renderAuditLog();
+  }).catch(function() { cachedAuditLog = []; renderAuditLog(); });
+}
+
 function renderRules() {
   var el = document.getElementById('rules-area');
-  var html = '<h3 style="font-size:16px;font-weight:700;margin-bottom:16px">Project Rules</h3>';
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="font-size:16px;font-weight:700">Governance Policies</h3></div>';
 
-  // Add form
-  html += '<div class="rule-add-form">' +
-    '<textarea id="new-rule-text" placeholder="Enter a new rule for all agents to follow..."></textarea>' +
-    '<div class="rule-form-row">' +
-      '<select id="new-rule-category">' +
+  // No-code Rule Builder Form
+  html += '<div class="rule-add-form" style="background:var(--nh-glass-bg);backdrop-filter:blur(var(--nh-blur));border:1px solid var(--nh-glass-border);padding:16px;border-radius:12px;margin-bottom:20px">' +
+    '<h4 style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">CREATE NEW POLICY</h4>' +
+    '<div style="display:flex;gap:12px;margin-bottom:12px">' +
+      '<div style="flex:1">' +
+        '<label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600;letter-spacing:0.5px">WHEN (TRIGGER)</label>' +
+        '<select id="builder-trigger" style="width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:8px;border-radius:6px">' +
+          '<option value="Anytime">Anytime</option>' +
+          '<option value="Before executing a workflow step">Before workflow step</option>' +
+          '<option value="After executing a workflow step">After workflow step</option>' +
+          '<option value="When writing a file">When writing a file</option>' +
+          '<option value="When sending a message">When sending a message</option>' +
+        '</select>' +
+      '</div>' +
+      '<div style="flex:2">' +
+        '<label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600;letter-spacing:0.5px">IF (CONDITION)</label>' +
+        '<input id="builder-condition" type="text" placeholder="e.g. the file ends with .js (optional)" style="width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:8px;border-radius:6px">' +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-bottom:16px">' +
+      '<label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600;letter-spacing:0.5px">THEN (ACTION)</label>' +
+      '<textarea id="builder-action" placeholder="What must the agent do? e.g. Ensure strict type checking is added." style="width:100%;min-height:50px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:8px;border-radius:6px"></textarea>' +
+    '</div>' +
+    '<div style="display:flex;gap:12px;margin-bottom:16px;background:var(--surface-3);padding:10px;border-radius:8px;border:1px dashed var(--border)">' +
+      '<div style="flex:1">' +
+        '<label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600;letter-spacing:0.5px">SCOPE: ROLE</label>' +
+        '<input id="builder-scope-role" type="text" placeholder="e.g. quality" style="width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:6px;border-radius:6px;font-size:12px">' +
+      '</div>' +
+      '<div style="flex:1">' +
+        '<label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600;letter-spacing:0.5px">SCOPE: PROVIDER</label>' +
+        '<input id="builder-scope-provider" type="text" placeholder="e.g. claude" style="width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:6px;border-radius:6px;font-size:12px">' +
+      '</div>' +
+      '<div style="flex:1">' +
+        '<label style="font-size:10px;color:var(--text-muted);display:block;margin-bottom:4px;font-weight:600;letter-spacing:0.5px">SCOPE: AGENT</label>' +
+        '<input id="builder-scope-agent" type="text" placeholder="e.g. Victor" style="width:100%;background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:6px;border-radius:6px;font-size:12px">' +
+      '</div>' +
+    '</div>' +
+    '<div class="rule-form-row" style="display:flex;gap:10px;align-items:center">' +
+      '<select id="new-rule-category" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:6px;border-radius:6px">' +
         '<option value="general">General</option>' +
         '<option value="safety">Safety</option>' +
         '<option value="workflow">Workflow</option>' +
         '<option value="coding">Coding Standards</option>' +
         '<option value="forbidden">Forbidden Actions</option>' +
       '</select>' +
-      '<select id="new-rule-priority">' +
+      '<select id="new-rule-priority" style="background:var(--surface-2);color:var(--text);border:1px solid var(--border);padding:6px;border-radius:6px">' +
         '<option value="normal">Normal</option>' +
         '<option value="important">Important</option>' +
         '<option value="critical">Critical</option>' +
       '</select>' +
-      '<button class="btn btn-primary" onclick="addRule()" style="margin-left:auto">Add Rule</button>' +
+      '<button class="btn btn-primary" onclick="addRule()" style="margin-left:auto;background:var(--gradient-accent);color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:600">Save Policy</button>' +
     '</div>' +
   '</div>';
 
   if (!cachedRules.length) {
-    html += '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:40px 0">No rules defined yet. Add rules above — agents will see them in their guide text automatically.</div>';
+    html += '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:40px 0;background:var(--nh-glass-bg);backdrop-filter:blur(var(--nh-blur));border:1px solid var(--nh-glass-border);border-radius:12px">No policies defined yet.</div>';
   } else {
     for (var i = 0; i < cachedRules.length; i++) {
       var r = cachedRules[i];
       var cardClass = 'rule-card' + (r.active === false ? ' inactive' : '') + (r.priority === 'critical' ? ' critical' : r.priority === 'important' ? ' important' : '');
-      html += '<div class="' + cardClass + '">' +
+      var scopeObj = {};
+      if (r.scope_role) scopeObj.Role = r.scope_role;
+      if (r.scope_provider) scopeObj.Provider = r.scope_provider;
+      if (r.scope_agent) scopeObj.Agent = r.scope_agent;
+      var scopeKeys = Object.keys(scopeObj);
+      var scopeStr = scopeKeys.length > 0 
+                     ? scopeKeys.map(function(k) { return k + ':' + scopeObj[k]; }).join(', ')
+                     : escapeHtml(r.scope || 'global');
+      var hasScope = scopeKeys.length > 0 || (r.scope && r.scope !== 'global');
+      var scopeBadge = hasScope ? '<span style="font-size:9px;padding:2px 6px;border-radius:4px;background:var(--surface-3);color:var(--text-dim);border:1px solid var(--border);margin-right:6px;text-transform:uppercase" title="Scope">' + escapeHtml(scopeStr) + '</span>' : '';
+      
+      html += '<div class="' + cardClass + '" style="background:var(--nh-glass-bg);backdrop-filter:blur(var(--nh-blur));border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px;display:flex;align-items:center">' +
         '<div style="flex:1">' +
-          '<div class="rule-text">' + escapeHtml(r.text) + '</div>' +
+          '<div class="rule-text" style="font-size:14px;color:var(--text);margin-bottom:6px">' + escapeHtml(r.text) + '</div>' +
           '<div style="display:flex;gap:6px;align-items:center;margin-top:4px">' +
-            '<span class="rule-category">' + escapeHtml(r.category || 'general') + '</span>' +
+            scopeBadge +
+            '<span class="rule-category" style="font-size:10px;padding:2px 6px;border-radius:4px;background:var(--purple-dim);color:var(--purple)">' + escapeHtml(r.category || 'general') + '</span>' +
             '<span style="font-size:9px;color:var(--text-muted)">by ' + escapeHtml(r.created_by || '?') + ' &middot; ' + timeAgo(r.created_at) + '</span>' +
           '</div>' +
         '</div>' +
-        '<div class="rule-actions">' +
-          '<button onclick="toggleRule(\'' + r.id + '\',' + (r.active === false ? 'true' : 'false') + ')">' + (r.active === false ? 'Enable' : 'Disable') + '</button>' +
-          '<button onclick="deleteRule(\'' + r.id + '\')" style="color:var(--red,#ef4444)">Delete</button>' +
+        '<div class="rule-actions" style="display:flex;gap:8px;align-items:center">' +
+          '<button class="btn" style="padding:4px 8px;font-size:11px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer" onclick="toggleRule(\'' + r.id + '\',' + (r.active === false ? 'true' : 'false') + ')">' + (r.active === false ? 'Enable' : 'Disable') + '</button>' +
+          '<button class="btn" style="padding:4px 8px;font-size:11px;color:var(--red,#ef4444);background:transparent;border:none;cursor:pointer" onclick="deleteRule(\'' + r.id + '\')">Delete</button>' +
         '</div>' +
       '</div>';
     }
@@ -7296,19 +7374,74 @@ function renderRules() {
   el.innerHTML = html;
 }
 
+function renderAuditLog() {
+  var el = document.getElementById('audit-log-area');
+  if (!el) return;
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="font-size:16px;font-weight:700">Governance Audit Log</h3></div>';
+
+  if (!cachedAuditLog.length) {
+    html += '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:40px 0;background:var(--nh-glass-bg);backdrop-filter:blur(var(--nh-blur));border:1px solid var(--nh-glass-border);border-radius:12px">No enforcement events recorded yet.</div>';
+  } else {
+    html += '<div style="background:var(--nh-glass-bg);backdrop-filter:blur(var(--nh-blur));border:1px solid var(--border);border-radius:12px;overflow:hidden">';
+    for (var i = 0; i < cachedAuditLog.length; i++) {
+        var log = cachedAuditLog[i];
+        var isViolation = log.type === 'violation' || log.event === 'violation' || log.status === 'violation';
+        var icon = isViolation ? '<span style="color:var(--red)">&#x26A0;</span>' : '<span style="color:var(--green)">&#x2713;</span>';
+        var borderLeft = isViolation ? 'border-left:3px solid var(--red)' : 'border-left:3px solid transparent';
+        
+        html += '<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start;' + borderLeft + '">' +
+            '<div style="font-size:16px;margin-top:2px">' + icon + '</div>' +
+            '<div style="flex:1">' + 
+              '<div style="font-size:13px;color:var(--text);margin-bottom:4px"><strong>' + escapeHtml(log.agent || 'System') + '</strong>: ' + escapeHtml(log.description || log.message || '') + '</div>' +
+              '<div style="font-size:11px;color:var(--text-muted)">' + timeAgo(log.timestamp) + (log.rule_id ? ' &middot; Rule ' + escapeHtml(log.rule_id) : '') + '</div>' +
+            '</div>' +
+        '</div>';
+    }
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
 function addRule() {
-  var text = document.getElementById('new-rule-text').value.trim();
-  if (!text) return;
+  var trigger = document.getElementById('builder-trigger').value;
+  var condition = document.getElementById('builder-condition').value.trim();
+  var action = document.getElementById('builder-action').value.trim();
+  
+  if (!action) {
+    alert("Action field is required to create a rule.");
+    return;
+  }
+  
+  var text = "";
+  if (trigger === "Anytime") {
+    text = condition ? "If " + condition + ", then " + action : action;
+  } else {
+    text = trigger + (condition ? " and " + condition : "") + ", then " + action;
+  }
+  
+  var sRole = document.getElementById('builder-scope-role').value.trim();
+  var sProv = document.getElementById('builder-scope-provider').value.trim();
+  var sAgent = document.getElementById('builder-scope-agent').value.trim();
+  var scopeObj = {};
+  if (sRole) scopeObj.role = sRole;
+  if (sProv) scopeObj.provider = sProv;
+  if (sAgent) scopeObj.agent = sAgent;
+  var scope = Object.keys(scopeObj).length > 0 ? scopeObj : 'global';
+
   var category = document.getElementById('new-rule-category').value;
   var priority = document.getElementById('new-rule-priority').value;
   var pq = projectParam();
   lttFetch('/api/rules' + pq, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'add', text: text, category: category, priority: priority, created_by: 'Dashboard' })
+    body: JSON.stringify({ action: 'add', text: text, category: category, priority: priority, scope: scope, created_by: 'Dashboard' })
   }).then(function(r) { return r.json(); }).then(function(res) {
     if (res.success) {
-      document.getElementById('new-rule-text').value = '';
+      document.getElementById('builder-condition').value = '';
+      document.getElementById('builder-action').value = '';
+      document.getElementById('builder-scope-role').value = '';
+      document.getElementById('builder-scope-provider').value = '';
+      document.getElementById('builder-scope-agent').value = '';
       fetchRules();
     }
   }).catch(function(e) { console.error('Add rule failed:', e); });
@@ -7393,42 +7526,28 @@ function showProfilePopup(agentName, event) {
   document.getElementById('pp-role').innerHTML = agent.role ? '<span class="role-badge">' + escapeHtml(agent.role) + '</span>' : '';
   document.getElementById('pp-bio').textContent = agent.bio || '';
 
-  // Stats
-  var sent = 0, received = 0;
-  for (var i = 0; i < cachedHistory.length; i++) {
-    if (cachedHistory[i].from === agentName) sent++;
-    if (cachedHistory[i].to === agentName) received++;
-  }
-  var statsHtml =
-    '<div class="profile-popup-stat">Sent: <span>' + sent + '</span></div>' +
-    '<div class="profile-popup-stat">Received: <span>' + received + '</span></div>' +
-    '<div class="profile-popup-stat">Provider: <span>' + escapeHtml(agent.provider || 'unknown') + '</span></div>' +
-    '<div class="profile-popup-stat">Branch: <span>' + escapeHtml(agent.branch || 'main') + '</span></div>';
-  document.getElementById('pp-stats').innerHTML = statsHtml;
-
-  // Fetch token usage (Claude agents only)
-  var pq = projectParam();
-  lttFetch('/api/token-usage' + pq).then(function(r) { return r.json(); }).then(function(data) {
-    if (!data || !data.agents || !data.agents[agentName]) return;
-    var tu = data.agents[agentName];
-    var tokenHtml = '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">' +
-      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:4px">Token Usage</div>' +
-      '<div class="profile-popup-stat">Model: <span>' + escapeHtml(tu.model || 'unknown') + '</span></div>' +
-      '<div class="profile-popup-stat">Input: <span>' + (tu.input_tokens || 0).toLocaleString() + '</span></div>' +
-      '<div class="profile-popup-stat">Output: <span>' + (tu.output_tokens || 0).toLocaleString() + '</span></div>' +
-      '<div class="profile-popup-stat">Cache: <span>' + ((tu.cache_creation_tokens || 0) + (tu.cache_read_tokens || 0)).toLocaleString() + '</span></div>' +
-      '<div class="profile-popup-stat" style="font-weight:600">Cost: <span style="color:var(--accent)">$' + (tu.estimated_cost_usd || 0).toFixed(2) + '</span></div>' +
-      '</div>';
-    var el = document.getElementById('pp-stats');
-    if (el) el.innerHTML += tokenHtml;
-  }).catch(function() { /* no token data available */ });
+  renderSkillEditor(agentName);
 
   // Position near click
   var rect = event.target.closest('.agent-top').getBoundingClientRect();
-  popup.style.top = Math.min(rect.bottom + 4, window.innerHeight - 280) + 'px';
-  popup.style.left = Math.min(rect.left, window.innerWidth - 280) + 'px';
+  popup.style.visibility = 'hidden';
   popup.classList.add('open');
-  renderSkillEditor(agentName);
+  var popupHeight = popup.offsetHeight;
+  
+  var topPos = rect.bottom + 4;
+  if (topPos + popupHeight > window.innerHeight - 10) {
+    var topSpace = rect.top;
+    var bottomSpace = window.innerHeight - rect.bottom;
+    if (topSpace > bottomSpace && topSpace > popupHeight) {
+      topPos = rect.top - popupHeight - 4;
+    } else {
+      topPos = window.innerHeight - popupHeight - 10;
+    }
+  }
+  
+  popup.style.top = Math.max(10, topPos) + 'px';
+  popup.style.left = Math.min(rect.left, window.innerWidth - 280) + 'px';
+  popup.style.visibility = 'visible';
 }
 
 function renderSkillEditor(agentName) {
@@ -7509,12 +7628,19 @@ function updateAgentSkills(agentName, skills) {
 }
 
 function showAgentPopup(agentName) {
-  var popup = document.getElementById('profile-popup');
   var agent = cachedAgents[agentName];
   if (!agent) return;
-  showProfilePopup(agentName, { stopPropagation: function(){}, target: { closest: function() {
-    return { getBoundingClientRect: function() { return { bottom: 60, left: Math.min(window.innerWidth / 2, window.innerWidth - 280) }; } };
-  }}});
+  editingAgent = agentName;
+  openProfileEditor();
+  
+  // Auto-switch to stats tab
+  var tabs = document.querySelectorAll('.cd-tab');
+  for (var i = 0; i < tabs.length; i++) {
+    if (tabs[i].textContent === 'Stats') {
+      cdSwitchTab('stats', tabs[i]);
+      break;
+    }
+  }
 }
 
 document.addEventListener('click', function() {
@@ -7815,6 +7941,33 @@ function openProfileEditor() {
 
   // Reset to Body tab
   cdSwitchTab('body', document.querySelector('.cd-tab'));
+
+  // Calculate and populate stats
+  var sent = 0, received = 0;
+  for (var i = 0; i < cachedHistory.length; i++) {
+    if (cachedHistory[i].from === editingAgent) sent++;
+    if (cachedHistory[i].to === editingAgent) received++;
+  }
+  var statsHtml =
+    '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Sent: <b style="color:var(--text)">' + sent + '</b></div>' +
+    '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Received: <b style="color:var(--text)">' + received + '</b></div>' +
+    '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Provider: <b style="color:var(--text)">' + escapeHtml(agent.provider || 'unknown') + '</b></div>' +
+    '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Branch: <b style="color:var(--text)">' + escapeHtml(agent.branch || 'main') + '</b></div>';
+  document.getElementById('pe-stats-container').innerHTML = statsHtml;
+
+  var pq = projectParam();
+  lttFetch('/api/token-usage' + pq).then(function(r) { return r.json(); }).then(function(data) {
+    if (!data || !data.agents || !data.agents[editingAgent]) return;
+    var tu = data.agents[editingAgent];
+    var tokenHtml = 
+      '<div style="grid-column:1/-1;margin-top:12px;font-weight:800;color:var(--text);font-size:11px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:4px">Token Usage (<span style="color:var(--accent);font-weight:600">' + escapeHtml(tu.model || 'unknown') + '</span>)</div>' +
+      '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Input: <b style="color:var(--text)">' + (tu.input_tokens || 0).toLocaleString() + '</b> </div>' +
+      '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Output: <b style="color:var(--text)">' + (tu.output_tokens || 0).toLocaleString() + '</b> </div>' +
+      '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Cache: <b style="color:var(--text)">' + ((tu.cache_creation_tokens || 0) + (tu.cache_read_tokens || 0)).toLocaleString() + '</b> </div>' +
+      '<div style="background:var(--accent-dim);color:var(--accent);padding:10px;border-radius:6px;border:1px solid var(--accent);font-weight:700">Cost: $' + (tu.estimated_cost_usd || 0).toFixed(2) + '</div>';
+    var el = document.getElementById('pe-stats-container');
+    if (el) el.innerHTML += tokenHtml;
+  }).catch(function() {});
 
   // Open the panel
   document.getElementById('char-designer').classList.add('open');

@@ -268,9 +268,13 @@ function setupAntigravity(cwd) {
     }
   }
 
+  const abDataDir = path.join(path.resolve(cwd), '.neohive').replace(/\\/g, '/');
+
   config.mcpServers['neohive'] = {
     command: 'npx',
     args: ['-y', 'neohive', 'mcp'],
+    cwd: cwd,
+    env: { NEOHIVE_DATA_DIR: abDataDir },
   };
 
   fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n');
@@ -287,7 +291,7 @@ function setupAntigravity(cwd) {
 }
 
 function neohiveAgentRules(defaultName) {
-  return `# Neohive Multi-Agent Coordination
+  return `# Neohive Agent
 
 You are a Neohive team agent. Follow these rules every session.
 
@@ -306,7 +310,7 @@ Do NOT explore the codebase or take initiative before completing these 3 steps.
 - **After finishing** — call \`update_task(id, status="done")\`, report to Coordinator
 - **Before editing a file** — call \`lock_file(path)\`. Call \`unlock_file(path)\` when done.
 - **Check tasks first** — call \`list_tasks()\` before starting anything. Never take another agent's task.
-- **Keep messages short** — 2–3 paragraphs max: what changed, files, decisions.
+- **Keep messages short** — 2–3 paragraphs max. Lead with what changed, then files, then decisions.
 
 ## Workflow loop
 
@@ -317,7 +321,7 @@ register → get_briefing → listen → [receive task] → update_task(in_progr
 
 Never exit the listen loop.
 
-## Available MCP tools
+## Available MCP tools (neohive server)
 
 **Messaging:** \`register\`, \`send_message\`, \`broadcast\`, \`listen\`, \`check_messages\`, \`get_history\`
 **Tasks:** \`create_task\`, \`update_task\`, \`list_tasks\`
