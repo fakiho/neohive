@@ -65,6 +65,7 @@ const REPUTATION_FILE = path.join(DATA_DIR, 'reputation.json');
 const COMPRESSED_FILE = path.join(DATA_DIR, 'compressed.json');
 const RULES_FILE = path.join(DATA_DIR, 'rules.json');
 const AGENT_CARDS_FILE = path.join(DATA_DIR, 'agent-cards.json');
+const PUSH_REQUESTS_FILE = path.join(DATA_DIR, 'push-requests.json');
 
 // In-memory state for this process
 let registeredName = null;
@@ -6773,6 +6774,84 @@ function toolToggleRule(ruleId) {
   return { success: true, rule_id: ruleId, active: rule.active, message: `Rule ${rule.active ? 'activated' : 'deactivated'}.` };
 }
 
+// --- Push approval system ---
+
+const PUSH_AUTO_APPROVE_MS = 120000; // 2 minutes
+
+function getPushRequests() { return cachedRead('push_requests', () => readJsonFile(PUSH_REQUESTS_FILE) || [], 2000); }
+
+function toolRequestPushApproval(branch, description) {
+  if (!registeredName) return { error: 'You must call register() first' };
+  if (!branch) return { error: 'branch is required' };
+
+  const agents = getAgents();
+  const aliveOthers = Object.keys(agents).filter(n => n !== registeredName && isPidAlive(agents[n].pid, agents[n].last_activity));
+
+  // Auto-approve if no other agents online
+  if (aliveOthers.length === 0) {
+    return { approved: true, auto: true, message: 'No other agents online — auto-approved. You may push.' };
+  }
+
+  const requests = getPushRequests();
+  const id = 'push_' + generateId();
+  const request = {
+    id,
+    branch: branch.substring(0, 100),
+    description: (description || '').substring(0, 500),
+    requested_by: registeredName,
+    requested_at: new Date().toISOString(),
+    status: 'pending',
+    acked_by: null,
+  };
+  requests.push(request);
+  writeJsonFile(PUSH_REQUESTS_FILE, requests);
+
+  broadcastSystemMessage(`[PUSH REQUEST] ${registeredName} wants to push branch "${branch}". ${description || ''}. Call ack_push("${id}") to approve.`, registeredName);
+
+  return {
+    request_id: id,
+    status: 'pending',
+    waiting_on: aliveOthers,
+    auto_approve_after: '2 minutes',
+    message: `Push request created. Waiting for approval from ${aliveOthers.join(', ')}. Auto-approves in 2 minutes if no response.`,
+  };
+}
+
+function toolAckPush(requestId) {
+  if (!registeredName) return { error: 'You must call register() first' };
+  if (!requestId) return { error: 'request_id is required' };
+
+  const requests = getPushRequests();
+  const req = requests.find(r => r.id === requestId);
+  if (!req) return { error: `Push request not found: ${requestId}` };
+  if (req.requested_by === registeredName) return { error: 'Cannot approve your own push request.' };
+  if (req.status !== 'pending') return { error: `Push request already ${req.status}.` };
+
+  req.status = 'approved';
+  req.acked_by = registeredName;
+  req.acked_at = new Date().toISOString();
+  writeJsonFile(PUSH_REQUESTS_FILE, requests);
+
+  sendSystemMessage(req.requested_by, `[PUSH APPROVED] ${registeredName} approved your push of "${req.branch}". You may push now.`);
+
+  return { success: true, request_id: requestId, message: `Push approved for ${req.requested_by} on branch "${req.branch}".` };
+}
+
+function checkPushAutoApprove(requestId) {
+  const requests = getPushRequests();
+  const req = requests.find(r => r.id === requestId);
+  if (!req || req.status !== 'pending') return;
+
+  const elapsed = Date.now() - new Date(req.requested_at).getTime();
+  if (elapsed >= PUSH_AUTO_APPROVE_MS) {
+    req.status = 'auto_approved';
+    req.acked_by = '__system__';
+    req.acked_at = new Date().toISOString();
+    writeJsonFile(PUSH_REQUESTS_FILE, requests);
+    sendSystemMessage(req.requested_by, `[PUSH AUTO-APPROVED] No response after 2 minutes. Push of "${req.branch}" auto-approved. You may push now.`);
+  }
+}
+
 // --- MCP Server setup ---
 
 const server = new Server(
@@ -7414,6 +7493,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['rule_id'],
         },
       },
+      // --- Push approval tools ---
+      {
+        name: 'request_push_approval',
+        description: 'Request approval from another agent before pushing to a branch. Auto-approves after 2 minutes if no response, or immediately if no other agents are online.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            branch: { type: 'string', description: 'Branch name to push (e.g., "main", "feature/xyz")' },
+            description: { type: 'string', description: 'What changes are being pushed' },
+          },
+          required: ['branch'],
+        },
+      },
+      {
+        name: 'ack_push',
+        description: 'Approve another agent\'s push request. Cannot approve your own.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            request_id: { type: 'string', description: 'Push request ID from the system message' },
+          },
+          required: ['request_id'],
+        },
+      },
       // --- Autonomy Engine tools ---
       {
         name: 'get_work',
@@ -7716,6 +7819,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case 'toggle_rule':
         result = toolToggleRule(args.rule_id);
+        break;
+      case 'request_push_approval':
+        result = toolRequestPushApproval(args.branch, args.description);
+        if (result.request_id) {
+          setTimeout(() => checkPushAutoApprove(result.request_id), PUSH_AUTO_APPROVE_MS + 1000);
+        }
+        break;
+      case 'ack_push':
+        result = toolAckPush(args.request_id);
         break;
       case 'get_work':
         result = await toolGetWork(args || {});
