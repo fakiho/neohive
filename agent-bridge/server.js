@@ -3467,7 +3467,8 @@ function toolUpdateTask(taskId, status, notes = null) {
       const reviews = getReviews();
       const hasApproval = reviews.some(r =>
         r.status === 'approved' &&
-        (r.requested_by === registeredName || (r.file && task.title && task.title.includes(r.file)))
+        r.requested_by === registeredName &&
+        (r.file && task.title && (task.title === r.file || task.title.includes(r.file)))
       );
       if (!hasApproval) {
         const reviewId = 'review_' + generateId();

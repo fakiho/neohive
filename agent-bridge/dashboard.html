@@ -3142,9 +3142,12 @@
     border: 1px solid var(--border-light);
     border-radius: 14px;
     padding: 18px;
-    width: 260px;
+    width: 280px;
+    box-sizing: border-box;
     max-height: 80vh;
     overflow-y: auto;
+    overflow-x: hidden;
+    word-break: break-word;
     box-shadow: var(--shadow-lg), 0 0 40px rgba(0,0,0,0.2);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
@@ -5707,10 +5710,17 @@ function renderMessages(messages) {
     var msgAvatarHtml = getMsgAvatar(m.from, color);
 
     if (isSystem) {
-      html += '<div class="message nh-msg-card system-msg' + newClass + '"' + msgIdAttr + '>' +
-        '<div class="msg-body">' +
-          '<div class="msg-content">' + renderMarkdown(m.content) + '</div>' +
-        '</div></div>';
+      if (m.content.toLowerCase().indexOf('violation') !== -1 || m.content.indexOf('[VIOLATION]') !== -1) {
+        html += '<div class="message nh-msg-card system-msg violation-msg' + newClass + '"' + msgIdAttr + ' style="border: 1px solid var(--nh-amber); background: rgba(255, 191, 0, 0.05);">' +
+          '<div class="msg-body">' +
+            '<div class="msg-content" style="color:var(--text);font-weight:500;"><span style="color:var(--nh-amber);margin-right:6px">🔒</span><span style="color:var(--nh-amber);font-weight:700">VIOLATION:</span> ' + renderMarkdown(m.content.replace(/\[?VIOLATION\]?:?\s*/i, '')) + '</div>' +
+          '</div></div>';
+      } else {
+        html += '<div class="message nh-msg-card system-msg' + newClass + '"' + msgIdAttr + '>' +
+          '<div class="msg-body">' +
+            '<div class="msg-content">' + renderMarkdown(m.content) + '</div>' +
+          '</div></div>';
+      }
       lastFrom = '';
       lastTo = '';
     } else if (m.type === 'handoff') {
@@ -8120,6 +8130,20 @@ function buildWorkflowHTML(wf) {
   for (var j = 0; j < wf.steps.length; j++) {
     var s = wf.steps[j];
     var stepColor = s.status === 'done' ? 'var(--green)' : s.status === 'in_progress' ? 'var(--accent)' : 'var(--text-muted)';
+    
+    var hasActiveRule = false;
+    if (typeof cachedRules !== 'undefined' && s.assignee && cachedAgents && cachedAgents[s.assignee]) {
+      var a = cachedAgents[s.assignee];
+      for (var r=0; r < cachedRules.length; r++) {
+         if (!cachedRules[r].active) continue;
+         var matchRole = !cachedRules[r].scope_role || cachedRules[r].scope_role === (a.role || '').toLowerCase();
+         var matchProv = !cachedRules[r].scope_provider || cachedRules[r].scope_provider === (a.provider || '').toLowerCase();
+         var matchAgt = !cachedRules[r].scope_agent || cachedRules[r].scope_agent === s.assignee;
+         if (matchRole && matchProv && matchAgt) { hasActiveRule = true; break; }
+      }
+    }
+    var shieldIcon = hasActiveRule ? '<span class="step-shield" title="Governed by active rules" style="font-size:10px;margin-right:4px;">🛡️</span>' : '';
+
     if (j > 0) stepsHtml += '<span class="step-arrow">&rarr;</span>';
     var stepTimeHtml = '';
     if (s.status === 'done' && s.started_at && s.completed_at) {
@@ -8131,6 +8155,7 @@ function buildWorkflowHTML(wf) {
     }
     stepsHtml += '<div class="step-card ' + s.status + '" data-step-id="' + s.id + '" title="' + escapeHtml(s.notes || '') + '">' +
       '<span class="step-num">' + s.id + '</span>' +
+      shieldIcon +
       '<span class="step-status" style="font-size:10px;color:' + stepColor + ';font-weight:600;text-transform:uppercase">' + s.status.replace('_', ' ') + '</span>' +
       '<div class="step-desc">' + escapeHtml(s.description) + '</div>' +
       (s.assignee ? '<div class="step-assignee">' + escapeHtml(s.assignee) + '</div>' : '') +
