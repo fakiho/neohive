@@ -66,6 +66,7 @@ const COMPRESSED_FILE = path.join(DATA_DIR, 'compressed.json');
 const RULES_FILE = path.join(DATA_DIR, 'rules.json');
 const AGENT_CARDS_FILE = path.join(DATA_DIR, 'agent-cards.json');
 const PUSH_REQUESTS_FILE = path.join(DATA_DIR, 'push-requests.json');
+const AUDIT_LOG_FILE = path.join(DATA_DIR, 'audit_log.jsonl');
 
 // In-memory state for this process
 let registeredName = null;
@@ -3482,6 +3483,7 @@ function toolUpdateTask(taskId, status, notes = null) {
         task.updated_at = new Date().toISOString();
         saveTasks(tasks);
         broadcastSystemMessage(`[REVIEW GATE] ${registeredName} tried to mark "${task.title}" done but no review exists. Auto-created review ${reviewId}. A reviewer must approve before this task can be completed.`, registeredName);
+        logViolation('review_gate_blocked', registeredName, `Task "${task.title}" (${task.id}) blocked — no approved review. Auto-created ${reviewId}.`);
         touchActivity();
         return {
           blocked: true,
@@ -6774,6 +6776,28 @@ function toolToggleRule(ruleId) {
   return { success: true, rule_id: ruleId, active: rule.active, message: `Rule ${rule.active ? 'activated' : 'deactivated'}.` };
 }
 
+// --- Audit log ---
+
+function logViolation(type, agent, details) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    type,
+    agent,
+    details: (details || '').substring(0, 1000),
+  };
+  try {
+    fs.appendFileSync(AUDIT_LOG_FILE, JSON.stringify(entry) + '\n');
+  } catch (e) { log.debug('audit log write failed:', e.message); }
+  return entry;
+}
+
+function toolLogViolation(type, details) {
+  if (!registeredName) return { error: 'You must call register() first' };
+  if (!type) return { error: 'type is required (e.g., "review_skipped", "push_without_approval", "rule_violated")' };
+  const entry = logViolation(type, registeredName, details);
+  return { success: true, logged: entry, message: `Violation logged: ${type}` };
+}
+
 // --- Push approval system ---
 
 const PUSH_AUTO_APPROVE_MS = 120000; // 2 minutes
@@ -7493,7 +7517,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['rule_id'],
         },
       },
-      // --- Push approval tools ---
+      // --- Audit + Push tools ---
+      {
+        name: 'log_violation',
+        description: 'Log a workflow rule violation to the audit trail. Used automatically by review gates, or manually to flag issues.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', description: 'Violation type: review_skipped, push_without_approval, rule_violated, etc.' },
+            details: { type: 'string', description: 'Description of the violation' },
+          },
+          required: ['type'],
+        },
+      },
       {
         name: 'request_push_approval',
         description: 'Request approval from another agent before pushing to a branch. Auto-approves after 2 minutes if no response, or immediately if no other agents are online.',
@@ -7819,6 +7855,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case 'toggle_rule':
         result = toolToggleRule(args.rule_id);
+        break;
+      case 'log_violation':
+        result = toolLogViolation(args.type, args.details);
         break;
       case 'request_push_approval':
         result = toolRequestPushApproval(args.branch, args.description);
