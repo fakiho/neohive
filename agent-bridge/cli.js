@@ -90,6 +90,11 @@ function mcpNodeCommand() {
   return process.execPath;
 }
 
+// MCP stdio "command" for npx — do not use /usr/bin/env (not portable on Windows).
+function mcpNpxCommand() {
+  return process.platform === 'win32' ? 'npx.cmd' : 'npx';
+}
+
 // Configure for Claude Code (.mcp.json in project root)
 function setupClaude(serverPath, cwd) {
   const mcpConfigPath = path.join(cwd, '.mcp.json');
@@ -231,9 +236,13 @@ function setupVSCode(cwd) {
   }
 
   config.servers['neohive'] = {
-    command: '/usr/bin/env',
-    args: ['npx', '-y', 'neohive', 'mcp'],
-    cwd: cwd,
+    type: 'stdio',
+    command: mcpNpxCommand(),
+    args: ['-y', 'neohive', 'mcp'],
+    env: {
+      NEOHIVE_DATA_DIR: '${workspaceFolder}/.neohive',
+    },
+    cwd: '${workspaceFolder}',
   };
 
   fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n');

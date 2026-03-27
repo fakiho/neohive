@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { execFile } = require('child_process');
 
 // --- IDE liveness bridge v2 → .neohive/ide-activity-{agent}.json ---
@@ -271,6 +272,12 @@ class AgentTreeProvider {
   }
 
   getChildren() {
+    const versionItem = new vscode.TreeItem(`Neohive v${EXT_VERSION}`);
+    versionItem.description = detectIde();
+    versionItem.iconPath = new vscode.ThemeIcon('symbol-misc');
+    versionItem.tooltip = `Neohive v${EXT_VERSION} — running on ${vscode.env.appName}`;
+    versionItem.contextValue = 'neohive-version';
+
     const entries = Object.entries(this._agents)
       .filter(([name]) => name !== '__system__' && name !== 'Dashboard')
       .sort((a, b) => {
@@ -282,10 +289,10 @@ class AgentTreeProvider {
     if (entries.length === 0) {
       const item = new vscode.TreeItem('No agents online');
       item.description = 'Start agents with: npx neohive serve';
-      return [item];
+      return [versionItem, item];
     }
 
-    return entries.map(([name, agent]) => new AgentTreeItem(name, agent));
+    return [versionItem, ...entries.map(([name, agent]) => new AgentTreeItem(name, agent))];
   }
 }
 
@@ -407,7 +414,7 @@ function detectIde() {
   return 'unknown';
 }
 
-const SUPPORTED_IDES = { vscode: true, cursor: true };
+const SUPPORTED_IDES = { vscode: true, cursor: true, antigravity: true };
 
 function isDevMode() {
   const setting = vscode.workspace.getConfiguration('neohive').get('devMode', false);
@@ -418,13 +425,21 @@ function isDevMode() {
 }
 
 function getMcpConfigPath() {
+  const ide = detectIde();
+  // Antigravity uses a global user-level config, not workspace-level
+  if (ide === 'antigravity') {
+    return path.join(os.homedir(), '.gemini', 'antigravity', 'mcp_config.json');
+  }
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || !folders.length) return null;
   const root = folders[0].uri.fsPath;
-  const ide = detectIde();
   if (ide === 'vscode') return path.join(root, '.vscode', 'mcp.json');
   if (ide === 'cursor') return path.join(root, '.cursor', 'mcp.json');
   return null;
+}
+
+function mcpNpxCommand() {
+  return process.platform === 'win32' ? 'npx.cmd' : 'npx';
 }
 
 function detectNodePath() {
@@ -451,6 +466,7 @@ function getMcpStatus() {
     if (ide === 'cursor') {
       if (config.mcpServers && config.mcpServers.neohive) return 'ready';
     } else {
+      // vscode and antigravity both use the `servers` key
       if (config.servers && config.servers.neohive) return 'ready';
     }
     return 'missing_entry';
@@ -481,9 +497,10 @@ function writeMcpConfig() {
         try { fs.copyFileSync(mcpPath, mcpPath + '.backup'); } catch {}
       }
     }
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || !folders.length) return false;
+    const abDataDir = path.join(folders[0].uri.fsPath, '.neohive').replace(/\\/g, '/');
     if (dev) {
-      const folders = vscode.workspace.workspaceFolders;
-      const abDataDir = path.join(folders[0].uri.fsPath, '.neohive').replace(/\\/g, '/');
       config.mcpServers.neohive = {
         command: nodePath,
         args: [path.join(folders[0].uri.fsPath, 'agent-bridge', 'server.js')],
@@ -492,13 +509,15 @@ function writeMcpConfig() {
       };
     } else {
       config.mcpServers.neohive = {
-        command: '/usr/bin/env',
-        args: ['npx', '-y', 'neohive', 'mcp'],
+        command: mcpNpxCommand(),
+        args: ['-y', 'neohive', 'mcp'],
+        env: { NEOHIVE_DATA_DIR: abDataDir },
         timeout: 300,
       };
     }
     fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n');
   } else {
+    // vscode and antigravity both use { servers: { neohive: {...} } }
     let config = { servers: {} };
     if (fs.existsSync(mcpPath)) {
       try {
@@ -508,18 +527,21 @@ function writeMcpConfig() {
         try { fs.copyFileSync(mcpPath, mcpPath + '.backup'); } catch {}
       }
     }
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || !folders.length) return false;
+    const abDataDir = path.join(folders[0].uri.fsPath, '.neohive').replace(/\\/g, '/');
     if (dev) {
-      const folders = vscode.workspace.workspaceFolders;
       config.servers.neohive = {
         command: nodePath,
         args: [path.join(folders[0].uri.fsPath, 'agent-bridge', 'server.js')],
-        cwd: '${workspaceFolder}',
+        env: { NEOHIVE_DATA_DIR: abDataDir },
+        cwd: folders[0].uri.fsPath,
       };
     } else {
       config.servers.neohive = {
-        command: '/usr/bin/env',
-        args: ['npx', '-y', 'neohive', 'mcp'],
-        cwd: '${workspaceFolder}',
+        command: mcpNpxCommand(),
+        args: ['-y', 'neohive', 'mcp'],
+        env: { NEOHIVE_DATA_DIR: abDataDir },
       };
     }
     fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n');
@@ -532,7 +554,7 @@ let mcpStatusBarItem = null;
 function updateMcpStatusBar(status) {
   if (!mcpStatusBarItem) return;
   const ide = detectIde();
-  const ideName = ide === 'cursor' ? 'Cursor' : ide === 'vscode' ? 'Copilot Chat' : ide;
+  const ideName = ide === 'cursor' ? 'Cursor' : ide === 'antigravity' ? 'Antigravity' : ide === 'vscode' ? 'Copilot Chat' : ide;
   switch (status) {
     case 'ready':
       mcpStatusBarItem.text = '$(check) MCP Ready';
@@ -572,7 +594,7 @@ async function checkMcpOnActivate() {
   }
 
   if (status === 'not_configured' || status === 'missing_entry' || status === 'invalid') {
-    const ideName = ide === 'cursor' ? 'Cursor' : 'VS Code Copilot Chat';
+    const ideName = ide === 'cursor' ? 'Cursor' : ide === 'antigravity' ? 'Antigravity' : 'VS Code Copilot Chat';
     const action = await vscode.window.showInformationMessage(
       `Neohive MCP server is not configured for ${ideName}. Set it up now?`,
       'Set Up Now',
@@ -604,7 +626,11 @@ async function commandSetupMcp() {
 
   if (ide === 'cursor') {
     vscode.window.showInformationMessage(
-      `Neohive MCP configured for Cursor${mode}! MCP tools are now available in your AI chat.`
+      `Neohive MCP configured for Cursor${mode}! MCP tools are now available in your AI Agent chat.`
+    );
+  } else if (ide === 'antigravity') {
+    vscode.window.showInformationMessage(
+      `Neohive MCP configured for Antigravity${mode}! Restart Antigravity to activate the MCP tools.`
     );
   } else {
     const next = await vscode.window.showInformationMessage(
@@ -695,12 +721,16 @@ function activate(context) {
   );
 
   // Watch for MCP config changes to update MCP status bar
+  // Note: Antigravity uses a global path outside the workspace — use Uri-based watcher
   const mcpPath = getMcpConfigPath();
   if (mcpPath) {
+    const mcpFilename = path.basename(mcpPath);
     const mcpDir = path.dirname(mcpPath);
-    const mcpWatcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(mcpDir, 'mcp.json')
-    );
+    const ide = detectIde();
+    const watchPattern = ide === 'antigravity'
+      ? new vscode.RelativePattern(vscode.Uri.file(mcpDir), mcpFilename)
+      : new vscode.RelativePattern(mcpDir, mcpFilename);
+    const mcpWatcher = vscode.workspace.createFileSystemWatcher(watchPattern);
     mcpWatcher.onDidChange(() => updateMcpStatusBar(getMcpStatus()));
     mcpWatcher.onDidCreate(() => updateMcpStatusBar(getMcpStatus()));
     mcpWatcher.onDidDelete(() => updateMcpStatusBar(getMcpStatus()));

@@ -1,8 +1,12 @@
 {
   "servers": {
     "neohive": {
-      "command": "/Users/alifakih/.volta/tools/image/node/24.14.0/bin/node",
-      "args": ["agent-bridge/server.js"],
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/agent-bridge/server.js"],
+      "env": {
+        "NEOHIVE_DATA_DIR": "${workspaceFolder}/.neohive"
+      },
       "cwd": "${workspaceFolder}"
     }
   }

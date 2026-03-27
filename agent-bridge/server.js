@@ -3624,7 +3624,7 @@ function toolListTasks(status = null, assignee = null) {
       created_by: t.created_by,
       created_at: t.created_at,
       updated_at: t.updated_at,
-      notes_count: t.notes.length,
+      notes_count: Array.isArray(t.notes) ? t.notes.length : 0,
     })),
   };
 }
@@ -6908,6 +6908,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['name'],
+          additionalProperties: false,
         },
       },
       {
@@ -6948,6 +6949,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['content'],
+          additionalProperties: false,
         },
       },
       {
@@ -6965,6 +6967,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Only return messages from this specific agent (optional)',
             },
           },
+          additionalProperties: false,
         },
       },
       {
@@ -6979,6 +6982,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['content'],
+          additionalProperties: false,
         },
       },
       {
@@ -6992,6 +6996,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Only listen for messages from this specific agent (optional)',
             },
           },
+          additionalProperties: false,
         },
       },
       {
@@ -7005,6 +7010,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Only listen for messages from this specific agent (optional)',
             },
           },
+          additionalProperties: false,
         },
       },
       {
@@ -7018,6 +7024,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Only show messages from this specific agent (optional)',
             },
           },
+          additionalProperties: false,
         },
       },
       {
@@ -7035,6 +7042,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Max number of messages to consume (default: all)',
             },
           },
+          additionalProperties: false,
         },
       },
       {
@@ -7052,6 +7060,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Filter by type: task_done, workflow_advanced, agent_online, agent_offline, approval_needed (optional)',
             },
           },
+          additionalProperties: false,
         },
       },
       {
@@ -7066,6 +7075,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['message_id'],
+          additionalProperties: false,
         },
       },
       {
@@ -7083,6 +7093,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Filter to only messages in this thread (optional)',
             },
           },
+          additionalProperties: false,
         },
       },
       {
@@ -7101,6 +7112,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['to', 'context'],
+          additionalProperties: false,
         },
       },
       {
@@ -7123,6 +7135,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['file_path'],
+          additionalProperties: false,
         },
       },
       {
@@ -7136,6 +7149,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             assignee: { type: 'string', description: 'Agent to assign to (optional, auto-assigns with 2 agents)' },
           },
           required: ['title'],
+          additionalProperties: false,
         },
       },
       {
@@ -7145,10 +7159,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: 'object',
           properties: {
             task_id: { type: 'string', description: 'Task ID to update' },
-            status: { type: 'string', enum: ['pending', 'in_progress', 'done', 'blocked'], description: 'New status' },
+            status: { type: 'string', enum: ['pending', 'in_progress', 'in_review', 'done', 'blocked', 'blocked_permanent'], description: 'New status' },
             notes: { type: 'string', description: 'Optional progress note' },
           },
           required: ['task_id', 'status'],
+          additionalProperties: false,
         },
       },
       {
@@ -7157,9 +7172,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: 'object',
           properties: {
-            status: { type: 'string', enum: ['pending', 'in_progress', 'done', 'blocked'], description: 'Filter by status' },
+            status: { type: 'string', enum: ['pending', 'in_progress', 'in_review', 'done', 'blocked', 'blocked_permanent'], description: 'Filter by status' },
             assignee: { type: 'string', description: 'Filter by assignee agent name' },
           },
+          additionalProperties: false,
         },
       },
       {
@@ -7173,6 +7189,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Number of recent messages to summarize (default: 20)',
             },
           },
+          additionalProperties: false,
         },
       },
       {
@@ -7186,6 +7203,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             limit: { type: 'number', description: 'Max results (default: 20, max: 50)' },
           },
           required: ['query'],
+          additionalProperties: false,
         },
       },
       {
@@ -7209,6 +7227,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             bio: { type: 'string', description: 'Short bio (max 200 chars)' },
             role: { type: 'string', description: 'Role/title (max 30 chars, e.g. "Architect", "Reviewer")' },
           },
+          additionalProperties: false,
         },
       },
       // --- Phase 2: Workspaces ---
@@ -7222,6 +7241,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             content: { type: 'string', description: 'Content to store (max 100KB)' },
           },
           required: ['key', 'content'],
+          additionalProperties: false,
         },
       },
       {
@@ -7233,6 +7253,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             key: { type: 'string', description: 'Specific key to read (optional — omit for all keys)' },
             agent: { type: 'string', description: 'Agent whose workspace to read (optional — defaults to yourself)' },
           },
+          additionalProperties: false,
         },
       },
       {
@@ -7243,6 +7264,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             agent: { type: 'string', description: 'Agent name (optional — omit for all)' },
           },
+          additionalProperties: false,
         },
       },
       // --- Phase 3: Workflows ---
@@ -7267,6 +7289,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             parallel: { type: 'boolean', default: false, description: 'If true, steps with met dependencies run in parallel (multiple agents work simultaneously)' },
           },
           required: ['name', 'steps'],
+          additionalProperties: false,
         },
       },
       {
@@ -7279,6 +7302,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             notes: { type: 'string', description: 'Optional completion notes (max 500 chars)' },
           },
           required: ['workflow_id'],
+          additionalProperties: false,
         },
       },
       {
@@ -7291,6 +7315,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             action: { type: 'string', enum: ['status', 'rollback'], description: 'Action (default: status)' },
             checkpoint_index: { type: 'number', description: 'Checkpoint index to rollback to (for rollback action)' },
           },
+          additionalProperties: false,
         },
       },
       // --- Phase 4: Branching ---
@@ -7304,6 +7329,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             branch_name: { type: 'string', description: 'Name for the new branch (1-20 alphanumeric chars)' },
           },
           required: ['branch_name'],
+          additionalProperties: false,
         },
       },
       {
@@ -7315,6 +7341,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             branch_name: { type: 'string', description: 'Branch to switch to' },
           },
           required: ['branch_name'],
+          additionalProperties: false,
         },
       },
       {
@@ -7335,6 +7362,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             mode: { type: 'string', description: '"direct" (default), "group" for free chat, or "managed" for structured turn-taking', enum: ['group', 'direct', 'managed'] },
           },
           required: ['mode'],
+          additionalProperties: false,
         },
       },
       {
@@ -7350,12 +7378,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'join_channel',
         description: 'Join or create a channel. Channels let sub-teams communicate without flooding the main conversation. Auto-joined to #general on register. Use channels when team size > 4.',
-        inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Channel name (1-20 chars, e.g. "backend", "testing")' }, description: { type: 'string', description: 'Channel description (optional, max 200 chars)' }, rate_limit: { type: 'object', description: 'Optional rate limit config: { max_sends_per_minute: 10 }. Any member can update.', properties: { max_sends_per_minute: { type: 'number' } } } }, required: ['name'] },
+        inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Channel name (1-20 chars, e.g. "backend", "testing")' }, description: { type: 'string', description: 'Channel description (optional, max 200 chars)' }, rate_limit: { type: 'object', description: 'Optional rate limit config: { max_sends_per_minute: 10 }. Any member can update.', properties: { max_sends_per_minute: { type: 'number' } }, additionalProperties: false } }, required: ['name'], additionalProperties: false },
       },
       {
         name: 'leave_channel',
         description: 'Leave a channel. You will stop receiving messages from it. Cannot leave #general.',
-        inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Channel to leave' } }, required: ['name'] },
+        inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Channel to leave' } }, required: ['name'] , additionalProperties: false},
       },
       {
         name: 'list_channels',
@@ -7366,7 +7394,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'get_guide',
         description: 'Get the collaboration guide — all tool categories, critical rules, and workflow patterns. Call this if you are unsure how to use the tools or need a refresher on best practices. Use level="minimal" for a compact refresher (saves context tokens), "full" for complete reference with tool details.',
-        inputSchema: { type: 'object', properties: { level: { type: 'string', enum: ['minimal', 'standard', 'full'], description: 'Guide detail level: "minimal" (~5 rules, saves tokens), "standard" (default, progressive disclosure), "full" (all rules + tool details)' } } },
+        inputSchema: { type: 'object', properties: { level: { type: 'string', enum: ['minimal', 'standard', 'full'], description: 'Guide detail level: "minimal" (~5 rules, saves tokens), "standard" (default, progressive disclosure), "full" (all rules + tool details)' } } , additionalProperties: false},
       },
       {
         name: 'get_briefing',
@@ -7377,34 +7405,34 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'lock_file',
         description: 'Lock a file for exclusive editing. Other agents will be warned if they try to edit it. Call unlock_file() when done. Locks auto-release if you disconnect.',
-        inputSchema: { type: 'object', properties: { file_path: { type: 'string', description: 'Relative path to the file to lock' } }, required: ['file_path'] },
+        inputSchema: { type: 'object', properties: { file_path: { type: 'string', description: 'Relative path to the file to lock' } }, required: ['file_path'] , additionalProperties: false},
       },
       {
         name: 'unlock_file',
         description: 'Unlock a file you previously locked. Omit file_path to unlock all your files.',
-        inputSchema: { type: 'object', properties: { file_path: { type: 'string', description: 'File to unlock (optional — omit to unlock all)' } } },
+        inputSchema: { type: 'object', properties: { file_path: { type: 'string', description: 'File to unlock (optional — omit to unlock all)' } } , additionalProperties: false},
       },
       // --- Decision Log ---
       {
         name: 'log_decision',
         description: 'Log a team decision so it persists and other agents can reference it. Prevents re-debating the same choices.',
-        inputSchema: { type: 'object', properties: { decision: { type: 'string', description: 'The decision made (max 500 chars)' }, reasoning: { type: 'string', description: 'Why this was decided (optional, max 1000 chars)' }, topic: { type: 'string', description: 'Category like "architecture", "tech-stack", "design" (optional)' } }, required: ['decision'] },
+        inputSchema: { type: 'object', properties: { decision: { type: 'string', description: 'The decision made (max 500 chars)' }, reasoning: { type: 'string', description: 'Why this was decided (optional, max 1000 chars)' }, topic: { type: 'string', description: 'Category like "architecture", "tech-stack", "design" (optional)' } }, required: ['decision'] , additionalProperties: false},
       },
       {
         name: 'get_decisions',
         description: 'Get all logged decisions, optionally filtered by topic.',
-        inputSchema: { type: 'object', properties: { topic: { type: 'string', description: 'Filter by topic (optional)' } } },
+        inputSchema: { type: 'object', properties: { topic: { type: 'string', description: 'Filter by topic (optional)' } } , additionalProperties: false},
       },
       // --- Knowledge Base ---
       {
         name: 'kb_write',
         description: 'Write to the shared team knowledge base. Any agent can read, any agent can write. Use for API specs, conventions, shared data.',
-        inputSchema: { type: 'object', properties: { key: { type: 'string', description: 'Key name (1-50 alphanumeric chars)' }, content: { type: 'string', description: 'Content (max 100KB)' } }, required: ['key', 'content'] },
+        inputSchema: { type: 'object', properties: { key: { type: 'string', description: 'Key name (1-50 alphanumeric chars)' }, content: { type: 'string', description: 'Content (max 100KB)' } }, required: ['key', 'content'] , additionalProperties: false},
       },
       {
         name: 'kb_read',
         description: 'Read from the shared knowledge base. Omit key to read all entries.',
-        inputSchema: { type: 'object', properties: { key: { type: 'string', description: 'Key to read (optional — omit for all)' } } },
+        inputSchema: { type: 'object', properties: { key: { type: 'string', description: 'Key to read (optional — omit for all)' } } , additionalProperties: false},
       },
       {
         name: 'kb_list',
@@ -7415,7 +7443,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'update_progress',
         description: 'Update feature-level progress. Higher level than tasks — tracks overall feature completion percentage.',
-        inputSchema: { type: 'object', properties: { feature: { type: 'string', description: 'Feature name (max 100 chars)' }, percent: { type: 'number', description: 'Completion percentage 0-100' }, notes: { type: 'string', description: 'Progress notes (optional)' } }, required: ['feature', 'percent'] },
+        inputSchema: { type: 'object', properties: { feature: { type: 'string', description: 'Feature name (max 100 chars)' }, percent: { type: 'number', description: 'Completion percentage 0-100' }, notes: { type: 'string', description: 'Progress notes (optional)' } }, required: ['feature', 'percent'] , additionalProperties: false},
       },
       {
         name: 'get_progress',
@@ -7426,39 +7454,39 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'call_vote',
         description: 'Start a vote for the team to decide something. All online agents are notified and can cast their vote.',
-        inputSchema: { type: 'object', properties: { question: { type: 'string', description: 'The question to vote on' }, options: { type: 'array', items: { type: 'string' }, description: 'Array of 2-10 options to choose from' } }, required: ['question', 'options'] },
+        inputSchema: { type: 'object', properties: { question: { type: 'string', description: 'The question to vote on' }, options: { type: 'array', items: { type: 'string' }, description: 'Array of 2-10 options to choose from' } }, required: ['question', 'options'] , additionalProperties: false},
       },
       {
         name: 'cast_vote',
         description: 'Cast your vote on an open vote. Vote auto-resolves when all online agents have voted.',
-        inputSchema: { type: 'object', properties: { vote_id: { type: 'string', description: 'Vote ID' }, choice: { type: 'string', description: 'Your choice (must match one of the options)' } }, required: ['vote_id', 'choice'] },
+        inputSchema: { type: 'object', properties: { vote_id: { type: 'string', description: 'Vote ID' }, choice: { type: 'string', description: 'Your choice (must match one of the options)' } }, required: ['vote_id', 'choice'] , additionalProperties: false},
       },
       {
         name: 'vote_status',
         description: 'Check status of a specific vote or all votes.',
-        inputSchema: { type: 'object', properties: { vote_id: { type: 'string', description: 'Vote ID (optional — omit for all)' } } },
+        inputSchema: { type: 'object', properties: { vote_id: { type: 'string', description: 'Vote ID (optional — omit for all)' } } , additionalProperties: false},
       },
       // --- Code Review ---
       {
         name: 'request_review',
         description: 'Request a code review from the team. Creates a review request and notifies all agents.',
-        inputSchema: { type: 'object', properties: { file_path: { type: 'string', description: 'File to review' }, description: { type: 'string', description: 'What to focus on in the review' } }, required: ['file_path'] },
+        inputSchema: { type: 'object', properties: { file_path: { type: 'string', description: 'File to review' }, description: { type: 'string', description: 'What to focus on in the review' } }, required: ['file_path'] , additionalProperties: false},
       },
       {
         name: 'submit_review',
         description: 'Submit a code review — approve or request changes with feedback.',
-        inputSchema: { type: 'object', properties: { review_id: { type: 'string', description: 'Review ID' }, status: { type: 'string', enum: ['approved', 'changes_requested'], description: 'Review result' }, feedback: { type: 'string', description: 'Your review feedback (max 2000 chars)' } }, required: ['review_id', 'status'] },
+        inputSchema: { type: 'object', properties: { review_id: { type: 'string', description: 'Review ID' }, status: { type: 'string', enum: ['approved', 'changes_requested'], description: 'Review result' }, feedback: { type: 'string', description: 'Your review feedback (max 2000 chars)' } }, required: ['review_id', 'status'] , additionalProperties: false},
       },
       // --- Dependencies ---
       {
         name: 'declare_dependency',
         description: 'Declare that a task depends on another task. You will be notified when the dependency is complete.',
-        inputSchema: { type: 'object', properties: { task_id: { type: 'string', description: 'Your task that is blocked' }, depends_on: { type: 'string', description: 'Task ID that must complete first' } }, required: ['task_id', 'depends_on'] },
+        inputSchema: { type: 'object', properties: { task_id: { type: 'string', description: 'Your task that is blocked' }, depends_on: { type: 'string', description: 'Task ID that must complete first' } }, required: ['task_id', 'depends_on'] , additionalProperties: false},
       },
       {
         name: 'check_dependencies',
         description: 'Check dependency status for a task or all unresolved dependencies.',
-        inputSchema: { type: 'object', properties: { task_id: { type: 'string', description: 'Task ID to check (optional — omit for all unresolved)' } } },
+        inputSchema: { type: 'object', properties: { task_id: { type: 'string', description: 'Task ID to check (optional — omit for all unresolved)' } } , additionalProperties: false},
       },
       // --- Conversation Compression ---
       {
@@ -7470,7 +7498,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'get_reputation',
         description: 'View agent reputation — tasks completed, reviews done, bugs found, strengths. Shows leaderboard when called without agent name.',
-        inputSchema: { type: 'object', properties: { agent: { type: 'string', description: 'Agent name (optional — omit for leaderboard)' } } },
+        inputSchema: { type: 'object', properties: { agent: { type: 'string', description: 'Agent name (optional — omit for leaderboard)' } } , additionalProperties: false},
       },
       {
         name: 'suggest_task',
@@ -7497,6 +7525,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['text'],
+          additionalProperties: false,
         },
       },
       {
@@ -7511,6 +7540,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: 'object',
           properties: { rule_id: { type: 'string', description: 'The rule ID to remove' } },
           required: ['rule_id'],
+          additionalProperties: false,
         },
       },
       {
@@ -7520,6 +7550,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: 'object',
           properties: { rule_id: { type: 'string', description: 'The rule ID to toggle' } },
           required: ['rule_id'],
+          additionalProperties: false,
         },
       },
       // --- Audit + Push tools ---
@@ -7533,6 +7564,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             details: { type: 'string', description: 'Description of the violation' },
           },
           required: ['type'],
+          additionalProperties: false,
         },
       },
       {
@@ -7545,6 +7577,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             description: { type: 'string', description: 'What changes are being pushed' },
           },
           required: ['branch'],
+          additionalProperties: false,
         },
       },
       {
@@ -7556,6 +7589,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             request_id: { type: 'string', description: 'Push request ID from the system message' },
           },
           required: ['request_id'],
+          additionalProperties: false,
         },
       },
       // --- Autonomy Engine tools ---
@@ -7568,6 +7602,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             just_completed: { type: 'string', description: 'What you just finished (for context continuity)' },
             available_skills: { type: 'array', items: { type: 'string' }, description: 'What you are good at (e.g., "backend", "testing", "frontend")' },
           },
+          additionalProperties: false,
         },
       },
       {
@@ -7584,6 +7619,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             learnings: { type: 'string', description: 'What you learned that could help future work' },
           },
           required: ['workflow_id', 'summary', 'verification', 'confidence'],
+          additionalProperties: false,
         },
       },
       {
@@ -7599,6 +7635,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             attempt_number: { type: 'number', description: 'Which retry this is (1, 2, or 3)' },
           },
           required: ['task_or_step', 'what_failed', 'why_it_failed', 'new_approach'],
+          additionalProperties: false,
         },
       },
       {
@@ -7625,6 +7662,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             parallel: { type: 'boolean', description: 'Allow parallel execution of independent steps (default: true)' },
           },
           required: ['name', 'steps'],
+          additionalProperties: false,
         },
       },
       {
@@ -7636,6 +7674,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             content: { type: 'string', description: 'The user request or prompt to distribute' },
           },
           required: ['content'],
+          additionalProperties: false,
         },
       },
       // --- Managed mode tools ---
@@ -7658,6 +7697,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             prompt: { type: 'string', description: 'Optional question or topic for the agent to respond to' },
           },
           required: ['to'],
+          additionalProperties: false,
         },
       },
       {
@@ -7669,6 +7709,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             phase: { type: 'string', description: 'Phase name', enum: ['discussion', 'planning', 'execution', 'review'] },
           },
           required: ['phase'],
+          additionalProperties: false,
         },
       },
     ],

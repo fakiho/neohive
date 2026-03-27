@@ -2,7 +2,7 @@
   "name": "neohive",
   "displayName": "Neohive",
   "description": "Monitor and manage Neohive AI agent collaboration from VS Code",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "alionix",
   "engines": {
     "vscode": "^1.85.0"

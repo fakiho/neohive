@@ -10,12 +10,14 @@
     "start": "node server.js",
     "dashboard": "node dashboard.js",
     "test": "echo \"No tests configured\"",
-    "test:e2e-scroll": "node scripts/test-message-scroll-anchor.mjs"
+    "test:e2e-scroll": "node scripts/test-message-scroll-anchor.mjs",
+    "check-paths": "node scripts/check-portable-paths.mjs"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "files": [
+    "scripts/check-portable-paths.mjs",
     "server.js",
     "dashboard.js",
     "dashboard.html",
