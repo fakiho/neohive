@@ -1268,8 +1268,18 @@ function buildGuide(level = 'standard') {
       } catch (e) { log.debug("guide file read failed:", e.message); }
     }
 
-    // Inject dashboard-managed rules into guide
-    const dashboardRules = getRules().filter(r => r.active);
+    // Inject dashboard-managed rules into guide (filtered by scope)
+    const myProvider = (() => {
+      const ag = getAgents();
+      return ((ag[registeredName] && ag[registeredName].provider) || '').toLowerCase();
+    })();
+    const dashboardRules = getRules().filter(r => {
+      if (!r.active) return false;
+      if (r.scope_role && r.scope_role !== (myRole || '').toLowerCase()) return false;
+      if (r.scope_provider && r.scope_provider !== myProvider) return false;
+      if (r.scope_agent && r.scope_agent !== registeredName) return false;
+      return true;
+    });
     if (dashboardRules.length > 0) {
       for (const r of dashboardRules) {
         rules.push(`[${r.category.toUpperCase()}] ${r.text}`);
@@ -1383,8 +1393,18 @@ function buildGuide(level = 'standard') {
     } catch (e) { log.debug("guide file read failed:", e.message); }
   }
 
-  // Inject dashboard-managed rules into guide
-  const dashboardRules = getRules().filter(r => r.active);
+  // Inject dashboard-managed rules into guide (filtered by scope)
+  const agentProvider = (() => {
+    const ag = getAgents();
+    return ((ag[registeredName] && ag[registeredName].provider) || '').toLowerCase();
+  })();
+  const dashboardRules = getRules().filter(r => {
+    if (!r.active) return false;
+    if (r.scope_role && r.scope_role !== myRole) return false;
+    if (r.scope_provider && r.scope_provider !== agentProvider) return false;
+    if (r.scope_agent && r.scope_agent !== registeredName) return false;
+    return true;
+  });
   if (dashboardRules.length > 0) {
     for (const r of dashboardRules) {
       rules.push(`[${r.category.toUpperCase()}] ${r.text}`);
@@ -6692,11 +6712,12 @@ function toolSuggestTask() {
 
 // --- Rules system: project-level rules visible in dashboard and injected into agent guides ---
 
-function toolAddRule(text, category = 'custom') {
+function toolAddRule(text, category = 'custom', scope = null) {
   if (!registeredName) return { error: 'You must call register() first' };
   if (!text || !text.trim()) return { error: 'Rule text cannot be empty' };
   const validCategories = ['safety', 'workflow', 'code-style', 'communication', 'custom'];
   if (!validCategories.includes(category)) return { error: `Category must be one of: ${validCategories.join(', ')}` };
+  if (scope && typeof scope !== 'object') return { error: 'scope must be an object with optional fields: role, provider, agent' };
 
   const rules = getRules();
   const rule = {
@@ -6707,9 +6728,15 @@ function toolAddRule(text, category = 'custom') {
     created_at: new Date().toISOString(),
     active: true,
   };
+  if (scope) {
+    if (scope.role) rule.scope_role = String(scope.role).toLowerCase();
+    if (scope.provider) rule.scope_provider = String(scope.provider).toLowerCase();
+    if (scope.agent) rule.scope_agent = String(scope.agent);
+  }
   rules.push(rule);
   writeJsonFile(RULES_FILE, rules);
-  return { success: true, rule_id: rule.id, message: `Rule added: "${text.substring(0, 80)}". All agents will see this in their guide.` };
+  const scopeMsg = scope ? ` (scoped to ${JSON.stringify(scope)})` : '';
+  return { success: true, rule_id: rule.id, message: `Rule added: "${text.substring(0, 80)}"${scopeMsg}. Matching agents will see this in their guide.` };
 }
 
 function toolListRules() {
@@ -7345,12 +7372,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       // --- Rules tools ---
       {
         name: 'add_rule',
-        description: 'Add a project rule that all agents must follow. Rules appear in every agent\'s guide and briefing. Categories: safety, workflow, code-style, communication, custom.',
+        description: 'Add a project rule. Rules appear in matching agents\' guide and briefing. Use scope to limit who sees the rule (omit for all agents). Categories: safety, workflow, code-style, communication, custom.',
         inputSchema: {
           type: 'object',
           properties: {
             text: { type: 'string', description: 'The rule text' },
             category: { type: 'string', description: 'Rule category: safety, workflow, code-style, communication, custom' },
+            scope: {
+              type: 'object',
+              description: 'Optional scope filter. Omit for all agents.',
+              properties: {
+                role: { type: 'string', description: 'Only agents with this role (e.g., "quality", "backend")' },
+                provider: { type: 'string', description: 'Only agents on this platform (e.g., "claude", "cursor", "gemini")' },
+                agent: { type: 'string', description: 'Only this specific agent name' },
+              },
+            },
           },
           required: ['text'],
         },
@@ -7670,7 +7706,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolSuggestTask();
         break;
       case 'add_rule':
-        result = toolAddRule(args.text, args.category);
+        result = toolAddRule(args.text, args.category, args.scope);
         break;
       case 'list_rules':
         result = toolListRules();
