@@ -3119,7 +3119,7 @@
     margin-left: 4px;
   }
 
-  /* ===== v3.0: PROFILE POPUP ===== */
+  /* ===== v3.0: PROFILE POPUP (3-TAB) ===== */
   .profile-popup {
     display: none;
     position: fixed;
@@ -3128,16 +3128,16 @@
     background-image: var(--gradient-surface);
     border: 1px solid var(--border-light);
     border-radius: 14px;
-    padding: 18px;
-    width: 280px;
+    padding: 0;
+    width: 310px;
     box-sizing: border-box;
     max-height: 80vh;
-    overflow-y: auto;
     overflow-x: hidden;
+    overflow-y: hidden;
     word-break: break-word;
     box-shadow: var(--shadow-lg), 0 0 40px rgba(0,0,0,0.2);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
 
   .profile-popup.open { display: block; }
@@ -3146,25 +3146,78 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 10px;
+    padding: 16px 18px 12px;
   }
 
   .profile-popup-avatar {
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     object-fit: cover;
+    flex-shrink: 0;
   }
 
   .profile-popup-name {
     font-weight: 700;
     font-size: 15px;
+    line-height: 1.2;
   }
 
   .profile-popup-id {
     font-size: 11px;
     color: var(--text-muted);
   }
+
+  .pp-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+  }
+  .pp-status-badge.online { background: rgba(52,211,153,0.15); color: #34d399; }
+  .pp-status-badge.offline { background: rgba(156,163,175,0.15); color: #9ca3af; }
+  .pp-status-badge.listening { background: rgba(96,165,250,0.15); color: #60a5fa; }
+
+  /* Tab bar */
+  .pp-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 18px;
+    gap: 0;
+  }
+  .pp-tab {
+    flex: 1;
+    padding: 8px 0;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    text-align: center;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .pp-tab:hover { color: var(--text); }
+  .pp-tab.active { color: var(--nh-accent); border-bottom-color: var(--nh-accent); }
+
+  /* Tab content */
+  .pp-tab-content {
+    display: none;
+    padding: 14px 18px 16px;
+    max-height: calc(80vh - 140px);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .pp-tab-content.active { display: block; }
 
   .profile-popup-bio {
     font-size: 12px;
@@ -3176,19 +3229,49 @@
   .profile-popup-stats {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 4px;
+    gap: 6px;
     margin-top: 8px;
   }
 
   .profile-popup-stat {
     font-size: 11px;
     color: var(--text-dim);
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 8px 10px;
   }
 
   .profile-popup-stat span {
     font-weight: 600;
     color: var(--text);
+    display: block;
+    font-size: 16px;
+    margin-bottom: 2px;
   }
+
+  /* Actions tab */
+  .pp-actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .pp-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 500;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .pp-action-btn:hover { background: var(--surface-3); border-color: var(--nh-accent-dim); }
+  .pp-action-btn svg { width: 20px; height: 20px; stroke: var(--nh-accent); fill: none; stroke-width: 1.5; }
 
   /* ===== v3.0: WORKSPACES TAB ===== */
   .workspaces-area {
@@ -4394,9 +4477,9 @@
     <div class="audit-log-area" id="audit-log-area" style="display:none; padding:16px 20px; overflow-y:auto; flex:1"></div>
     <div class="stats-area" id="stats-area"></div>
     <div class="docs-area" id="docs-area"><div id="docs-content"></div></div>
-    <button class="scroll-bottom" id="scroll-bottom" onclick="scrollToBottom()">
+    <button class="scroll-bottom" id="scroll-bottom" type="button" onclick="scrollToBottom()" aria-label="Jump to latest messages.">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
-      <span id="new-msg-count" style="margin-right:4px">0</span> new messages
+      <span id="new-msg-count" style="margin-right:4px">0</span> <span id="new-msg-label">new messages</span>
     </button>
     <div class="typing-bar" id="typing-bar"></div>
 
@@ -4423,17 +4506,36 @@
 <div class="profile-popup" id="profile-popup" onclick="event.stopPropagation()">
   <div class="profile-popup-header">
     <img class="profile-popup-avatar" id="pp-avatar" src="data:," style="display:none">
-    <div>
-      <div class="profile-popup-name" id="pp-name"></div>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+        <div class="profile-popup-name" id="pp-name"></div>
+        <span id="pp-status-badge" class="pp-status-badge"></span>
+      </div>
       <div class="profile-popup-id" id="pp-id"></div>
     </div>
   </div>
-  <div id="pp-role"></div>
-  <div class="profile-popup-bio" id="pp-bio"></div>
-  <div class="profile-popup-stats" id="pp-stats"></div>
-  <div id="pp-skills-container" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"></div>
-  <button class="btn btn-primary" style="width:100%;margin-top:10px" id="pp-edit-btn" onclick="openProfileEditor()">Edit Profile</button>
-  <button class="btn btn-danger" style="width:100%;margin-top:6px" id="pp-delete-btn" onclick="confirmDeleteAgent()">Delete Agent</button>
+  <div class="pp-tabs">
+    <button class="pp-tab active" onclick="switchPpTab('stats')">Stats</button>
+    <button class="pp-tab" onclick="switchPpTab('actions')">Actions</button>
+    <button class="pp-tab" onclick="switchPpTab('profile')">Profile</button>
+  </div>
+  <!-- Stats Tab -->
+  <div class="pp-tab-content active" id="pp-tab-stats">
+    <div id="pp-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+    <div class="profile-popup-stats" id="pp-stats"></div>
+    <div id="pp-skills-readonly" style="margin-top:12px"></div>
+  </div>
+  <!-- Actions Tab -->
+  <div class="pp-tab-content" id="pp-tab-actions">
+    <div class="pp-actions-grid" id="pp-actions"></div>
+  </div>
+  <!-- Profile Tab -->
+  <div class="pp-tab-content" id="pp-tab-profile">
+    <div class="profile-popup-bio" id="pp-bio"></div>
+    <div id="pp-skills-container" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:12px" id="pp-edit-btn" onclick="openProfileEditor()">Edit Profile</button>
+    <button class="btn btn-danger" style="width:100%;margin-top:6px" id="pp-delete-btn" onclick="confirmDeleteAgent()">Delete Agent</button>
+  </div>
 </div>
 
 <!-- Character Designer Panel -->
@@ -5628,7 +5730,7 @@ function renderMessages(messages) {
   // Track new messages while scrolled up
   if (isNew && !autoScroll) {
     newWhileScrolled += (filtered.length - lastMessageCount);
-    document.getElementById('new-msg-count').textContent = newWhileScrolled;
+    updateNewMsgPill(newWhileScrolled);
     document.getElementById('scroll-bottom').classList.add('visible');
   }
   // Play sound if new messages arrived
@@ -5948,6 +6050,25 @@ function closeSidebar() {
   if (ov) ov.classList.remove('open');
 }
 
+function updateNewMsgPill(count) {
+  count = Math.max(0, Number(count) || 0);
+
+  var scrollBtn = document.getElementById('scroll-bottom');
+  var countEl = document.getElementById('new-msg-count');
+  var labelEl = document.getElementById('new-msg-label');
+  if (!scrollBtn || !countEl) return;
+
+  countEl.textContent = count;
+  if (labelEl) labelEl.textContent = count === 1 ? 'new message' : 'new messages';
+
+  if (count > 0) {
+    var label = count === 1 ? 'new message' : 'new messages';
+    scrollBtn.setAttribute('aria-label', 'Jump to latest messages. ' + count + ' ' + label + '.');
+  } else {
+    scrollBtn.setAttribute('aria-label', 'Jump to latest messages.');
+  }
+}
+
 var newWhileScrolled = 0;
 
 document.getElementById('messages').addEventListener('scroll', function() {
@@ -5957,6 +6078,7 @@ document.getElementById('messages').addEventListener('scroll', function() {
   if (atBottom) {
     scrollBtn.classList.remove('visible');
     newWhileScrolled = 0;
+    updateNewMsgPill(0);
   } else {
     if (newWhileScrolled > 0) scrollBtn.classList.add('visible');
   }
@@ -5967,6 +6089,7 @@ function scrollToBottom() {
   el.scrollTop = el.scrollHeight;
   autoScroll = true;
   newWhileScrolled = 0;
+  updateNewMsgPill(0);
   document.getElementById('scroll-bottom').classList.remove('visible');
 }
 
@@ -7506,6 +7629,59 @@ function getMsgAvatar(name, color) {
 
 // ==================== v3.0: PROFILE POPUP ====================
 
+function switchPpTab(tabName) {
+  var tabs = document.querySelectorAll('.pp-tab');
+  var contents = document.querySelectorAll('.pp-tab-content');
+  for (var i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); }
+  for (var j = 0; j < contents.length; j++) { contents[j].classList.remove('active'); }
+  document.getElementById('pp-tab-' + tabName).classList.add('active');
+  var tabBtns = document.querySelectorAll('.pp-tab');
+  for (var k = 0; k < tabBtns.length; k++) {
+    if (tabBtns[k].textContent.toLowerCase() === tabName) tabBtns[k].classList.add('active');
+  }
+}
+
+function ppPing(agentName) {
+  var pq = projectParam();
+  lttFetch('/api/inject' + pq, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: '__user__', to: agentName, content: 'ping' })
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    if (res.success) {
+      var btn = document.querySelector('#pp-actions .pp-ping-btn');
+      if (btn) { btn.style.borderColor = 'var(--nh-green)'; setTimeout(function() { btn.style.borderColor = ''; }, 1000); }
+    }
+  }).catch(function(e) { log.error('Ping failed:', e); });
+}
+
+function ppNudge(agentName) {
+  var sel = document.getElementById('inject-target');
+  if (sel) sel.value = agentName;
+  var ta = document.getElementById('inject-content');
+  if (ta) { ta.value = '@' + agentName + ' '; ta.focus(); }
+  updateSendBtn();
+  document.getElementById('profile-popup').classList.remove('open');
+}
+
+function ppFilterChat(agentName) {
+  searchQuery = agentName.toLowerCase();
+  var input = document.getElementById('search-input');
+  if (input) input.value = agentName;
+  lastMessageCount = 0;
+  renderMessages(cachedHistory);
+  document.getElementById('profile-popup').classList.remove('open');
+}
+
+function ppViewHistory(agentName) {
+  searchQuery = agentName.toLowerCase();
+  var input = document.getElementById('search-input');
+  if (input) input.value = agentName;
+  lastMessageCount = 0;
+  renderMessages(cachedHistory);
+  document.getElementById('profile-popup').classList.remove('open');
+}
+
 function showProfilePopup(agentName, event) {
   event.stopPropagation();
   var popup = document.getElementById('profile-popup');
@@ -7514,22 +7690,90 @@ function showProfilePopup(agentName, event) {
 
   editingAgent = agentName;
   var color = getColor(agentName);
+
+  // Header: avatar, name, status badge
   var ppAvatar = document.getElementById('pp-avatar');
   if (agent.avatar && (agent.avatar.startsWith('data:image/') || agent.avatar.startsWith('/'))) { ppAvatar.setAttribute('src', agent.avatar); ppAvatar.style.display = ''; } else { ppAvatar.style.display = 'none'; }
   document.getElementById('pp-name').textContent = agent.display_name || agentName;
   document.getElementById('pp-name').style.color = color;
   document.getElementById('pp-id').textContent = '@' + agentName;
-  document.getElementById('pp-role').innerHTML = agent.role ? '<span class="role-badge">' + escapeHtml(agent.role) + '</span>' : '';
-  document.getElementById('pp-bio').textContent = agent.bio || '';
 
+  // Status badge
+  var state = agent.status || (!agent.alive ? 'offline' : agent.is_listening ? 'listening' : 'working');
+  var badgeClass = (state === 'offline' || state === 'dead') ? 'offline' : state === 'listening' ? 'listening' : 'online';
+  var statusLabel = state === 'listening' ? 'Listening' : (state === 'offline' || state === 'dead') ? 'Offline' : 'Online';
+  document.getElementById('pp-status-badge').className = 'pp-status-badge ' + badgeClass;
+  document.getElementById('pp-status-badge').textContent = statusLabel;
+
+  // Reset to Stats tab
+  switchPpTab('stats');
+
+  // === Stats Tab ===
+  var badgesHtml = '';
+  if (agent.provider) badgesHtml += '<span class="role-badge" style="font-size:10px">' + escapeHtml(agent.provider) + '</span>';
+  if (agent.role) badgesHtml += '<span class="role-badge" style="font-size:10px">' + escapeHtml(agent.role) + '</span>';
+  document.getElementById('pp-badges').innerHTML = badgesHtml;
+
+  // Count tasks completed and messages for this agent
+  var tasksCompleted = 0;
+  var msgCount = 0;
+  if (cachedTasks) {
+    for (var t = 0; t < cachedTasks.length; t++) {
+      if (cachedTasks[t].assignee === agentName && cachedTasks[t].status === 'done') tasksCompleted++;
+    }
+  }
+  if (cachedHistory) {
+    for (var m = 0; m < cachedHistory.length; m++) {
+      if (cachedHistory[m].from === agentName) msgCount++;
+    }
+  }
+
+  var statsHtml = '<div class="profile-popup-stat"><span>' + tasksCompleted + '</span>Tasks Done</div>' +
+    '<div class="profile-popup-stat"><span>' + msgCount + '</span>Messages</div>';
+  document.getElementById('pp-stats').innerHTML = statsHtml;
+
+  // Skills (read-only display)
+  var skills = agent.skills || [];
+  var skillsRoHtml = '';
+  if (skills.length > 0) {
+    var platformClass = 'platform-' + (agent.provider || 'unknown').toLowerCase();
+    var platformSkills = agent.platform_skills || [];
+    skillsRoHtml = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:6px">Skills</div><div class="skill-tags-inline">';
+    for (var s = 0; s < skills.length; s++) {
+      var isPlatform = platformSkills.indexOf(skills[s]) !== -1;
+      skillsRoHtml += '<span class="skill-tag' + (isPlatform ? ' ' + platformClass : '') + '">' + escapeHtml(skills[s]) + '</span>';
+    }
+    skillsRoHtml += '</div>';
+  }
+  document.getElementById('pp-skills-readonly').innerHTML = skillsRoHtml;
+
+  // === Actions Tab ===
+  var eName = escapeHtml(agentName);
+  var actionsHtml = '<button class="pp-action-btn pp-ping-btn" onclick="ppPing(\'' + eName + '\')">' +
+    '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>' +
+    'Ping</button>' +
+    '<button class="pp-action-btn" onclick="ppNudge(\'' + eName + '\')">' +
+    '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
+    'Nudge</button>' +
+    '<button class="pp-action-btn" onclick="ppFilterChat(\'' + eName + '\')">' +
+    '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>' +
+    'Messages</button>' +
+    '<button class="pp-action-btn" onclick="ppViewHistory(\'' + eName + '\')">' +
+    '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' +
+    'History</button>';
+  document.getElementById('pp-actions').innerHTML = actionsHtml;
+
+  // === Profile Tab ===
+  document.getElementById('pp-bio').textContent = agent.bio || 'No bio set.';
   renderSkillEditor(agentName);
 
-  // Position near click
-  var rect = event.target.closest('.agent-top').getBoundingClientRect();
+  // Position near click — find closest clickable ancestor
+  var anchor = event.target.closest('.agent-top') || event.target.closest('.agent-card') || event.target;
+  var rect = anchor.getBoundingClientRect();
   popup.style.visibility = 'hidden';
   popup.classList.add('open');
   var popupHeight = popup.offsetHeight;
-  
+
   var topPos = rect.bottom + 4;
   if (topPos + popupHeight > window.innerHeight - 10) {
     var topSpace = rect.top;
@@ -7540,9 +7784,9 @@ function showProfilePopup(agentName, event) {
       topPos = window.innerHeight - popupHeight - 10;
     }
   }
-  
+
   popup.style.top = Math.max(10, topPos) + 'px';
-  popup.style.left = Math.min(rect.left, window.innerWidth - 280) + 'px';
+  popup.style.left = Math.min(rect.left, window.innerWidth - 310) + 'px';
   popup.style.visibility = 'visible';
 }
 
