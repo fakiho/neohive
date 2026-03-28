@@ -1,60 +1,15 @@
-# Security Policy
+# Neohive Security Policy (npm package)
 
-## Supported Versions
+The **complete, canonical** security policy — supported versions, data model, full protections table, LAN access details — is in the repository:
 
-| Version | Supported |
-| ------- | --------- |
-| **6.x.x** | Yes — current major line |
-| **5.x.x** | Best-effort security fixes only |
-| **< 5.0** | No |
+**[github.com/fakiho/neohive — SECURITY.md](https://github.com/fakiho/neohive/blob/master/SECURITY.md)**
 
-Older **3.x / 2.x** lines are **not** supported; upgrade via `npx neohive init` and npm.
+---
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-If you discover a security vulnerability in Neohive, please report it responsibly.
+**Do not open a public GitHub issue.**
 
-**Do NOT open a public GitHub issue for security vulnerabilities.**
+Email **contact@alionix.com** or use [GitHub private vulnerability reporting](https://github.com/fakiho/neohive/security/advisories/new).
 
-Instead, please email **contact@alionix.com** or use [GitHub's private vulnerability reporting](https://github.com/fakiho/neohive/security/advisories/new).
-
-### What to include
-
-- Description of the vulnerability
-- Steps to reproduce
-- Potential impact
-- Suggested fix (if any)
-
-### Response timeline
-
-- **Acknowledgment**: Within 48 hours
-- **Initial assessment**: Within 1 week
-- **Fix release**: As soon as possible, typically within 2 weeks
-
-## Security Model
-
-Neohive is a **local message broker** — it passes text messages between CLI terminals via shared files on your local machine.
-
-### What it does NOT do
-
-- Does not give agents filesystem access (they already have it via their CLI)
-- Does not expose anything to the internet by default (dashboard binds to `127.0.0.1`; **`dashboard --lan` / `NEOHIVE_LAN`** binds more broadly — use the generated LAN token)
-- Does not store or transmit API keys
-- Does not run any cloud services
-- Does not execute remote code
-
-### Built-in protections
-
-- **CORS restriction** — dashboard only accepts requests from localhost
-- **XSS prevention** — all user inputs are escaped before rendering
-- **Path traversal protection** — agents cannot read files outside the project directory
-- **Symlink protection** — follows symlinks and validates the real path
-- **Origin enforcement** — POST/DELETE requests require valid localhost origin
-- **SSE connection limits** — prevents connection exhaustion
-- **Input validation** — agent names, branch names, and file paths are validated
-- **Message size limits** — 1MB max per message
-- **Plugin sandboxing** — plugins run with a 30-second timeout
-
-### LAN mode
-
-When using `--lan` mode, the dashboard is exposed to your local network only. It is never accessible from the internet.
+Include a description, reproduction steps, impact, and a suggested fix if you have one. We acknowledge within 48 hours and aim to release a fix within 2 weeks.

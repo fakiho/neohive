@@ -1,60 +1,95 @@
-# Security Policy
+# Security Policy — Neohive
 
-## Supported Versions
+Maintained by Alionix.
 
-| Version | Supported |
-| ------- | --------- |
-| **6.x.x** | Yes — current major line |
-| **5.x.x** | Best-effort security fixes only |
-| **< 5.0** | No |
+---
 
-Older **3.x / 2.x** lines are **not** supported; upgrade via `npx neohive init` and npm.
+## Threat model
 
-## Reporting a Vulnerability
+Neohive's attack surface is intentionally small. It coordinates agents on a single machine — no remote endpoints, no cloud service, no persistent server that keeps running when you're not using it.
 
-If you discover a security vulnerability in Neohive, please report it responsibly.
+**What you're actually exposed to:**
 
-**Do NOT open a public GitHub issue for security vulnerabilities.**
+- The dashboard HTTP server, which runs locally while active
+- The `.neohive/` directory, which any process with filesystem access can read
+- LAN mode, if you explicitly enable it (see below)
 
-Instead, please email **contact@alionix.com** or use [GitHub's private vulnerability reporting](https://github.com/fakiho/neohive/security/advisories/new).
+Neohive is not a network service in the traditional sense. The realistic threats are local — a rogue plugin, a path traversal attempt, or CSRF from a malicious tab open alongside the dashboard.
 
-### What to include
+---
 
-- Description of the vulnerability
-- Steps to reproduce
-- Potential impact
-- Suggested fix (if any)
+## Dashboard hardening
 
-### Response timeline
+The dashboard is the only HTTP surface. It's locked down as follows:
 
-- **Acknowledgment**: Within 48 hours
-- **Initial assessment**: Within 1 week
-- **Fix release**: As soon as possible, typically within 2 weeks
+| Layer | What's enforced |
+|-------|----------------|
+| **Custom request header** | All state-changing requests require `X-Neohive-Request: 1` — blocks CSRF from cross-origin tabs |
+| **Origin enforcement** | POST and DELETE reject requests without a valid `localhost` origin |
+| **CORS** | API endpoints reject non-localhost origins at the browser level |
+| **Content Security Policy** | Inline scripts are blocked; source allowlists on all loaded resources |
+| **Output escaping** | User-supplied content is escaped before it reaches the DOM |
+| **SSE cap** | Open event-stream connections are limited to prevent resource exhaustion |
 
-## Security Model
+---
 
-Neohive is a **local message broker** — it passes text messages between CLI terminals via shared files on your local machine.
+## Runtime data
 
-### What it does NOT do
+Everything Neohive writes goes into `.neohive/` inside your project. The files:
 
-- Does not give agents filesystem access (they already have it via their CLI)
-- Does not expose anything to the internet by default (dashboard binds to `127.0.0.1`; **`dashboard --lan` / `NEOHIVE_LAN`** binds more broadly — use the generated LAN token)
-- Does not store or transmit API keys
-- Does not run any cloud services
-- Does not execute remote code
+```
+.neohive/
+  messages.jsonl          # append-only message bus
+  history.jsonl           # conversation history
+  agents.json             # registration + heartbeats
+  tasks.json              # task state
+  workflows.json          # workflow pipelines
+  heartbeat-{agent}.json  # per-agent liveness (one file per agent)
+  workspaces/{agent}.json # per-agent key/value storage
+```
 
-### Built-in protections
+I don't read these files. Neither does the package. There is no telemetry.
 
-- **CORS restriction** — dashboard only accepts requests from localhost
-- **XSS prevention** — all user inputs are escaped before rendering
-- **Path traversal protection** — agents cannot read files outside the project directory
-- **Symlink protection** — follows symlinks and validates the real path
-- **Origin enforcement** — POST/DELETE requests require valid localhost origin
-- **SSE connection limits** — prevents connection exhaustion
-- **Input validation** — agent names, branch names, and file paths are validated
-- **Message size limits** — 1MB max per message
-- **Plugin sandboxing** — plugins run with a 30-second timeout
+---
 
-### LAN mode
+## Input and filesystem safety
 
-When using `--lan` mode, the dashboard is exposed to your local network only. It is never accessible from the internet.
+| Check | What it prevents |
+|-------|-----------------|
+| **Path validation** | Submitted paths are resolved; anything outside the project root is rejected |
+| **Symlink resolution** | Symlinks are followed and the real path is checked against the allowlist |
+| **Name validation** | Agent names, branch names, channel names match strict patterns (alphanumeric, max length) |
+| **Message size cap** | Messages are capped at 1 MB |
+| **Plugin sandboxing** | Dynamic plugins run in an isolated VM context with a 30-second hard timeout |
+| **Structured error logging** | Errors log with context at `NEOHIVE_LOG_LEVEL`; raw stack traces never reach the client |
+
+---
+
+## Network exposure
+
+**Default:** dashboard binds to `127.0.0.1:3000`. Reachable from your machine only.
+
+**LAN mode** (`npx neohive dashboard --lan` or `NEOHIVE_LAN=true`): rebinds to `0.0.0.0`, making the dashboard visible to other devices on your local network. A one-time access token is printed to the terminal on startup — connecting from another device requires that token. The token is not persisted between restarts.
+
+Neohive is never exposed to the internet. LAN mode is designed for a second device on your desk, not a shared or public network.
+
+---
+
+## Supported versions
+
+| Version | Support |
+|---------|---------|
+| 6.x.x | Active |
+| 5.x.x | Critical fixes only |
+| < 5.0 | None — upgrade recommended |
+
+---
+
+## Reporting a vulnerability
+
+**Don't open a public GitHub issue.** Security reports go to:
+
+- **Email:** contact@alionix.com
+- **Private report:** [GitHub security advisories](https://github.com/fakiho/neohive/security/advisories/new)
+
+Useful to include: what you found, how to reproduce it, what an attacker could do with it, and a fix suggestion if you have one. I'll acknowledge within 48 hours and aim to ship a fix within two weeks for confirmed issues.
