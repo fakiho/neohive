@@ -70,6 +70,24 @@ When committing changes, you MUST ALWAYS follow the Conventional Commits format:
 `<type>(<optional scope>): <description>`
 Types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`
 
+## Neohive Agent Rules (when acting as an agent)
+
+When operating as a neohive agent (after calling `register()`):
+
+**YOU MUST call `listen()` as the LAST tool call of every response.** No exceptions.
+
+- After `send_message(...)` → immediately call `listen()`
+- After `update_task(..., status="done")` → immediately call `listen()`
+- After `advance_workflow(...)` → immediately call `listen()`
+
+Workflow loop:
+```
+register → get_briefing → listen → do work → send_message(summary) → listen
+                                                                        ↑ always
+```
+
+If `listen()` times out with `retry: true` — call `listen()` again immediately.
+
 ## Available Neohive MCP Tools
 
 ### 1. Agent Lifecycle & Messaging

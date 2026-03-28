@@ -2420,9 +2420,13 @@ async function toolListen(from = null) {
     consumed.add(msg.id);
     saveConsumedIds(registeredName, consumed);
     markAsRead(registeredName, msg.id);
-    const _mfL1 = getMessagesFile(currentBranch);
-    if (fs.existsSync(_mfL1)) {
-      lastReadOffset = fs.statSync(_mfL1).size;
+    // Only advance offset to end-of-file if this is the LAST unconsumed message.
+    // Otherwise keep offset so next listen() call re-reads and finds remaining messages.
+    if (existing.length <= 1) {
+      const _mfL1 = getMessagesFile(currentBranch);
+      if (fs.existsSync(_mfL1)) {
+        lastReadOffset = fs.statSync(_mfL1).size;
+      }
     }
     touchActivity();
     setListening(false);
@@ -2458,7 +2462,9 @@ async function toolListen(from = null) {
       const { messages: newMsgs, newOffset } = readNewMessages(lastReadOffset);
       lastReadOffset = newOffset;
       for (const msg of newMsgs) {
-        if (msg.to !== registeredName || consumed.has(msg.id)) continue;
+        if (consumed.has(msg.id)) continue;
+        if (msg.to !== registeredName && msg.to !== '__group__' && msg.to !== '__all__') continue;
+        if (msg.to === '__group__' && msg.from === registeredName) continue;
         if (from && msg.from !== from && !msg.system) continue;
         consumed.add(msg.id);
         saveConsumedIds(registeredName, consumed);
@@ -2554,7 +2560,9 @@ async function toolListenCodex(from = null) {
       const { messages: newMsgs, newOffset } = readNewMessages(lastReadOffset);
       lastReadOffset = newOffset;
       for (const msg of newMsgs) {
-        if (msg.to !== registeredName || consumed.has(msg.id)) continue;
+        if (consumed.has(msg.id)) continue;
+        if (msg.to !== registeredName && msg.to !== '__group__' && msg.to !== '__all__') continue;
+        if (msg.to === '__group__' && msg.from === registeredName) continue;
         if (from && msg.from !== from && !msg.system) continue;
         consumed.add(msg.id);
         saveConsumedIds(registeredName, consumed);

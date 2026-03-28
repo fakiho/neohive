@@ -2876,6 +2876,42 @@
     font-size: 13px;
   }
 
+  /* ===== VIOLATION MESSAGES ===== */
+  .message.violation-msg.nh-msg-card {
+    border: 1px solid var(--nh-amber, #f59e0b);
+    background: rgba(245, 158, 11, 0.05);
+  }
+
+  .violation-content {
+    color: var(--text);
+    font-weight: 500;
+    font-style: normal;
+  }
+
+  .violation-icon {
+    color: var(--nh-amber, #f59e0b);
+    margin-right: 6px;
+    vertical-align: middle;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .violation-label {
+    color: var(--nh-amber, #f59e0b);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  /* ===== STEP SHIELD ICON ===== */
+  .step-shield {
+    display: inline-flex;
+    align-items: center;
+    color: var(--nh-amber, #f59e0b);
+    margin-right: 4px;
+    vertical-align: middle;
+    opacity: 0.85;
+  }
+
   /* ===== RESPONSIVE ===== */
   /* ===== MOBILE: TABLET (768px) ===== */
   @media (max-width: 768px) {
@@ -4515,9 +4551,9 @@
     </div>
   </div>
   <div class="pp-tabs">
-    <button class="pp-tab active" onclick="switchPpTab('stats')">Stats</button>
-    <button class="pp-tab" onclick="switchPpTab('actions')">Actions</button>
-    <button class="pp-tab" onclick="switchPpTab('profile')">Profile</button>
+    <button class="pp-tab active" data-tab="stats" onclick="switchPpTab('stats')">Stats</button>
+    <button class="pp-tab" data-tab="actions" onclick="switchPpTab('actions')">Actions</button>
+    <button class="pp-tab" data-tab="profile" onclick="switchPpTab('profile')">Profile</button>
   </div>
   <!-- Stats Tab -->
   <div class="pp-tab-content active" id="pp-tab-stats">
@@ -5801,9 +5837,9 @@ function renderMessages(messages) {
 
     if (isSystem) {
       if (m.content.toLowerCase().indexOf('violation') !== -1 || m.content.indexOf('[VIOLATION]') !== -1) {
-        html += '<div class="message nh-msg-card system-msg violation-msg' + newClass + '"' + msgIdAttr + ' style="border: 1px solid var(--nh-amber); background: rgba(255, 191, 0, 0.05);">' +
+        html += '<div class="message nh-msg-card system-msg violation-msg' + newClass + '"' + msgIdAttr + '>' +
           '<div class="msg-body">' +
-            '<div class="msg-content" style="color:var(--text);font-weight:500;"><span style="color:var(--nh-amber);margin-right:6px">🔒</span><span style="color:var(--nh-amber);font-weight:700">VIOLATION:</span> ' + renderMarkdown(m.content.replace(/\[?VIOLATION\]?:?\s*/i, '')) + '</div>' +
+            '<div class="msg-content violation-content"><span class="violation-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span><span class="violation-label">VIOLATION:</span> ' + renderMarkdown(m.content.replace(/\[?VIOLATION\]?:?\s*/i, '')) + '</div>' +
           '</div></div>';
       } else {
         html += '<div class="message nh-msg-card system-msg' + newClass + '"' + msgIdAttr + '>' +
@@ -7637,7 +7673,7 @@ function switchPpTab(tabName) {
   document.getElementById('pp-tab-' + tabName).classList.add('active');
   var tabBtns = document.querySelectorAll('.pp-tab');
   for (var k = 0; k < tabBtns.length; k++) {
-    if (tabBtns[k].textContent.toLowerCase() === tabName) tabBtns[k].classList.add('active');
+    if (tabBtns[k].getAttribute('data-tab') === tabName) tabBtns[k].classList.add('active');
   }
 }
 
@@ -8372,7 +8408,7 @@ function buildWorkflowHTML(wf) {
          if (matchRole && matchProv && matchAgt) { hasActiveRule = true; break; }
       }
     }
-    var shieldIcon = hasActiveRule ? '<span class="step-shield" title="Governed by active rules" style="font-size:10px;margin-right:4px;">🛡️</span>' : '';
+    var shieldIcon = hasActiveRule ? '<span class="step-shield" title="Governed by active rules"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></span>' : '';
 
     if (j > 0) stepsHtml += '<span class="step-arrow">&rarr;</span>';
     var stepTimeHtml = '';

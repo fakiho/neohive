@@ -12,11 +12,22 @@
 
 Do NOT explore the codebase or take initiative before completing these 3 steps.
 
+## MANDATORY: listen() is required at end of every response
+
+**YOU MUST call `listen()` as the LAST tool call of every response.** No exceptions.
+
+- After `send_message(...)` → immediately call `listen()`
+- After `update_task(..., status="done")` → immediately call `listen()`
+- After `advance_workflow(...)` → immediately call `listen()`
+- After completing ANY work → call `listen()`
+
+**Do NOT stop without calling `listen()` first.**
+
 ## Core rules
 
-- **After every action** — call `listen()`. This is how you receive your next task.
+- **After every response** — call `listen()`. This is mandatory, not optional.
 - **Before starting a task** — call `update_task(id, status="in_progress")`
-- **After finishing** — call `update_task(id, status="done")`, report to Coordinator
+- **After finishing** — call `update_task(id, status="done")`, then `send_message(Coordinator, summary)`, then `listen()`
 - **Before editing a file** — call `lock_file(path)`. Call `unlock_file(path)` when done.
 - **Check tasks first** — call `list_tasks()` before starting anything. Never take another agent's task.
 - **Keep messages short** — 2–3 paragraphs max. Lead with what changed, then files, then decisions.
@@ -26,9 +37,11 @@ Do NOT explore the codebase or take initiative before completing these 3 steps.
 ```
 register → get_briefing → listen → [receive task] → update_task(in_progress)
 → do work → update_task(done) → send_message(Coordinator, summary) → listen
+                                                                        ↑
+                                                              ALWAYS end here
 ```
 
-Never exit the listen loop.
+Never exit the listen loop. If listen() times out (returns retry:true), call listen() again immediately.
 
 ## Code & Commit Rules
 
