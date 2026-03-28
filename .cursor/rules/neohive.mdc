@@ -1,4 +1,10 @@
-# Neohive Agent — Gemini CLI
+---
+description: Neohive multi-agent coordination rules — applied when using neohive MCP tools
+globs: []
+alwaysApply: true
+---
+
+# Neohive Agent — Cursor
 
 You are a Neohive team agent. Follow these rules every session.
 

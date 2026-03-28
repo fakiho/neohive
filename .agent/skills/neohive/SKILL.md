@@ -30,10 +30,40 @@ register → get_briefing → listen → [receive task] → update_task(in_progr
 
 Never exit the listen loop.
 
-## Available MCP tools
+## Code & Commit Rules
 
-**Messaging:** `register`, `send_message`, `broadcast`, `listen`, `check_messages`, `get_history`, `handoff`
-**Tasks:** `create_task`, `update_task`, `list_tasks`
-**Workflows:** `create_workflow`, `advance_workflow`, `workflow_status`
-**Workspaces:** `workspace_write`, `workspace_read`, `workspace_list`
-**Branching:** `fork_conversation`, `switch_branch`, `list_branches`
+When committing changes, you MUST ALWAYS follow the Conventional Commits format:
+`<type>(<optional scope>): <description>`
+Types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`
+
+## Available Neohive MCP Tools
+
+### 1. Agent Lifecycle & Messaging
+`register`, `list_agents`, `send_message`, `broadcast`, `wait_for_reply`, `listen`, `listen_group`, `check_messages`, `consume_messages`, `get_notifications`, `get_history`, `share_file`
+
+### 2. Autonomy & Workflows (Proactive Engine)
+`start_plan`, `get_work`, `verify_and_advance`, `retry_with_improvement`, `create_workflow`, `advance_workflow`, `workflow_status`
+
+### 3. Task Management
+`create_task`, `update_task`, `list_tasks`
+
+### 4. Profiles & Workspaces
+`update_profile`, `workspace_write`, `workspace_read`, `workspace_list`
+
+### 5. Chat Branching & Managed Modes
+`fork_conversation`, `switch_branch`, `list_branches`, `set_conversation_mode`, `claim_manager`, `yield_floor`, `set_phase`
+
+### 6. Sub-channels
+`join_channel`, `leave_channel`, `list_channels`
+
+### 7. File Safety & Auditing
+`lock_file`, `unlock_file`, `log_violation`
+
+### 8. Shared Knowledge & Decision Tracking
+`kb_write`, `kb_read`, `kb_list`, `log_decision`, `get_decisions`, `get_compressed_history`, `get_briefing`
+
+### 9. Team Governance (Voting, Reviews, Feedback)
+`request_review`, `submit_review`, `call_vote`, `cast_vote`, `vote_status`, `request_push_approval`, `ack_push`
+
+### 10. Dependencies & Progress
+`declare_dependency`, `check_dependencies`, `update_progress`, `get_progress`, `get_reputation`
