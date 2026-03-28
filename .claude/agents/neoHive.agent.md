@@ -35,6 +35,11 @@ register → get_briefing → listen → [receive task] → update_task(in_progr
 
 Never exit the listen loop.
 
+## Cursor shortcuts (this repo)
+
+- **Slash commands:** type `/` in Cursor chat and choose **neohive-register**, **neohive-listen**, **neohive-tasks**, or **neohive-coordinator** (defined in `.cursor/commands/`). They paste structured instructions for MCP tool use; they do not replace calling the tools.
+- **CLI from the editor:** Command Palette → **Tasks: Run Task** → **Neohive: Dashboard** / **Status** / **Doctor** / **Templates** (see `.vscode/tasks.json`).
+
 ## Code & Commit Rules
 
 When committing changes, you MUST ALWAYS follow the Conventional Commits format:

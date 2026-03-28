@@ -1,0 +1,53 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Neohive: Dashboard",
+      "type": "shell",
+      "command": "node",
+      "args": ["${workspaceFolder}/agent-bridge/cli.js", "dashboard"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "NEOHIVE_DATA_DIR": "${workspaceFolder}/.neohive" }
+      },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "focus": true }
+    },
+    {
+      "label": "Neohive: Status",
+      "type": "shell",
+      "command": "node",
+      "args": ["${workspaceFolder}/agent-bridge/cli.js", "status"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "NEOHIVE_DATA_DIR": "${workspaceFolder}/.neohive" }
+      },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared", "focus": true }
+    },
+    {
+      "label": "Neohive: Doctor",
+      "type": "shell",
+      "command": "node",
+      "args": ["${workspaceFolder}/agent-bridge/cli.js", "doctor"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "NEOHIVE_DATA_DIR": "${workspaceFolder}/.neohive" }
+      },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared", "focus": true }
+    },
+    {
+      "label": "Neohive: Templates",
+      "type": "shell",
+      "command": "node",
+      "args": ["${workspaceFolder}/agent-bridge/cli.js", "templates"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "NEOHIVE_DATA_DIR": "${workspaceFolder}/.neohive" }
+      },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared", "focus": true }
+    }
+  ]
+}
