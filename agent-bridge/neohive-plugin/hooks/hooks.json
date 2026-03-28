@@ -37,6 +37,27 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "mcp__neohive__send_message|mcp__neohive__advance_workflow|mcp__neohive__update_task|mcp__neohive__broadcast",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '\\n📡 NEOHIVE: Call listen() now to receive your next task. Do not stop without calling listen().'",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/enforce-listen.sh",
+            "timeout": 5
+          }
+        ]
       }
     ]
   }

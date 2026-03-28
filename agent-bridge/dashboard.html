@@ -466,6 +466,11 @@
   .agent-status-dot.dead, .agent-status-dot.offline { background: var(--nh-text-muted); }
   .agent-status-dot.unknown { background: var(--nh-text-muted); opacity: 0.5; }
   .agent-status-dot.stale { background: var(--orange); animation: pulse 2s infinite; }
+  .agent-status-dot.unresponsive { background: var(--orange, #f97316); box-shadow: 0 0 6px var(--orange, #f97316); animation: pulse 2s infinite; }
+  .agent-status-dot.stuck { background: var(--red, #ef4444); box-shadow: 0 0 8px var(--red, #ef4444); animation: pulse 1.2s infinite; }
+
+  .agent-card.stuck { border-color: rgba(239, 68, 68, 0.3); }
+  .agent-card.unresponsive { border-color: rgba(249, 115, 22, 0.3); }
 
   .agent-name {
     font-weight: 600;
@@ -3219,6 +3224,8 @@
   .pp-status-badge.online { background: rgba(52,211,153,0.15); color: #34d399; }
   .pp-status-badge.offline { background: rgba(156,163,175,0.15); color: #9ca3af; }
   .pp-status-badge.listening { background: rgba(96,165,250,0.15); color: #60a5fa; }
+  .pp-status-badge.unresponsive { background: rgba(249,115,22,0.15); color: #f97316; }
+  .pp-status-badge.stuck { background: rgba(239,68,68,0.15); color: #ef4444; }
 
   /* Tab bar */
   .pp-tabs {
@@ -5315,7 +5322,7 @@ function renderAgents(agents) {
       var name = agentNames[i];
       var info = agents[name];
       var color = getColor(name);
-      var state = info.status || (!info.alive ? 'offline' : info.is_listening ? 'listening' : (info.status === 'idle' || info.status === 'sleeping') ? 'idle' : 'working');
+      var state = info.status || (!info.alive ? 'offline' : info.is_listening ? 'listening' : 'working');
       if (state === 'idle' || state === 'stale') sleepCount++;
 
       // Compact activity text
@@ -5326,6 +5333,10 @@ function renderAgents(agents) {
         activityText = 'stale';
       } else if (state === 'offline' || state === 'dead') {
         activityText = 'offline';
+      } else if (state === 'stuck') {
+        activityText = '⚠ no listen()';
+      } else if (state === 'unresponsive') {
+        activityText = 'unresponsive';
       } else if (info.idle_seconds != null) {
         if (info.idle_seconds < 5) activityText = 'just now';
         else if (info.idle_seconds < 60) activityText = info.idle_seconds + 's ago';
@@ -5411,7 +5422,7 @@ function renderAgents(agents) {
       var pCard = el.querySelector('[data-agent="' + pName + '"]');
       if (!pCard) { didPatch = false; break; }
       var pInfo = agents[pName];
-      var pState = pInfo.status || (!pInfo.alive ? 'offline' : pInfo.is_listening ? 'listening' : (pInfo.status === 'idle' || pInfo.status === 'sleeping') ? 'idle' : 'working');
+      var pState = pInfo.status || (!pInfo.alive ? 'offline' : pInfo.is_listening ? 'listening' : 'working');
       var dot = pCard.querySelector('.agent-status-dot');
       if (dot) { dot.className = 'agent-status-dot ' + pState; dot.title = pState; }
       var sub = pCard.querySelector('.agent-subtitle');
@@ -7736,8 +7747,8 @@ function showProfilePopup(agentName, event) {
 
   // Status badge
   var state = agent.status || (!agent.alive ? 'offline' : agent.is_listening ? 'listening' : 'working');
-  var badgeClass = (state === 'offline' || state === 'dead') ? 'offline' : state === 'listening' ? 'listening' : 'online';
-  var statusLabel = state === 'listening' ? 'Listening' : (state === 'offline' || state === 'dead') ? 'Offline' : 'Online';
+  var badgeClass = (state === 'offline' || state === 'dead') ? 'offline' : state === 'listening' ? 'listening' : (state === 'stuck') ? 'stuck' : (state === 'unresponsive') ? 'unresponsive' : 'online';
+  var statusLabel = state === 'listening' ? 'Listening' : (state === 'offline' || state === 'dead') ? 'Offline' : state === 'stuck' ? 'Stuck' : state === 'unresponsive' ? 'Unresponsive' : state === 'idle' ? 'Idle' : 'Online';
   document.getElementById('pp-status-badge').className = 'pp-status-badge ' + badgeClass;
   document.getElementById('pp-status-badge').textContent = statusLabel;
 

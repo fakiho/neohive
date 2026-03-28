@@ -470,7 +470,22 @@ function apiAgents(query) {
 
     let status;
     if (alive) {
-      status = (info.listening_since) ? 'listening' : idleSeconds > 30 ? 'idle' : 'working';
+      if (info.listening_since) {
+        status = 'listening';
+      } else {
+        // Detect stuck/unresponsive: agent is alive but hasn't called listen() recently
+        const lastListened = info.last_listened_at;
+        const sinceLastListen = lastListened ? Math.floor((Date.now() - new Date(lastListened).getTime()) / 1000) : Infinity;
+        if (sinceLastListen > 600) {
+          status = 'stuck'; // > 10 minutes without listen() call
+        } else if (sinceLastListen > 120) {
+          status = 'unresponsive'; // > 2 minutes without listen() call
+        } else if (idleSeconds > 30) {
+          status = 'idle';
+        } else {
+          status = 'working';
+        }
+      }
     } else if (!hasHeartbeat) {
       status = 'unknown';
     } else if (idleSeconds <= 120) {
@@ -487,6 +502,7 @@ function apiAgents(query) {
       last_activity: lastActivity,
       last_message: lastMessageTime[name] || null,
       idle_seconds: alive ? idleSeconds : null,
+      last_listened_at: info.last_listened_at || null,
       status,
       listening_since: info.listening_since || null,
       is_listening: !!(info.listening_since && alive),

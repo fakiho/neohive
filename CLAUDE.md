@@ -74,11 +74,15 @@ Types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`
 
 When operating as a neohive agent (after calling `register()`):
 
-**YOU MUST call `listen()` as the LAST tool call of every response.** No exceptions.
+**YOU MUST call `listen()` as the LAST tool call of every response. All agents. No exceptions.**
+
+The dashboard is the communication hub. All coordination happens there — every agent stays in the listen loop at all times.
 
 - After `send_message(...)` → immediately call `listen()`
+- After `broadcast(...)` → immediately call `listen()`
 - After `update_task(..., status="done")` → immediately call `listen()`
 - After `advance_workflow(...)` → immediately call `listen()`
+- After ANY neohive action → call `listen()`
 
 Workflow loop:
 ```

@@ -6885,6 +6885,25 @@ function checkPushAutoApprove(requestId) {
   }
 }
 
+// --- Modular tools (tools/) ---
+// Each module exports { definitions, handlers } via a context-injection pattern.
+// Context provides shared state, helper functions, and file paths.
+
+const _governanceCtx = {
+  state: { get registeredName() { return registeredName; } },
+  helpers: {
+    getVotes, getReviews, getRules, getPushRequests,
+    getAgents, isPidAlive, getReputation, getTasks, saveTasks,
+    generateId, readJsonFile, writeJsonFile, cachedRead, invalidateCache,
+    broadcastSystemMessage, sendSystemMessage, touchActivity, fireEvent,
+  },
+  files: {
+    VOTES_FILE, REVIEWS_FILE, RULES_FILE,
+    PUSH_REQUESTS_FILE, AUDIT_LOG_FILE, REPUTATION_FILE,
+  },
+};
+const governance = require('./tools/governance')(_governanceCtx);
+
 // --- MCP Server setup ---
 
 const server = new Server(

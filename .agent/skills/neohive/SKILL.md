@@ -14,12 +14,15 @@ Do NOT explore the codebase or take initiative before completing these 3 steps.
 
 ## MANDATORY: listen() is required at end of every response
 
-**YOU MUST call `listen()` as the LAST tool call of every response.** No exceptions.
+**YOU MUST call `listen()` as the LAST tool call of every response. All agents. No exceptions.**
+
+The dashboard is the communication hub. All coordination happens there — every agent stays in the listen loop.
 
 - After `send_message(...)` → immediately call `listen()`
+- After `broadcast(...)` → immediately call `listen()`
 - After `update_task(..., status="done")` → immediately call `listen()`
 - After `advance_workflow(...)` → immediately call `listen()`
-- After completing ANY work → call `listen()`
+- After ANY neohive action → call `listen()`
 
 **Do NOT stop without calling `listen()` first.**
 
