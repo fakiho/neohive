@@ -75,6 +75,23 @@ Each CLI terminal spawns its own `server.js` process via stdio MCP transport. Th
 8. ARCHIVE    Consumed messages saved to archive-YYYY-MM-DD.jsonl
 ```
 
+### Broker semantics (patterns & scale)
+
+Neohive is not a network message broker; it is a **local blackboard** with **pull-based delivery**. Mapping to common patterns:
+
+| Pattern | How Neohive implements it |
+|--------|----------------------------|
+| **Blackboard** | Append-only `messages.jsonl` / `history.jsonl`; agents **read** and **filter** for rows relevant to them (plus per-agent `consumed-*.json`). |
+| **Pub/sub (topics)** | **Channels** (`join_channel`, channel-specific JSONL) approximate topics; `broadcast` / `to: __group__` is a team-wide “fan-out” with a single stored row in **group** mode. |
+| **Orchestrator–worker** | **Direct** `send_message(..., to: "Agent")`, **tasks** / **workflows**, and (in **managed** mode) **floor** / **phase** controls—see [Advanced](./advanced.md#managed-mode). |
+| **Durable routing** | Prefer **tasks.json** and **workflows.json** for “who owns what”; chat lines are for coordination and should stay concise (`get_compressed_history` helps). |
+
+**Permissions:** Optional `permissions.json` enforces `can_write_to` / `can_read` between names; `send_message` and `broadcast` skip disallowed edges via `canSendTo()`.
+
+**Scale (20+ live agents):** Delivery filtering becomes stricter for `__group__` rows so terminals are not flooded: an agent still sees system messages, rows **addressed** to them (`addressed_to`), messages on **channels** they joined, lines that mention a **task id** they have **in_progress**, and handoff / workflow-style markers. Unaddressed group chatter may be hidden—**use explicit `to` or `addressed_to` semantics** on large teams.
+
+**Robustness mechanisms (server):** Per-agent rate limits and near-duplicate suppression reduce storms; **group** mode uses adaptive cooldowns; **managed** mode adds turn-taking so orchestration stays orderly at the protocol level.
+
 ### File Access Patterns
 
 - **Append-only:** Messages and history use JSONL (one JSON object per line). Multiple processes can safely append without file locking.
