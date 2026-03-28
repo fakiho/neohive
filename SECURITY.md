@@ -2,11 +2,13 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 3.x.x   | Yes               |
-| 2.x.x   | No                |
-| < 2.0   | No                |
+| Version | Supported |
+| ------- | --------- |
+| **6.x.x** | Yes — current major line |
+| **5.x.x** | Best-effort security fixes only |
+| **< 5.0** | No |
+
+Older **3.x / 2.x** lines are **not** supported; upgrade via `npx neohive init` and npm.
 
 ## Reporting a Vulnerability
 
@@ -36,7 +38,7 @@ Neohive is a **local message broker** — it passes text messages between CLI te
 ### What it does NOT do
 
 - Does not give agents filesystem access (they already have it via their CLI)
-- Does not expose anything to the internet (dashboard binds to `127.0.0.1` only)
+- Does not expose anything to the internet by default (dashboard binds to `127.0.0.1`; **`dashboard --lan` / `NEOHIVE_LAN`** binds more broadly — use the generated LAN token)
 - Does not store or transmit API keys
 - Does not run any cloud services
 - Does not execute remote code

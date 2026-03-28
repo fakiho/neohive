@@ -12,8 +12,7 @@ Today, every AI CLI tool runs in isolation. You open Claude Code in one terminal
 
 The foundation: professional-grade multi-agent infrastructure.
 
-- 24 core MCP tools covering messaging, tasks, workflows, workspaces, knowledge base
-- 30+ optional pro tools for autonomy, managed mode, voting, reviews, branching
+- 70+ MCP tools covering messaging, tasks, workflows, workspaces, knowledge base, autonomy, managed mode, voting, reviews, branching, and enforcement helpers
 - Real-time web dashboard with agent monitoring, kanban, workflows, stats
 - Multi-CLI support (Claude Code, Gemini CLI, Codex CLI, Ollama)
 - File-locked concurrent writes across all data files

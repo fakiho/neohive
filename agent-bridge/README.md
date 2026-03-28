@@ -28,7 +28,7 @@
   <a href="#-quick-start">Quick Start</a> &middot;
   <a href="#-features">Features</a> &middot;
   <a href="#-how-it-works">How It Works</a> &middot;
-  <a href="docs/DOCUMENTATION.md">Documentation</a> &middot;
+  <a href="docs/documentation.md">Documentation</a> &middot;
   <a href="#%EF%B8%8F-cli-reference">CLI Reference</a> &middot;
   <a href="https://www.npmjs.com/package/neohive">npm</a>
 </p>
@@ -213,44 +213,31 @@ Plus: agent liveness monitoring (working/listening/idle/stale/unknown/offline), 
 
 ## 🛠 MCP Tools
 
-**24 core tools** always available. **30+ optional tools** loaded with `NEOHIVE_FULL_TOOLS=true`.
+The MCP server exposes **70+ built-in tools** in one registration list (no separate “lite” vs “full” mode). See [docs/reference/tools.md](../docs/reference/tools.md) for full parameters and behavior ([hub](../docs/documentation.md)).
 
 <details>
-<summary><strong>Core Tools (24)</strong> — messaging, tasks, workflows, storage</summary>
+<summary><strong>Tool categories</strong> — messaging, tasks, workflows, autonomy, governance</summary>
 
 <br />
 
 | Category | Tools |
 |----------|-------|
-| **Identity** | `register` · `list_agents` · `update_profile` · `get_briefing` |
-| **Messaging** | `send_message` · `broadcast` · `listen` · `check_messages` · `ack_message` |
-| **History** | `get_history` · `get_summary` · `search_messages` |
+| **Identity & briefing** | `register` · `list_agents` · `update_profile` · `get_briefing` · `get_guide` |
+| **Messaging** | `send_message` · `broadcast` · `listen` · `listen_group` · `listen_codex` · `wait_for_reply` · `check_messages` · `consume_messages` · `get_notifications` · `ack_message` |
+| **History & search** | `get_history` · `get_summary` · `search_messages` · `get_compressed_history` |
 | **Collaboration** | `handoff` · `share_file` · `lock_file` · `unlock_file` |
 | **Tasks** | `create_task` · `update_task` · `list_tasks` |
 | **Workflows** | `create_workflow` · `advance_workflow` · `workflow_status` |
 | **Storage** | `workspace_write` · `workspace_read` · `workspace_list` |
-
-</details>
-
-<details>
-<summary><strong>Optional Tools (30+)</strong> — autonomy, voting, reviews, branching</summary>
-
-<br />
-
-| Category | Tools |
-|----------|-------|
 | **Autonomy** | `get_work` · `verify_and_advance` · `start_plan` · `retry_with_improvement` · `distribute_prompt` |
-| **Managed Mode** | `claim_manager` · `yield_floor` · `set_phase` · `set_conversation_mode` |
-| **Knowledge** | `kb_write` · `kb_read` · `kb_list` |
-| **Decisions** | `log_decision` · `get_decisions` |
-| **Voting** | `call_vote` · `cast_vote` · `vote_status` |
-| **Reviews** | `request_review` · `submit_review` |
-| **Progress** | `update_progress` · `get_progress` |
-| **Dependencies** | `declare_dependency` · `check_dependencies` |
+| **Managed mode** | `claim_manager` · `yield_floor` · `set_phase` · `set_conversation_mode` |
+| **Knowledge & decisions** | `kb_write` · `kb_read` · `kb_list` · `log_decision` · `get_decisions` |
+| **Voting & reviews** | `call_vote` · `cast_vote` · `vote_status` · `request_review` · `submit_review` |
+| **Progress & deps** | `update_progress` · `get_progress` · `declare_dependency` · `check_dependencies` |
 | **Reputation** | `get_reputation` · `suggest_task` |
-| **Branching** | `fork_conversation` · `switch_branch` · `list_branches` |
-| **Channels** | `join_channel` · `leave_channel` · `list_channels` |
-| **Rules** | `add_rule` · `remove_rule` · `list_rules` · `toggle_rule` |
+| **Branching & channels** | `fork_conversation` · `switch_branch` · `list_branches` · `join_channel` · `leave_channel` · `list_channels` |
+| **Rules & enforcement** | `add_rule` · `remove_rule` · `list_rules` · `toggle_rule` · `log_violation` · `request_push_approval` · `ack_push` |
+| **Lifecycle** | `reset` |
 
 </details>
 
@@ -261,6 +248,7 @@ Plus: agent liveness monitoring (working/listening/idle/stale/unknown/offline), 
 ```bash
 neohive init [--claude|--gemini|--codex|--cursor|--vscode|--antigravity|--all|--ollama] [--template <name>]
 neohive mcp                 # start MCP stdio server (used internally by IDE configs)
+neohive serve               # optional HTTP MCP server (default port 4321)
 neohive dashboard [--lan]
 neohive status              # active agents, tasks, workflows
 neohive msg <agent> <text>  # send message from CLI
@@ -280,7 +268,6 @@ neohive uninstall           # remove from all CLI configs
 | `NEOHIVE_PORT` | `3000` | Dashboard port |
 | `NEOHIVE_LAN` | `false` | Enable LAN access |
 | `NEOHIVE_LOG_LEVEL` | `warn` | Logging: `error` · `warn` · `info` · `debug` |
-| `NEOHIVE_FULL_TOOLS` | `false` | Load all 54 tools (core + optional) |
 
 <br />
 
@@ -308,13 +295,18 @@ Full details: [SECURITY.md](SECURITY.md)
 
 | Resource | Link |
 |----------|------|
-| Full API Reference | [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) |
-| Architecture & Data Flow | [docs/DOCUMENTATION.md#architecture](docs/DOCUMENTATION.md#architecture) |
-| Tool Reference | [docs/DOCUMENTATION.md#tools-reference](docs/DOCUMENTATION.md#tools-reference) |
-| Vision & Roadmap | [VISION.md](VISION.md) |
+| Documentation hub | [docs/documentation.md](../docs/documentation.md) |
+| Docs folder index | [docs/README.md](../docs/README.md) |
+| Reference index | [docs/reference/README.md](../docs/reference/README.md) |
+| Architecture (full) | [docs/reference/architecture.md](../docs/reference/architecture.md) |
+| MCP tools (full) | [docs/reference/tools.md](../docs/reference/tools.md) |
+| AI onboarding (repo map) | [docs/ai-onboarding.md](../docs/ai-onboarding.md) |
+| MCP tools (high-level tour) | [docs/mcp-tools-documentation.md](../docs/mcp-tools-documentation.md) |
+| Documentation audit / doc debt | [docs/documentation-audit.md](../docs/documentation-audit.md) |
+| Vision & Roadmap | [VISION.md](../VISION.md) |
 | Security Policy | [SECURITY.md](SECURITY.md) |
-| Contributing Guide | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Changelog | [CHANGELOG.md](CHANGELOG.md) |
+| Contributing Guide | [CONTRIBUTING.md](../CONTRIBUTING.md) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) · [root CHANGELOG](../CHANGELOG.md) |
 
 <br />
 
@@ -346,6 +338,6 @@ node dashboard.js # run the dashboard
 <p align="center">
   <a href="https://github.com/fakiho/neohive">GitHub</a> &middot;
   <a href="https://www.npmjs.com/package/neohive">npm</a> &middot;
-  <a href="docs/DOCUMENTATION.md">Docs</a> &middot;
+  <a href="docs/documentation.md">Docs</a> &middot;
   <a href="mailto:contact@alionix.com">Contact</a>
 </p>

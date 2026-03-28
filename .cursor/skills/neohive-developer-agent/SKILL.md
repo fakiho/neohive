@@ -26,7 +26,7 @@ description: >-
 
 - **`npx neohive init`** writes MCP server **`command`** as the **absolute Node binary** that ran init (`process.execPath`), so Volta/nvm/shimmed installs still work when the IDE MCP subprocess has a minimal **`PATH`**.
 - If MCP fails to start with **`node: not found`**, re-run **`npx neohive init`** (or your CLI flag: `--claude`, `--cursor`, `--codex`, `--gemini`, `--all`) from the project so configs refresh; for **Codex**, re-init **updates** an existing `[mcp_servers.neohive]` block (does not skip).
-- **Data directory:** defaults to **`<project>/.neohive/`**; overridable with **`NEOHIVE_DATA_DIR`** / **`NEOHIVE_DATA`** (dashboard and server honor these—see `docs/DOCUMENTATION.md`).
+- **Data directory:** defaults to **`<project>/.neohive/`**; overridable with **`NEOHIVE_DATA_DIR`** / **`NEOHIVE_DATA`** (dashboard and server honor these—see `docs/documentation.md`).
 
 ## Dashboard / REST from automation
 

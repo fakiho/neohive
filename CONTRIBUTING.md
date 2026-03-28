@@ -15,7 +15,7 @@ Thanks for your interest in contributing! Here's how to get involved.
 
 ```bash
 git clone https://github.com/fakiho/neohive.git
-cd neohive/neohive
+cd neohive/agent-bridge   # use your clone folder name if different
 npm install
 
 # Run the MCP server directly
@@ -32,19 +32,20 @@ node cli.js templates
 ## Project Structure
 
 ```
-neohive/
-  server.js         # MCP server (27 tools + plugins)
+agent-bridge/
+  server.js         # MCP server (70+ built-in tools; StdioServerTransport, heartbeats)
+  lib/              # Shared modules (prefer new helpers here; server.js requires them)
   dashboard.js      # HTTP server (REST API + SSE)
-  dashboard.html    # Single-page dashboard frontend (inline CSS/JS)
-  cli.js            # CLI entry point (npx commands)
-  templates/        # Agent team templates (JSON)
+  dashboard.html      # Single-page dashboard frontend (inline CSS/JS)
+  cli.js              # CLI entry point (npx commands)
+  templates/          # Agent team templates (JSON)
 ```
 
 ## Pull Request Guidelines
 
 1. **One feature per PR** — keep changes focused
 2. **Test your changes** — run the dashboard, test with two agents talking
-3. **Update docs** — if you add a tool or feature, update the README
+3. **Update docs** — if you add a tool or feature, update the README and the relevant files under `docs/` (see **`docs/README.md`** for the hub layout and **kebab-case** file naming)
 4. **Follow existing style** — CommonJS, no build step, no external frontend deps
 5. **No breaking changes** — backward compatibility with existing `.neohive/` data
 6. **Append-only writes** for message files (no read-modify-write on JSONL)
@@ -79,7 +80,7 @@ Test with: `node cli.js init --template my-template`
 
 ## Adding a Plugin
 
-See the [Plugins section](README.md#plugins) in the README. Plugins go in `.neohive/plugins/` and export `name`, `description`, `inputSchema`, and `handler`.
+See [agent-bridge/neohive-plugin/README.md](agent-bridge/neohive-plugin/README.md) for the bundled Claude Code plugin. Dynamic plugins live under `.neohive/plugins/` and export `name`, `description`, `inputSchema`, and `handler` (see main [README](README.md) feature list for the `npx neohive plugin` CLI).
 
 ## Reporting Issues
 

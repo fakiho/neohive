@@ -35,7 +35,8 @@ No tests, linter, or build step. Raw Node.js (CommonJS).
 ## Architecture
 
 **Core files:**
-- `server.js` — MCP server (27 tools + plugins, StdioServerTransport, heartbeat system)
+- `server.js` — MCP server (70+ built-in tools, StdioServerTransport, heartbeat system)
+- `lib/` — Shared modules (`config`, `messaging`, `file-io`, …); prefer adding logic here and requiring from `server.js`
 - `dashboard.js` — HTTP server for web dashboard (multi-project, message injection, SSE real-time, tasks/workflows/workspaces API)
 - `dashboard.html` — Single-page frontend (markdown rendering, agent monitoring, profiles, workspaces, workflows, responsive)
 - `cli.js` — CLI entry point with multi-CLI auto-detection

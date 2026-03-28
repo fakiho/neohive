@@ -7,6 +7,62 @@
 - **MCP data directory** — When the MCP process starts with cwd outside the repo (e.g. Cursor home) and no `NEOHIVE_DATA_DIR`, resolve the hive from repo `.cursor/mcp.json` / sibling config (`lib/resolve-server-data-dir.js`); `lib/config.js` uses the same root so agents and dashboard agree.
 - **Dashboard `projects.json`** — Only rewrite the projects file when the canonical list differs from on-disk data (`pack(nonRedundant) !== pack(raw)`), not on every load when duplicates or default-hive rows were only present in the normalized pass-through list.
 
+## [5.3.0] - 2026-03-20
+
+### Listen System Overhaul — Zero Token Waste
+
+- **5-minute listen timeout** — `listen()` and `listen_group()` now block for 5 minutes (was 45s), reducing idle token overhead by 7x
+- **fs.watch instant wake** — agents wake immediately when a message arrives, zero CPU/tokens while waiting
+- **Fixed collectBatch bug** — file path was passed as branch name to `sanitizeName()`, breaking `listen_group()` on all platforms
+- **Mode-aware instructions** — managed mode says `listen()`, group mode says `listen_group()`, all modes say "NEVER use sleep()"
+- **Managed mode task tracking** — manager creates tasks/workflows, agents update status as they work (Tasks/Plan tabs stay current)
+- **check_messages warns against loops** — response includes `action_required` telling agents to use `listen()` instead
+- **listen_codex restricted** — description explicitly says "ONLY for Codex CLI, Claude/Gemini must use listen()"
+
+## [5.2.0] - 2026-03-20
+
+### Security Hardening (50+ fixes across 5 audit rounds)
+
+- **Timing-safe** LAN token comparison (`crypto.timingSafeEqual`)
+- **File permissions** — `.neohive/` created with `0o700`, `.lan-token` with `0o600`
+- **XSS prevention** — `escapeHtml` escapes 6 characters, thread panel escaped, replay export `</script>` escaped, null byte placeholder collision fixed
+- **Path traversal** — containment checks on `/lib/`, `/office/`, `/mods/` with `path.resolve`, mods asset write validated, conversation name regex
+- **Rate limiting** — per-IP API rate limit (300/min), per-IP SSE limit (5), duplicate message detection, escalation broadcast rate limited
+- **File locking** — tasks, workflows, channels all use `withFileLock`, PID-checked force-break, task claiming atomic
+- **Input validation** — content type guards, stricter limits on some dashboard API bodies, agent name regex on all endpoints, avatar URL scheme validation
+- **Security headers** — X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy no-referrer, CSP frame-ancestors none
+- **Token removed** from all API responses, destructive endpoints require `confirm: true`
+- **KB prompt injection** prevented — content in separate `reference_notes` field
+- **share_file** denylist for .env, .pem, .key, credentials, data directory
+- **Reserved names** — "Dashboard" blocked from agent registration
+- **Manager claim** TOCTOU fixed with config lock
+
+### Cross-Platform Compatibility
+
+- **Windows line endings** — all JSONL parsing uses `/\r?\n/` (24 sites fixed)
+- **Portable config paths** — removed hardcoded absolute paths from env vars
+- **Codex config backup** — creates `.backup` before modification
+- Works identically on Windows, macOS, and Linux
+
+### New Features
+
+- **Uninstall command** — `npx neohive uninstall` cleanly removes config entries from Claude/Gemini/Codex
+- **Conversation management** — Clear Messages, New Conversation (archive + start fresh), Load saved conversations
+- **Display names** — messages show profile display_name instead of raw registered name
+- **Re-registration prevention** — agents can't change name mid-session
+
+### Fixed
+
+- 11 full-file read optimizations (tailReadJsonl)
+- AI City environment removed from 3D Hub
+- Test script updated (referenced deleted files)
+- Node engine requirement updated to >=18.0.0
+- Three.js updated to 0.175.0
+- Tool count console message corrected (66 tools)
+- SSE heartbeat `.unref()` added
+- Monitor workspace log capped with safe fallback
+- Edit history capped at 10 entries per message
+
 ## [5.1.0] - 2026-03-19
 
 ### Major — True Autonomy Engine + Team Intelligence + Scale to 100

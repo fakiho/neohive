@@ -6880,7 +6880,7 @@ function checkPushAutoApprove(requestId) {
 // --- MCP Server setup ---
 
 const server = new Server(
-  { name: 'neohive', version: '6.0.0' },
+  { name: 'neohive', version: '6.0.3' },
   { capabilities: { tools: { listChanged: true } } }
 );
 

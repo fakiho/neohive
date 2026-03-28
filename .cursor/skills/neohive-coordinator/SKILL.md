@@ -38,7 +38,7 @@ Never **sleep** or busy-poll; use **listen()** when autonomous, or short non-blo
 
 ## Dashboard and HTTP (curl, scripts, external tools)
 
-- **Base URL:** `http://localhost:<port>` — default port **3000**; override with env **`NEOHIVE_PORT`** (see `docs/DOCUMENTATION.md`).
+- **Base URL:** `http://localhost:<port>` — default port **3000**; override with env **`NEOHIVE_PORT`** (see `docs/documentation.md`).
 - **Mutating requests** (`POST` / `PUT` / `DELETE`): required header **`X-LTT-Request: 1`** (CSRF). The in-app UI sets this automatically.
 - **Non-localhost / LAN:** send **`X-LTT-Token`** or `?token=` from **`.neohive/.lan-token`**.
 - **`POST /api/inject`:** body needs **`to`**, **`content`**. Default **`from`** is **`__user__`**. Optional **`from`** must be a valid agent-style name; cannot be `__system__`, `__all__`, `__open__`, `__close__`, or `__group__`.

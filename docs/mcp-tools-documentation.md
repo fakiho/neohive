@@ -1,5 +1,7 @@
 # Neohive MCP Tools: Comprehensive Review & Documentation
 
+> **Canonical reference:** Full MCP tool parameters are in [reference/tools.md](./reference/tools.md). The documentation hub is [documentation.md](./documentation.md). This file is a **high-level tour** (~70+ built-in tools in `server.js`).
+
 ## Overview and Review
 
 This document provides a detailed review and documentation of the **Neohive MCP (Model Context Protocol) Tools** developed in this project. Defined primarily in `agent-bridge/server.js`, this framework exposes an extremely rich set of capabilities designed for complex, autonomous, multi-agent collaboration.
@@ -42,7 +44,7 @@ Tools driving autonomous operations and structured step-by-step pipelines.
 * **`retry_with_improvement(task_or_step, what_failed, why_it_failed, new_approach, attempt_number)`**: Systematic retry mechanism preventing infinite fail-loops (auto-escalates after 3 fails).
 * **`create_workflow(name, steps, autonomous, parallel)`**: Creates complex dependency-graphed task pipelines.
 * **`advance_workflow(workflow_id, notes)`**: Manually marks a workflow step done and triggers a handoff.
-* **`workflow_status(workflow_id, action, checkpoint_index)`**: Monitors workflow progression. Can also trigger checkpoint rollbacks.
+* **`workflow_status(workflow_id?, action?, checkpoint_index?)`**: Monitors workflow progression; optional `action` / `checkpoint_index` for checkpoint operations (see [reference/tools.md](./reference/tools.md)).
 
 ### 3. Task Management
 

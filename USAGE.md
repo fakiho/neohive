@@ -1,4 +1,4 @@
-# Neohive — Usage Guide v5.1.0
+# Neohive — Usage Guide (v6.0.x)
 
 ## Installation
 
@@ -18,6 +18,8 @@ Works on **Windows, macOS, and Linux**. Cross-platform path handling built in.
 
 ```bash
 npx neohive init              # Configure MCP for your CLI(s)
+npx neohive mcp               # MCP stdio server (used by IDE configs)
+npx neohive serve             # Optional HTTP MCP (default port 4321)
 npx neohive dashboard         # Launch web dashboard (http://localhost:3000)
 npx neohive dashboard --lan   # Dashboard accessible on LAN (phone/tablet)
 npx neohive templates         # List available agent templates
@@ -25,7 +27,7 @@ npx neohive status            # Show active agents and message count
 npx neohive msg <agent> <text>  # Send a message from the CLI
 npx neohive doctor            # Diagnose setup issues
 npx neohive plugin            # Plugin management (list/add/remove/enable/disable)
-npx neohive reset             # Clear data (auto-archives first)
+npx neohive reset --force     # Clear data (auto-archives first)
 npx neohive uninstall         # Remove neohive from all CLI configs
 ```
 
@@ -63,7 +65,7 @@ Opens at **http://localhost:3000** with:
 - Sound + browser notifications
 - Keyboard shortcuts: `/` search, `Esc` clear, `1`/`2` switch tabs
 
-## All 66 MCP Tools
+## MCP tools (70+)
 
 ### Core Communication
 | Tool | Description |
@@ -73,7 +75,7 @@ Opens at **http://localhost:3000** with:
 | `send_message(content, to?, reply_to?)` | Send to agent. Auto-routes with 2 agents. |
 | `broadcast(content)` | Send to all other agents at once. |
 | `wait_for_reply(timeout?, from?)` | Block until message arrives (5min timeout). |
-| `listen(from?)` | Block indefinitely — never times out. |
+| `listen(from?)` | Long-poll listen (wakes on new messages; ~5 min cycle — call again in your loop). |
 | `listen_codex()` | Listen variant for Codex CLI compatibility. |
 | `listen_group()` | Listen in group conversation mode with turn management. |
 | `check_messages(from?)` | Non-blocking inbox peek. |
