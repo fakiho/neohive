@@ -2173,6 +2173,52 @@ setInterval(() => {
   }
 }, 300000).unref(); // Clean every 5 minutes, .unref() prevents zombie process
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE DISPATCH TABLE
+// Simple GET/POST routes are registered here as { method, handler } entries.
+// Complex routes (body parsing, SSE, multi-step logic) remain inline below.
+// Key format: 'METHOD /path'  e.g. 'GET /api/agents'
+// ─────────────────────────────────────────────────────────────────────────────
+function routeKey(method, pathname) { return method + ' ' + pathname; }
+
+/** @type {Map<string, (req: any, res: any, url: URL) => void | Promise<void>>} */
+const ROUTE_TABLE = new Map([
+  // Simple GET routes — each maps to a standalone API function
+  [routeKey('GET', '/api/history'),         (req, res, url) => jsonOk(res, apiHistory(url.searchParams))],
+  [routeKey('GET', '/api/agents'),          (req, res, url) => jsonOk(res, apiAgents(url.searchParams))],
+  [routeKey('GET', '/api/channels'),        (req, res, url) => jsonOk(res, apiChannels(url.searchParams))],
+  [routeKey('GET', '/api/decisions'),       (req, res, url) => jsonOk(res, readJson(filePath('decisions.json', url.searchParams.get('project') || null)) || [])],
+  [routeKey('GET', '/api/status'),          (req, res, url) => jsonOk(res, apiStatus(url.searchParams))],
+  [routeKey('GET', '/api/stats'),           (req, res, url) => jsonOk(res, apiStats(url.searchParams))],
+  [routeKey('GET', '/api/token-usage'),     (req, res, url) => jsonOk(res, apiTokenUsage(url.searchParams))],
+  [routeKey('GET', '/api/coordinator-mode'),(req, res, url) => {
+    const config = readJson(filePath('config.json', url.searchParams.get('project') || null));
+    jsonOk(res, { mode: config.coordinator_mode || 'autonomous', config });
+  }],
+  [routeKey('GET', '/api/projects'),        (req, res, url) => jsonOk(res, apiProjects())],
+  [routeKey('GET', '/api/timeline'),        (req, res, url) => jsonOk(res, apiTimeline(url.searchParams))],
+  [routeKey('GET', '/api/tasks'),           (req, res, url) => jsonOk(res, apiTasks(url.searchParams))],
+  [routeKey('GET', '/api/rules'),           (req, res, url) => jsonOk(res, apiRules(url.searchParams))],
+  [routeKey('GET', '/api/audit-log'),       (req, res, url) => jsonOk(res, apiAuditLog(url.searchParams))],
+  [routeKey('GET', '/api/notifications'),   (req, res, url) => jsonOk(res, apiNotifications())],
+  [routeKey('GET', '/api/scores'),          (req, res, url) => jsonOk(res, apiScores(url.searchParams))],
+  [routeKey('GET', '/api/search-all'),      (req, res, url) => jsonOk(res, apiSearchAll(url.searchParams))],
+  [routeKey('GET', '/api/export-replay'),   (req, res, url) => jsonOk(res, apiExportReplay(url.searchParams))],
+  // Routes below have complex inline logic and remain in the else-if chain for safety.
+  // TODO: extract to standalone functions in a future refactor:
+  //   /api/search, /api/export-json, /api/conversations, /api/profiles, /api/workspaces,
+  //   /api/workflows, /api/plan/*, /api/monitor/health, /api/reputation, /api/branches,
+  //   /api/conversation-templates, /api/permissions, /api/read-receipts, /api/server-info,
+  //   /api/templates
+]);
+
+/** Send a 200 JSON response — shared helper for route table handlers */
+function jsonOk(res, data) {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}
+
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost:' + PORT);
 
@@ -2368,26 +2414,11 @@ const server = http.createServer(async (req, res) => {
       });
       res.end(html);
     }
-    // Existing APIs (now with ?project= param support)
-    else if (url.pathname === '/api/history' && req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(apiHistory(url.searchParams)));
+    // ── Route table dispatch (simple GET routes) ──────────────────────────────
+    else if (ROUTE_TABLE.has(routeKey(req.method, url.pathname))) {
+      await ROUTE_TABLE.get(routeKey(req.method, url.pathname))(req, res, url);
     }
-    else if (url.pathname === '/api/agents' && req.method === 'GET') {
-      const payload = apiAgents(url.searchParams);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(payload));
-    }
-    else if (url.pathname === '/api/channels' && req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(apiChannels(url.searchParams)));
-    }
-    else if (url.pathname === '/api/decisions' && req.method === 'GET') {
-      const projectPath = url.searchParams.get('project') || null;
-      const decisions = readJson(filePath('decisions.json', projectPath));
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(decisions || []));
-    }
+    // ── Complex routes (body parsing, SSE, multi-step logic) ──────────────────
     else if (url.pathname === '/api/agents' && req.method === 'DELETE') {
       const body = await parseBody(req);
       if (!body.name) {

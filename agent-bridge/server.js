@@ -6924,6 +6924,58 @@ const _tasksCtx = {
 };
 const tasks = require('./tools/tasks')(_tasksCtx);
 
+const _workflowsCtx = {
+  state: {
+    get registeredName() { return registeredName; },
+    get messageSeq() { return messageSeq; },
+    set messageSeq(v) { messageSeq = v; },
+    get currentBranch() { return currentBranch; },
+  },
+  helpers: {
+    getWorkflows, saveWorkflows, saveWorkflowCheckpoint, findReadySteps,
+    getAgents, isPidAlive, getTasks, saveTasks, generateId, ensureDataDir,
+    broadcastSystemMessage, sendSystemMessage, touchActivity, appendNotification,
+    getMessagesFile, getHistoryFile, canSendTo, generateCompletionReport,
+  },
+  files: {},
+};
+const workflows = require('./tools/workflows')(_workflowsCtx);
+
+const _knowledgeCtx = {
+  state: {
+    get registeredName() { return registeredName; },
+    get currentBranch() { return currentBranch; },
+  },
+  helpers: {
+    getDecisions, getKB, getProgressData, getCompressed, getLocks, getConfig,
+    generateId, writeJsonFile, readJsonFile, touchActivity, tailReadJsonl,
+    getHistoryFile, getAgents, isPidAlive, getProfiles, getTasks, cachedRead,
+  },
+  files: { DECISIONS_FILE, KB_FILE, PROGRESS_FILE, COMPRESSED_FILE },
+};
+const knowledge = require('./tools/knowledge')(_knowledgeCtx);
+
+const _channelsCtx = {
+  state: { get registeredName() { return registeredName; } },
+  helpers: {
+    getChannelsData, saveChannelsData, sanitizeName,
+    isChannelMember, getAgentChannels, getChannelMessagesFile,
+    touchActivity,
+  },
+  files: {},
+};
+const channels = require('./tools/channels')(_channelsCtx);
+
+const _safetyCtx = {
+  state: { get registeredName() { return registeredName; } },
+  helpers: {
+    getLocks, getAgents, isPidAlive, getTasks, getDeps,
+    generateId, writeJsonFile, touchActivity,
+  },
+  files: { LOCKS_FILE, DEPS_FILE },
+};
+const safety = require('./tools/safety')(_safetyCtx);
+
 // --- MCP Server setup ---
 
 const server = new Server(
@@ -7187,20 +7239,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       // --- Task tools (from tools/tasks.js) ---
       ...tasks.definitions,
-      {
-        name: 'get_summary',
-        description: 'Get a condensed summary of the conversation so far. Useful when context is getting long and you need a quick recap of what was discussed.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            last_n: {
-              type: 'number',
-              description: 'Number of recent messages to summarize (default: 20)',
-            },
-          },
-          additionalProperties: false,
-        },
-      },
+      // --- Knowledge tools (from tools/knowledge.js) ---
+      ...knowledge.definitions,
       {
         name: 'search_messages',
         description: 'Search conversation history by keyword. Returns matching messages with previews. Useful for finding past discussions, decisions, or code references.',
@@ -7276,57 +7316,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           additionalProperties: false,
         },
       },
-      // --- Phase 3: Workflows ---
-      {
-        name: 'create_workflow',
-        description: 'Create a multi-step workflow pipeline. Each step can have a description, assignee, and depends_on (step IDs). Set autonomous=true for proactive work loop (agents auto-advance, no human gates). Set parallel=true to run independent steps simultaneously.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            name: { type: 'string', description: 'Workflow name (max 50 chars)' },
-            steps: {
-              type: 'array',
-              description: 'Array of steps. Each step is a string (description) or {description, assignee, depends_on: [stepIds]}.',
-              items: {
-                oneOf: [
-                  { type: 'string' },
-                  { type: 'object', properties: { description: { type: 'string' }, assignee: { type: 'string' }, depends_on: { type: 'array', items: { type: 'number' }, description: 'Step IDs this step depends on (must complete first)' } }, required: ['description'] },
-                ],
-              },
-            },
-            autonomous: { type: 'boolean', default: false, description: 'If true, agents auto-advance through steps without waiting for approval. Enables proactive work loop, relaxed send limits, fast cooldowns, and 30s listen cap.' },
-            parallel: { type: 'boolean', default: false, description: 'If true, steps with met dependencies run in parallel (multiple agents work simultaneously)' },
-          },
-          required: ['name', 'steps'],
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'advance_workflow',
-        description: 'Mark the current step as done and start the next step. Auto-sends a handoff message to the next assignee.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            workflow_id: { type: 'string', description: 'Workflow ID' },
-            notes: { type: 'string', description: 'Optional completion notes (max 500 chars)' },
-          },
-          required: ['workflow_id'],
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'workflow_status',
-        description: 'Get status of a specific workflow or all workflows. Shows step progress, checkpoints, and completion percentage. Use action="rollback" to rollback to a checkpoint.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            workflow_id: { type: 'string', description: 'Workflow ID (optional — omit for all workflows)' },
-            action: { type: 'string', enum: ['status', 'rollback'], description: 'Action (default: status)' },
-            checkpoint_index: { type: 'number', description: 'Checkpoint index to rollback to (for rollback action)' },
-          },
-          additionalProperties: false,
-        },
-      },
+      // --- Workflow tools (from tools/workflows.js) ---
+      ...workflows.definitions,
       // --- Phase 4: Branching ---
       {
         name: 'fork_conversation',
@@ -7383,101 +7374,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           additionalProperties: false,
         },
       },
-      // --- Channels ---
-      {
-        name: 'join_channel',
-        description: 'Join or create a channel. Channels let sub-teams communicate without flooding the main conversation. Auto-joined to #general on register. Use channels when team size > 4.',
-        inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Channel name (1-20 chars, e.g. "backend", "testing")' }, description: { type: 'string', description: 'Channel description (optional, max 200 chars)' }, rate_limit: { type: 'object', description: 'Optional rate limit config: { max_sends_per_minute: 10 }. Any member can update.', properties: { max_sends_per_minute: { type: 'number' } }, additionalProperties: false } }, required: ['name'], additionalProperties: false },
-      },
-      {
-        name: 'leave_channel',
-        description: 'Leave a channel. You will stop receiving messages from it. Cannot leave #general.',
-        inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'Channel to leave' } }, required: ['name'] , additionalProperties: false},
-      },
-      {
-        name: 'list_channels',
-        description: 'List all channels with members, message counts, and your membership status.',
-        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-      },
+      // --- Channel tools (from tools/channels.js) ---
+      ...channels.definitions,
       // --- Briefing & Recovery ---
       {
         name: 'get_guide',
         description: 'Get the collaboration guide — all tool categories, critical rules, and workflow patterns. Call this if you are unsure how to use the tools or need a refresher on best practices. Use level="minimal" for a compact refresher (saves context tokens), "full" for complete reference with tool details.',
         inputSchema: { type: 'object', properties: { level: { type: 'string', enum: ['minimal', 'standard', 'full'], description: 'Guide detail level: "minimal" (~5 rules, saves tokens), "standard" (default, progressive disclosure), "full" (all rules + tool details)' } } , additionalProperties: false},
       },
-      {
-        name: 'get_briefing',
-        description: 'Get a full project briefing: who is online, active tasks, recent decisions, knowledge base, locked files, progress, and project files. Call this when joining a project or after being away. One call = fully onboarded.',
-        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-      },
-      // --- File Locking ---
-      {
-        name: 'lock_file',
-        description: 'Lock a file for exclusive editing. Other agents will be warned if they try to edit it. Call unlock_file() when done. Locks auto-release if you disconnect.',
-        inputSchema: { type: 'object', properties: { file_path: { type: 'string', description: 'Relative path to the file to lock' } }, required: ['file_path'] , additionalProperties: false},
-      },
-      {
-        name: 'unlock_file',
-        description: 'Unlock a file you previously locked. Omit file_path to unlock all your files.',
-        inputSchema: { type: 'object', properties: { file_path: { type: 'string', description: 'File to unlock (optional — omit to unlock all)' } } , additionalProperties: false},
-      },
-      // --- Decision Log ---
-      {
-        name: 'log_decision',
-        description: 'Log a team decision so it persists and other agents can reference it. Prevents re-debating the same choices.',
-        inputSchema: { type: 'object', properties: { decision: { type: 'string', description: 'The decision made (max 500 chars)' }, reasoning: { type: 'string', description: 'Why this was decided (optional, max 1000 chars)' }, topic: { type: 'string', description: 'Category like "architecture", "tech-stack", "design" (optional)' } }, required: ['decision'] , additionalProperties: false},
-      },
-      {
-        name: 'get_decisions',
-        description: 'Get all logged decisions, optionally filtered by topic.',
-        inputSchema: { type: 'object', properties: { topic: { type: 'string', description: 'Filter by topic (optional)' } } , additionalProperties: false},
-      },
-      // --- Knowledge Base ---
-      {
-        name: 'kb_write',
-        description: 'Write to the shared team knowledge base. Any agent can read, any agent can write. Use for API specs, conventions, shared data.',
-        inputSchema: { type: 'object', properties: { key: { type: 'string', description: 'Key name (1-50 alphanumeric chars)' }, content: { type: 'string', description: 'Content (max 100KB)' } }, required: ['key', 'content'] , additionalProperties: false},
-      },
-      {
-        name: 'kb_read',
-        description: 'Read from the shared knowledge base. Omit key to read all entries.',
-        inputSchema: { type: 'object', properties: { key: { type: 'string', description: 'Key to read (optional — omit for all)' } } , additionalProperties: false},
-      },
-      {
-        name: 'kb_list',
-        description: 'List all keys in the shared knowledge base with metadata.',
-        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-      },
-      // --- Progress Tracking ---
-      {
-        name: 'update_progress',
-        description: 'Update feature-level progress. Higher level than tasks — tracks overall feature completion percentage.',
-        inputSchema: { type: 'object', properties: { feature: { type: 'string', description: 'Feature name (max 100 chars)' }, percent: { type: 'number', description: 'Completion percentage 0-100' }, notes: { type: 'string', description: 'Progress notes (optional)' } }, required: ['feature', 'percent'] , additionalProperties: false},
-      },
-      {
-        name: 'get_progress',
-        description: 'Get progress on all features with completion percentages and overall project progress.',
-        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-      },
+      // get_briefing, lock_file, unlock_file, log_decision, get_decisions, kb_*, progress_*
+      // are included via ...knowledge.definitions and ...safety.definitions
+      // --- Safety tools (from tools/safety.js) ---
+      ...safety.definitions,
       // --- Governance tools (from tools/governance.js) ---
       ...governance.definitions,
-      // --- Dependencies ---
-      {
-        name: 'declare_dependency',
-        description: 'Declare that a task depends on another task. You will be notified when the dependency is complete.',
-        inputSchema: { type: 'object', properties: { task_id: { type: 'string', description: 'Your task that is blocked' }, depends_on: { type: 'string', description: 'Task ID that must complete first' } }, required: ['task_id', 'depends_on'] , additionalProperties: false},
-      },
-      {
-        name: 'check_dependencies',
-        description: 'Check dependency status for a task or all unresolved dependencies.',
-        inputSchema: { type: 'object', properties: { task_id: { type: 'string', description: 'Task ID to check (optional — omit for all unresolved)' } } , additionalProperties: false},
-      },
-      // --- Conversation Compression ---
-      {
-        name: 'get_compressed_history',
-        description: 'Get conversation history with automatic compression. Old messages are summarized into segments, recent messages shown verbatim. Use this when the conversation is long and you need to catch up without overflowing your context.',
-        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-      },
+      // declare_dependency, check_dependencies included via ...safety.definitions
+      // get_compressed_history included via ...knowledge.definitions
       // --- Reputation ---
       {
         name: 'get_reputation',
@@ -7665,7 +7577,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolShareFile(args.file_path, args?.to, args?.summary);
         break;
       case 'get_summary':
-        result = toolGetSummary(args?.last_n);
+      case 'get_briefing':
+      case 'log_decision':
+      case 'get_decisions':
+      case 'kb_write':
+      case 'kb_read':
+      case 'kb_list':
+      case 'update_progress':
+      case 'get_progress':
+      case 'get_compressed_history':
+        result = knowledge.handlers[name](args || {});
         break;
       case 'search_messages':
         result = toolSearchMessages(args.query, args?.from, args?.limit);
@@ -7686,13 +7607,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolWorkspaceList(args?.agent);
         break;
       case 'create_workflow':
-        result = toolCreateWorkflow(args.name, args.steps, args?.autonomous, args?.parallel);
-        break;
       case 'advance_workflow':
-        result = toolAdvanceWorkflow(args.workflow_id, args?.notes);
-        break;
       case 'workflow_status':
-        result = toolWorkflowStatus(args?.workflow_id, args?.action, args?.checkpoint_index);
+        result = workflows.handlers[name](args || {});
         break;
       case 'fork_conversation':
         result = toolForkConversation(args?.from_message_id, args.branch_name);
