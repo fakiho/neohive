@@ -216,7 +216,12 @@ function getProjects() {
 }
 
 function saveProjects(projects) {
-  fs.writeFileSync(PROJECTS_FILE, JSON.stringify(projects, null, 2));
+  try {
+    fs.writeFileSync(PROJECTS_FILE, JSON.stringify(projects, null, 2));
+  } catch (e) {
+    console.error('[saveProjects] Failed to write projects file:', e.message);
+    throw new Error('Failed to save projects: ' + e.message);
+  }
 }
 
 // Multi-project paths must be the repo root, not .../project/.neohive (otherwise we join .neohive twice).
@@ -1400,7 +1405,11 @@ function apiAddProject(body) {
   ensureMCPConfig('cursor', serverPath, absPath);
 
   projects.push({ name, path: absPath, added_at: new Date().toISOString() });
-  saveProjects(projects);
+  try {
+    saveProjects(projects);
+  } catch (e) {
+    return { error: 'Failed to save project: ' + e.message };
+  }
   return { success: true, project: { name, path: absPath } };
 }
 
@@ -1411,7 +1420,11 @@ function apiRemoveProject(body) {
   const before = projects.length;
   projects = projects.filter(p => normalizeMonitoredProjectRoot(path.resolve(p.path)) !== absPath);
   if (projects.length === before) return { error: 'Project not found' };
-  saveProjects(projects);
+  try {
+    saveProjects(projects);
+  } catch (e) {
+    return { error: 'Failed to save project changes: ' + e.message };
+  }
   return { success: true };
 }
 

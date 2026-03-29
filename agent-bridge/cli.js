@@ -818,6 +818,14 @@ function cliMsg() {
     process.exit(1);
   }
   const text = textParts.join(' ');
+  if (text.length > 10000) {
+    console.error('  Message text exceeds maximum length of 10,000 characters.');
+    process.exit(1);
+  }
+  if (!text.trim().length) {
+    console.error('  Message text cannot be empty or whitespace only.');
+    process.exit(1);
+  }
   const dir = resolveDataDirCli();
   if (!fs.existsSync(dir)) {
     console.error('  No .neohive/ directory found. Run "npx neohive init" first.');
@@ -833,12 +841,16 @@ function cliMsg() {
     timestamp: new Date().toISOString(),
   };
 
-  const messagesFile = path.join(dir, 'messages.jsonl');
-  const historyFile = path.join(dir, 'history.jsonl');
-  fs.appendFileSync(messagesFile, JSON.stringify(msg) + '\n');
-  fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
-
-  console.log('  Message sent to ' + recipient + ': ' + text);
+  try {
+    const messagesFile = path.join(dir, 'messages.jsonl');
+    const historyFile = path.join(dir, 'history.jsonl');
+    fs.appendFileSync(messagesFile, JSON.stringify(msg) + '\n');
+    fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
+    console.log('  Message sent to ' + recipient + ': ' + text);
+  } catch (e) {
+    console.error('  Failed to send message: ' + e.message);
+    process.exit(1);
+  }
 }
 
 function cliStatus() {

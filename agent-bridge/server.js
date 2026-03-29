@@ -6904,6 +6904,26 @@ const _governanceCtx = {
 };
 const governance = require('./tools/governance')(_governanceCtx);
 
+const _tasksCtx = {
+  state: {
+    get registeredName() { return registeredName; },
+    get messageSeq() { return messageSeq; },
+    set messageSeq(v) { messageSeq = v; },
+    get currentBranch() { return currentBranch; },
+  },
+  helpers: {
+    getTasks, saveTasks, getAgents, isPidAlive, generateId, writeJsonFile,
+    broadcastSystemMessage, sendSystemMessage, touchActivity, fireEvent,
+    ensureDataDir, getProfiles, getReviews, getReputation, getDeps,
+    getChannelsData, saveChannelsData, isGroupMode,
+    getWorkspace, saveWorkspace, appendNotification,
+    getWorkflows, saveWorkflows, saveWorkflowCheckpoint, findReadySteps,
+    getMessagesFile, getHistoryFile, logViolation, cachedRead,
+  },
+  files: { TASKS_FILE, REVIEWS_FILE, DEPS_FILE },
+};
+const tasks = require('./tools/tasks')(_tasksCtx);
+
 // --- MCP Server setup ---
 
 const server = new Server(
@@ -7165,46 +7185,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           additionalProperties: false,
         },
       },
-      {
-        name: 'create_task',
-        description: 'Create a task and optionally assign it to another agent. Use for structured work delegation in multi-agent teams.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            title: { type: 'string', description: 'Short task title' },
-            description: { type: 'string', description: 'Detailed task description' },
-            assignee: { type: 'string', description: 'Agent to assign to (optional, auto-assigns with 2 agents)' },
-          },
-          required: ['title'],
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'update_task',
-        description: 'Update a task status. Statuses: pending, in_progress, in_review, done, blocked.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            task_id: { type: 'string', description: 'Task ID to update' },
-            status: { type: 'string', enum: ['pending', 'in_progress', 'in_review', 'done', 'blocked', 'blocked_permanent'], description: 'New status' },
-            notes: { type: 'string', description: 'Optional progress note' },
-          },
-          required: ['task_id', 'status'],
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'list_tasks',
-        description: 'List all tasks, optionally filtered by status or assignee.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            status: { type: 'string', enum: ['pending', 'in_progress', 'in_review', 'done', 'blocked', 'blocked_permanent'], description: 'Filter by status' },
-            assignee: { type: 'string', description: 'Filter by assignee agent name' },
-          },
-          additionalProperties: false,
-        },
-      },
+      // --- Task tools (from tools/tasks.js) ---
+      ...tasks.definitions,
       {
         name: 'get_summary',
         description: 'Get a condensed summary of the conversation so far. Useful when context is getting long and you need a quick recap of what was discussed.',
@@ -7477,33 +7459,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: 'Get progress on all features with completion percentages and overall project progress.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       },
-      // --- Voting ---
-      {
-        name: 'call_vote',
-        description: 'Start a vote for the team to decide something. All online agents are notified and can cast their vote.',
-        inputSchema: { type: 'object', properties: { question: { type: 'string', description: 'The question to vote on' }, options: { type: 'array', items: { type: 'string' }, description: 'Array of 2-10 options to choose from' } }, required: ['question', 'options'] , additionalProperties: false},
-      },
-      {
-        name: 'cast_vote',
-        description: 'Cast your vote on an open vote. Vote auto-resolves when all online agents have voted.',
-        inputSchema: { type: 'object', properties: { vote_id: { type: 'string', description: 'Vote ID' }, choice: { type: 'string', description: 'Your choice (must match one of the options)' } }, required: ['vote_id', 'choice'] , additionalProperties: false},
-      },
-      {
-        name: 'vote_status',
-        description: 'Check status of a specific vote or all votes.',
-        inputSchema: { type: 'object', properties: { vote_id: { type: 'string', description: 'Vote ID (optional — omit for all)' } } , additionalProperties: false},
-      },
-      // --- Code Review ---
-      {
-        name: 'request_review',
-        description: 'Request a code review from the team. Creates a review request and notifies all agents.',
-        inputSchema: { type: 'object', properties: { file_path: { type: 'string', description: 'File to review' }, description: { type: 'string', description: 'What to focus on in the review' } }, required: ['file_path'] , additionalProperties: false},
-      },
-      {
-        name: 'submit_review',
-        description: 'Submit a code review — approve or request changes with feedback.',
-        inputSchema: { type: 'object', properties: { review_id: { type: 'string', description: 'Review ID' }, status: { type: 'string', enum: ['approved', 'changes_requested'], description: 'Review result' }, feedback: { type: 'string', description: 'Your review feedback (max 2000 chars)' } }, required: ['review_id', 'status'] , additionalProperties: false},
-      },
+      // --- Governance tools (from tools/governance.js) ---
+      ...governance.definitions,
       // --- Dependencies ---
       {
         name: 'declare_dependency',
@@ -7527,98 +7484,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: 'View agent reputation — tasks completed, reviews done, bugs found, strengths. Shows leaderboard when called without agent name.',
         inputSchema: { type: 'object', properties: { agent: { type: 'string', description: 'Agent name (optional — omit for leaderboard)' } } , additionalProperties: false},
       },
-      {
-        name: 'suggest_task',
-        description: 'Get a task suggestion based on your strengths, pending tasks, open reviews, and blocked dependencies. Helps you find the most useful thing to do next.',
-        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-      },
-      // --- Rules tools ---
-      {
-        name: 'add_rule',
-        description: 'Add a project rule. Rules appear in matching agents\' guide and briefing. Use scope to limit who sees the rule (omit for all agents). Categories: safety, workflow, code-style, communication, custom.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            text: { type: 'string', description: 'The rule text' },
-            category: { type: 'string', description: 'Rule category: safety, workflow, code-style, communication, custom' },
-            scope: {
-              type: 'object',
-              description: 'Optional scope filter. Omit for all agents.',
-              properties: {
-                role: { type: 'string', description: 'Only agents with this role (e.g., "quality", "backend")' },
-                provider: { type: 'string', description: 'Only agents on this platform (e.g., "claude", "cursor", "gemini")' },
-                agent: { type: 'string', description: 'Only this specific agent name' },
-              },
-            },
-          },
-          required: ['text'],
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'list_rules',
-        description: 'List all project rules (active and inactive count).',
-        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-      },
-      {
-        name: 'remove_rule',
-        description: 'Remove a project rule by ID.',
-        inputSchema: {
-          type: 'object',
-          properties: { rule_id: { type: 'string', description: 'The rule ID to remove' } },
-          required: ['rule_id'],
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'toggle_rule',
-        description: 'Toggle a rule active/inactive without deleting it.',
-        inputSchema: {
-          type: 'object',
-          properties: { rule_id: { type: 'string', description: 'The rule ID to toggle' } },
-          required: ['rule_id'],
-          additionalProperties: false,
-        },
-      },
-      // --- Audit + Push tools ---
-      {
-        name: 'log_violation',
-        description: 'Log a workflow rule violation to the audit trail. Used automatically by review gates, or manually to flag issues.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            type: { type: 'string', description: 'Violation type: review_skipped, push_without_approval, rule_violated, etc.' },
-            details: { type: 'string', description: 'Description of the violation' },
-          },
-          required: ['type'],
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'request_push_approval',
-        description: 'Request approval from another agent before pushing to a branch. Auto-approves after 2 minutes if no response, or immediately if no other agents are online.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            branch: { type: 'string', description: 'Branch name to push (e.g., "main", "feature/xyz")' },
-            description: { type: 'string', description: 'What changes are being pushed' },
-          },
-          required: ['branch'],
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'ack_push',
-        description: 'Approve another agent\'s push request. Cannot approve your own.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            request_id: { type: 'string', description: 'Push request ID from the system message' },
-          },
-          required: ['request_id'],
-          additionalProperties: false,
-        },
-      },
+      // suggest_task is included via ...tasks.definitions above
+      // Rules, audit, and push tools are included via ...governance.definitions above
       // --- Autonomy Engine tools ---
       {
         name: 'get_work',
@@ -7787,13 +7654,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolGetHistory(args?.limit, args?.thread_id);
         break;
       case 'create_task':
-        result = toolCreateTask(args.title, args?.description, args?.assignee);
-        break;
       case 'update_task':
-        result = toolUpdateTask(args.task_id, args.status, args?.notes);
-        break;
       case 'list_tasks':
-        result = toolListTasks(args?.status, args?.assignee);
+        result = tasks.handlers[name](args || {});
         break;
       case 'handoff':
         result = toolHandoff(args.to, args.context);
@@ -7889,19 +7752,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolGetProgress();
         break;
       case 'call_vote':
-        result = toolCallVote(args.question, args.options);
-        break;
       case 'cast_vote':
-        result = toolCastVote(args.vote_id, args.choice);
-        break;
       case 'vote_status':
-        result = toolVoteStatus(args?.vote_id);
-        break;
       case 'request_review':
-        result = toolRequestReview(args.file_path, args?.description);
-        break;
       case 'submit_review':
-        result = toolSubmitReview(args.review_id, args.status, args?.feedback);
+        // Route through governance module
+        if (governance.handlers[name]) {
+          result = governance.handlers[name](args || {});
+        } else {
+          result = { error: `Unknown governance tool: ${name}` };
+        }
         break;
       case 'declare_dependency':
         result = toolDeclareDependency(args.task_id, args.depends_on);
@@ -7916,31 +7776,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolGetReputation(args?.agent);
         break;
       case 'suggest_task':
-        result = toolSuggestTask();
+        result = tasks.handlers[name](args || {});
         break;
       case 'add_rule':
-        result = toolAddRule(args.text, args.category, args.scope);
-        break;
       case 'list_rules':
-        result = toolListRules();
-        break;
       case 'remove_rule':
-        result = toolRemoveRule(args.rule_id);
-        break;
       case 'toggle_rule':
-        result = toolToggleRule(args.rule_id);
-        break;
       case 'log_violation':
-        result = toolLogViolation(args.type, args.details);
-        break;
       case 'request_push_approval':
-        result = toolRequestPushApproval(args.branch, args.description);
-        if (result.request_id) {
-          setTimeout(() => checkPushAutoApprove(result.request_id), PUSH_AUTO_APPROVE_MS + 1000);
-        }
-        break;
       case 'ack_push':
-        result = toolAckPush(args.request_id);
+        // Route all governance tools through the module
+        if (governance.handlers[name]) {
+          result = governance.handlers[name](args || {});
+          // Push auto-approve timer
+          if (name === 'request_push_approval' && result.request_id) {
+            setTimeout(() => governance.checkPushAutoApprove(result.request_id), governance.PUSH_AUTO_APPROVE_MS + 1000);
+          }
+        } else {
+          result = { error: `Unknown governance tool: ${name}` };
+        }
         break;
       case 'get_work':
         result = await toolGetWork(args || {});
