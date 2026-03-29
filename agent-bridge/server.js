@@ -122,6 +122,7 @@ let messageSeq = 0; // monotonic sequence counter for message ordering
 let currentBranch = 'main'; // which branch this agent is on
 let lastSentAt = 0; // timestamp of last sent message (for group cooldown)
 let sendsSinceLastListen = 0; // enforced: must listen between sends in group mode
+let consecutiveNonListenCalls = 0; // escalating listen() enforcement counter
 let sendLimit = 1; // default: 1 send per listen cycle (2 if addressed)
 let unaddressedSends = 0; // response budget: unaddressed sends counter
 let budgetResetTime = Date.now(); // resets every 60s
@@ -365,6 +366,7 @@ function getAgents() {
           try {
             const hb = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
             if (hb.last_activity) agents[name].last_activity = hb.last_activity;
+            if (hb.last_listen_call) agents[name].last_listen_call = hb.last_listen_call;
             if (hb.pid) agents[name].pid = hb.pid;
           } catch (e) { log.debug("heartbeat merge failed:", e.message); }
         }
@@ -389,14 +391,18 @@ function heartbeatFile(name) { return path.join(DATA_DIR, `heartbeat-${name}.jso
 
 let _lastStdinActivity = null;
 
-function touchHeartbeat(name) {
+function touchHeartbeat(name, isListenCall = false) {
   if (!name) return;
   try {
+    const now = new Date().toISOString();
     const payload = {
-      last_activity: new Date().toISOString(),
+      last_activity: now,
       pid: process.pid,
       ppid: process.ppid,
     };
+    if (isListenCall) {
+      payload.last_listen_call = now;
+    }
     if (_lastStdinActivity) payload.last_stdin_activity = _lastStdinActivity;
     if (process.env.CLAUDE_SESSION_ID) payload.claude_session_id = process.env.CLAUDE_SESSION_ID;
     const target = heartbeatFile(name);
@@ -1517,6 +1523,8 @@ function toolRegister(name, provider = null, skills = null) {
         }
         // Agent status change notifications — detect agents going offline/online
         detectAgentStatusChanges(agents);
+        // Auto-nudge system: detect agents that haven't called listen() recently
+        checkListenCompliance(agents);
         // Snapshot dead agents BEFORE cleanup (for auto-recovery)
         snapshotDeadAgents(agents);
         // Clean up file locks held by dead agents
@@ -1621,15 +1629,21 @@ function toolRegister(name, provider = null, skills = null) {
 
 // Update last_activity timestamp for this agent
 // Uses file lock to prevent race with heartbeat writes
-function touchActivity() {
+function touchActivity(isListenCall = false) {
   if (!registeredName) return;
   // Scale fix: write per-agent heartbeat file instead of lock+write agents.json
-  touchHeartbeat(registeredName);
+  touchHeartbeat(registeredName, isListenCall);
 }
 
 // Set or clear the listening_since flag
 function setListening(isListening) {
   if (!registeredName) return;
+  
+  // Track listen calls in heartbeat for auto-nudge system
+  if (isListening) {
+    touchActivity(true); // Mark as listen call
+  }
+  
   try {
     lockAgentsFile();
     try {
@@ -5796,6 +5810,66 @@ function detectAgentStatusChanges(agents) {
   }
 }
 
+// --- Auto-nudge system: detect agents that haven't called listen() recently ---
+const AUTO_NUDGE_THRESHOLD_MS = 30000; // 30 seconds
+const _lastNudgeSent = {}; // Track when we last nudged each agent
+
+function checkListenCompliance(agents) {
+  const now = Date.now();
+  
+  for (const [name, info] of Object.entries(agents)) {
+    if (name === registeredName) continue; // Skip self
+    if (!isPidAlive(info.pid, info.last_activity)) continue; // Skip dead agents
+    
+    // Check if agent has recent activity but no recent listen call
+    const lastActivity = info.last_activity ? new Date(info.last_activity).getTime() : 0;
+    const timeSinceActivity = now - lastActivity;
+    
+    // Only check agents that have been active recently (within 5 minutes)
+    if (timeSinceActivity > 300000) continue; // Skip inactive agents
+    
+    // Check for recent listen call in heartbeat file
+    let lastListenCall = 0;
+    try {
+      const heartbeatPath = heartbeatFile(name);
+      if (fs.existsSync(heartbeatPath)) {
+        const heartbeat = JSON.parse(fs.readFileSync(heartbeatPath, 'utf8'));
+        if (heartbeat.last_listen_call) {
+          lastListenCall = new Date(heartbeat.last_listen_call).getTime();
+        }
+      }
+    } catch (e) {
+      // Ignore heartbeat read errors
+      continue;
+    }
+    
+    // Calculate time since last listen call
+    const timeSinceListenCall = now - lastListenCall;
+    
+    // If agent has been active but hasn't called listen() in 30+ seconds, nudge them
+    if (timeSinceListenCall > AUTO_NUDGE_THRESHOLD_MS) {
+      // Avoid spamming - only nudge once every 2 minutes per agent
+      const lastNudge = _lastNudgeSent[name] || 0;
+      if (now - lastNudge > 120000) { // 2 minutes
+        _lastNudgeSent[name] = now;
+        
+        // Send critical system message to the agent
+        const minutesSinceActivity = Math.round(timeSinceActivity / 60000);
+        const minutesSinceListenCall = Math.round(timeSinceListenCall / 60000);
+        
+        const nudgeMessage = `[CRITICAL] You have been active for ${minutesSinceActivity}m but haven't called listen() in ${minutesSinceListenCall}m. Please call listen() now to stay reachable for coordination.`;
+        
+        try {
+          sendSystemMessage(name, nudgeMessage);
+          log.info(`[auto-nudge] Sent listen() reminder to ${name} (${minutesSinceListenCall}m since last listen)`);
+        } catch (e) {
+          log.warn(`[auto-nudge] Failed to send nudge to ${name}:`, e.message);
+        }
+      }
+    }
+  }
+}
+
 // Auto-recovery: snapshot dead agent state before cleanup
 // Creates recovery-{name}.json so replacement agent can resume
 function snapshotDeadAgents(agents) {
@@ -7339,6 +7413,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const startTime = Date.now();
 
   try {
+    // Escalating listen() enforcement — block tools after too many non-listen calls
+    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'listen_group', 'listen_codex', 'wait_for_reply', 'check_messages', 'consume_messages', 'update_profile', 'list_agents']);
+    if (listenExemptTools.has(name)) {
+      if (name === 'listen' || name === 'listen_group' || name === 'listen_codex' || name === 'wait_for_reply' || name === 'consume_messages') {
+        consecutiveNonListenCalls = 0;
+      }
+    } else if (registeredName) {
+      consecutiveNonListenCalls++;
+      if (consecutiveNonListenCalls >= 5) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({
+            error: `BLOCKED: You must call listen() before using other tools. You have made ${consecutiveNonListenCalls} tool calls without listening. Call listen() now.`,
+            blocked_tool: name,
+            calls_without_listen: consecutiveNonListenCalls,
+            fix: 'Call listen() immediately. It will reset the counter and unblock all tools.',
+          }, null, 2) }],
+          isError: true,
+        };
+      }
+    }
+
     let result;
 
     switch (name) {
@@ -7627,6 +7722,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           result.unread_action = `You have ${unread.length} unread message(s). Call listen() to receive them.`;
         }
       } catch (e) { log.debug('unread message hint failed:', e.message); }
+    }
+
+    // Persistent listen() reminder — injected into EVERY non-listen tool response.
+    // Keeps the instruction in the agent's immediate context even after extended
+    // processing pushes earlier instructions out of working memory.
+    if (registeredName && typeof result === 'object' && result !== null && !listenTools.includes(name)) {
+      result._listen = 'After processing this result, call listen() to receive messages. Do NOT skip this.';
     }
 
     // Log successful tool call
