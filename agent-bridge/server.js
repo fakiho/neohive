@@ -68,7 +68,45 @@ const AGENT_CARDS_FILE = path.join(DATA_DIR, 'agent-cards.json');
 const PUSH_REQUESTS_FILE = path.join(DATA_DIR, 'push-requests.json');
 const AUDIT_LOG_FILE = path.join(DATA_DIR, 'audit_log.jsonl');
 
-// In-memory state for this process
+// ─────────────────────────────────────────────────────────────────────────────
+// SERVER_CONFIG — centralized constants (timeouts, thresholds, limits)
+// Override via environment variables where indicated.
+// ─────────────────────────────────────────────────────────────────────────────
+const SERVER_CONFIG = {
+  // Polling / Heartbeat intervals (ms)
+  HEARTBEAT_INTERVAL_MS:    15000,   // how often agents write heartbeat files
+  POLL_INTERVAL_MS:          2000,   // message polling cycle
+  AUTONOMOUS_LISTEN_MS:     30000,   // max listen timeout in autonomous mode
+  CODEX_LISTEN_MS:          90000,   // max listen timeout for Codex agents
+
+  // Agent health thresholds (ms)
+  AGENT_STALE_THRESHOLD_MS:  30000,  // last_activity age before PID check falls back to stale
+  AGENT_CACHE_TTL_MS:         5000,  // alive-status cache TTL
+  AGENT_UNRESPONSIVE_MS:    120000,  // not called listen() in > 2 min => unresponsive
+  AGENT_SNAPSHOT_MAX_AGE_MS: 3600000,// snapshot older than 1 hr => force refresh
+
+  // Message rate limits
+  RATE_LIMIT_WINDOW_MS:      30000,  // sliding window for per-agent send rate limit
+  CHANNEL_RATE_WINDOW_MS:    60000,  // sliding window for per-channel rate limit
+  BUDGET_RESET_MS:           60000,  // unaddressed-send budget resets every 60s
+
+  // Cache TTLs
+  READ_CACHE_DEFAULT_TTL_MS:  2000,  // default read cache TTL
+  WORD_CACHE_TTL_MS:         30000,  // word-split cache TTL for task routing
+
+  // Wait / Lock timeouts (ms)
+  FILE_LOCK_MAX_WAIT_MS:      5000,  // max wait to acquire a file lock
+  RETENTION_DEFAULT_HOURS:      24,  // default message retention period (hours)
+
+  // Message limits
+  HISTORY_LIMIT_DEFAULT:        50,  // default history page size
+  HISTORY_LIMIT_MAX:           500,  // max history page size
+  MSG_CONTENT_MAX_CHARS:     10000,  // max CLI message text length
+
+  // MCP tool timeouts (seconds)
+  MCP_TOOL_TIMEOUT_S:          300,  // default MCP tool timeout used in IDE configs
+};
+
 let registeredName = null;
 let registeredToken = null; // auth token for re-registration
 let autoReclaimedName = false; // true when registeredName was set by autoReclaimDeadSeat() — overridable by explicit register()
@@ -86,7 +124,7 @@ let _channelSendTimes = {}; // per-channel rate limit sliding window
 
 // --- Read cache (eliminates 70%+ redundant disk I/O) ---
 const _cache = {};
-function cachedRead(key, readFn, ttlMs = 2000) {
+function cachedRead(key, readFn, ttlMs = SERVER_CONFIG.READ_CACHE_DEFAULT_TTL_MS) {
   const now = Date.now();
   const entry = _cache[key];
   if (entry && now - entry.ts < ttlMs) return entry.val;
@@ -107,7 +145,7 @@ function getConfig() {
 // File-based lock for config.json (prevents managed state race conditions)
 const CONFIG_LOCK = CONFIG_FILE + '.lock';
 function lockConfigFile() {
-  const maxWait = 5000; const start = Date.now();
+  const maxWait = SERVER_CONFIG.FILE_LOCK_MAX_WAIT_MS; const start = Date.now();
   while (Date.now() - start < maxWait) {
     try { fs.writeFileSync(CONFIG_LOCK, String(process.pid), { flag: 'wx' }); return true; }
     catch { /* lock exists, wait */ }
@@ -510,10 +548,10 @@ function isPidAlive(pid, lastActivity) {
   // Cache with 5s TTL — PID status doesn't change faster than heartbeats
   const cacheKey = `${pid}_${lastActivity}`;
   const cached = _pidAliveCache[cacheKey];
-  if (cached && Date.now() - cached.ts < 5000) return cached.alive;
+  if (cached && Date.now() - cached.ts < SERVER_CONFIG.AGENT_CACHE_TTL_MS) return cached.alive;
 
   // 30s stale threshold — 3x the 10s heartbeat interval, catches dead agents faster
-  const STALE_THRESHOLD = 30000;
+  const STALE_THRESHOLD = SERVER_CONFIG.AGENT_STALE_THRESHOLD_MS;
   let alive = false;
 
   // PRIORITY 1: Trust heartbeat freshness over PID status
@@ -540,7 +578,7 @@ function isPidAlive(pid, lastActivity) {
   // Evict old entries (keep cache small)
   const keys = Object.keys(_pidAliveCache);
   if (keys.length > 200) {
-    const cutoff = Date.now() - 10000;
+    const cutoff = Date.now() - SERVER_CONFIG.POLL_INTERVAL_MS * 5;
     for (const k of keys) { if (_pidAliveCache[k].ts < cutoff) delete _pidAliveCache[k]; }
   }
   return alive;
@@ -676,7 +714,7 @@ function autoCompact() {
     // This prevents message loss when agents reconnect after a crash
     const agents = getAgents();
     const allAgentNames = Object.keys(agents);
-    const retentionMs = (parseInt(process.env.NEOHIVE_RETENTION_HOURS) || 24) * 3600000;
+    const retentionMs = (parseInt(process.env.NEOHIVE_RETENTION_HOURS) || SERVER_CONFIG.RETENTION_DEFAULT_HOURS) * 3600000;
     const allConsumed = new Set();
     const perAgentConsumed = {};
     if (fs.existsSync(DATA_DIR)) {
@@ -1026,8 +1064,8 @@ function findUnassignedTasks(skills) {
   return pending.sort((a, b) => {
     const aKey = 'taskwords_' + a.id;
     const bKey = 'taskwords_' + b.id;
-    const aWords = cachedRead(aKey, () => ((a.title || '') + ' ' + (a.description || '')).toLowerCase().split(/\W+/).filter(w => w.length > 3), 30000);
-    const bWords = cachedRead(bKey, () => ((b.title || '') + ' ' + (b.description || '')).toLowerCase().split(/\W+/).filter(w => w.length > 3), 30000);
+    const aWords = cachedRead(aKey, () => ((a.title || '') + ' ' + (a.description || '')).toLowerCase().split(/\W+/).filter(w => w.length > 3), SERVER_CONFIG.WORD_CACHE_TTL_MS);
+    const bWords = cachedRead(bKey, () => ((b.title || '') + ' ' + (b.description || '')).toLowerCase().split(/\W+/).filter(w => w.length > 3), SERVER_CONFIG.WORD_CACHE_TTL_MS);
     const aScore = aWords.reduce((s, w) => s + (historyKeywords.has(w) ? (platformSkillSet.has(w) ? 0.5 : 1) : 0), 0);
     const bScore = bWords.reduce((s, w) => s + (historyKeywords.has(w) ? (platformSkillSet.has(w) ? 0.5 : 1) : 0), 0);
     return bScore - aScore;
@@ -1073,7 +1111,7 @@ function findStealableWork() {
 function findHelpRequests() {
   // Scale fix: only read last 50 messages — help requests are always recent
   const messages = tailReadJsonl(getMessagesFile(currentBranch), 50);
-  const recentCutoff = Date.now() - 300000;
+  const recentCutoff = Date.now() - SERVER_CONFIG.AUTONOMOUS_LISTEN_MS * 10;
   return messages.filter(m => {
     if (new Date(m.timestamp).getTime() < recentCutoff) return false;
     if (m.from === registeredName) return false;
@@ -2804,7 +2842,7 @@ async function toolListenGroup() {
   const consumed = getConsumedIds(registeredName);
 
   // Autonomous mode: cap listen at 30s — agents should use get_work() instead
-  const autonomousTimeout = isAutonomousMode() ? 30000 : null;
+  const autonomousTimeout = isAutonomousMode() ? SERVER_CONFIG.AUTONOMOUS_LISTEN_MS : null;
   const MAX_LISTEN_MS = 300000; // 5 minutes — MCP has no tool timeout, heartbeat keeps agent alive
   const listenStart = Date.now();
 
@@ -3070,7 +3108,7 @@ function buildListenGroupResponse(batch, consumed, agentName, listenStart) {
     } else {
       const lastListened = agents[n].last_listened_at;
       const sinceLastListen = lastListened ? Date.now() - new Date(lastListened).getTime() : Infinity;
-      agentStatus[n] = sinceLastListen > 120000 ? 'unresponsive' : 'working';
+      agentStatus[n] = sinceLastListen > SERVER_CONFIG.AGENT_UNRESPONSIVE_MS ? 'unresponsive' : 'working';
     }
   }
 
@@ -3131,7 +3169,7 @@ function buildListenGroupResponse(batch, consumed, agentName, listenStart) {
     : 'After processing these messages and sending your response, call listen_group() again immediately. Never stop listening.';
   result.coordinator_mode = getConfig().coordinator_mode || 'responsive';
 
-  // Task nudge: remind agent of their outstanding tasks
+  // Task reminder: remind agent of their outstanding tasks
   try {
     const myTasks = getTasks().filter(t => t.assignee === agentName && (t.status === 'pending' || t.status === 'in_progress'));
     if (myTasks.length > 0) {
@@ -3143,7 +3181,7 @@ function buildListenGroupResponse(batch, consumed, agentName, listenStart) {
 }
 
 function toolGetHistory(limit = 50, thread_id = null) {
-  limit = Math.min(Math.max(1, limit || 50), 500);
+  limit = Math.min(Math.max(1, limit || SERVER_CONFIG.HISTORY_LIMIT_DEFAULT), SERVER_CONFIG.HISTORY_LIMIT_MAX);
   // Tail-read with 2x buffer to account for filtering reducing results
   let history = tailReadJsonl(getHistoryFile(currentBranch), limit * 2);
   if (thread_id) {
@@ -7627,46 +7665,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await toolListenGroup();
         break;
       case 'join_channel':
-        result = toolJoinChannel(args.name, args?.description, args?.rate_limit);
-        break;
       case 'leave_channel':
-        result = toolLeaveChannel(args.name);
-        break;
       case 'list_channels':
-        result = toolListChannels();
+        result = channels.handlers[name](args || {});
         break;
       case 'get_guide':
         result = toolGetGuide(args?.level);
         break;
-      case 'get_briefing':
-        result = toolGetBriefing();
-        break;
+      // get_briefing, log_decision, get_decisions, kb_*, progress_* handled by knowledge module above
       case 'lock_file':
-        result = toolLockFile(args.file_path);
-        break;
       case 'unlock_file':
-        result = toolUnlockFile(args?.file_path);
-        break;
-      case 'log_decision':
-        result = toolLogDecision(args.decision, args?.reasoning, args?.topic);
-        break;
-      case 'get_decisions':
-        result = toolGetDecisions(args?.topic);
-        break;
-      case 'kb_write':
-        result = toolKBWrite(args.key, args.content);
-        break;
-      case 'kb_read':
-        result = toolKBRead(args?.key);
-        break;
-      case 'kb_list':
-        result = toolKBList();
-        break;
-      case 'update_progress':
-        result = toolUpdateProgress(args.feature, args.percent, args?.notes);
-        break;
-      case 'get_progress':
-        result = toolGetProgress();
+      case 'declare_dependency':
+      case 'check_dependencies':
+        result = safety.handlers[name](args || {});
         break;
       case 'call_vote':
       case 'cast_vote':
@@ -7680,15 +7691,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           result = { error: `Unknown governance tool: ${name}` };
         }
         break;
-      case 'declare_dependency':
-        result = toolDeclareDependency(args.task_id, args.depends_on);
-        break;
-      case 'check_dependencies':
-        result = toolCheckDependencies(args?.task_id);
-        break;
-      case 'get_compressed_history':
-        result = toolGetCompressedHistory();
-        break;
+      // declare_dependency, check_dependencies handled by safety module above
+      // get_compressed_history handled by knowledge module above
       case 'get_reputation':
         result = toolGetReputation(args?.agent);
         break;

@@ -6,6 +6,17 @@ const os = require('os');
 const { execSync } = require('child_process');
 const { upsertNeohiveMcpInToml } = require('./lib/codex-neohive-toml');
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CLI_CONFIG — centralized constants for the Neohive CLI
+// ─────────────────────────────────────────────────────────────────────────────
+const CLI_CONFIG = {
+  MCP_TOOL_TIMEOUT_S:   300,    // MCP tool timeout written to IDE config files (seconds)
+  OLLAMA_DETECT_TIMEOUT_MS: 5000, // timeout for 'ollama --version' probe
+  OLLAMA_HEARTBEAT_MS:  10000,  // how often Ollama agent writes heartbeat
+  OLLAMA_POLL_MS:        2000,  // how often Ollama agent polls for messages
+  MSG_MAX_CHARS:        10000,  // max length of --msg text argument
+};
+
 const command = process.argv[2];
 
 function printUsage() {
@@ -73,7 +84,7 @@ function detectCLIs() {
 // Detect Ollama installation
 function detectOllama() {
   try {
-    const version = execSync('ollama --version', { encoding: 'utf8', timeout: 5000 }).trim();
+    const version = execSync('ollama --version', { encoding: 'utf8', timeout: CLI_CONFIG.OLLAMA_DETECT_TIMEOUT_MS }).trim();
     return { installed: true, version };
   } catch {
     return { installed: false };
@@ -114,7 +125,7 @@ function setupClaude(serverPath, cwd) {
   mcpConfig.mcpServers['neohive'] = {
     command: mcpNodeCommand(),
     args: [serverPath],
-    timeout: 300,
+    timeout: CLI_CONFIG.MCP_TOOL_TIMEOUT_S,
   };
 
   fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
@@ -146,7 +157,7 @@ function setupGemini(serverPath, cwd) {
   settings.mcpServers['neohive'] = {
     command: mcpNodeCommand(),
     args: [serverPath],
-    timeout: 300,
+    timeout: CLI_CONFIG.MCP_TOOL_TIMEOUT_S,
     trust: true,
   };
 
@@ -366,7 +377,7 @@ function setupCodex(serverPath, cwd) {
   config = upsertNeohiveMcpInToml(config, {
     command: mcpNodeCommand(),
     serverPath,
-    timeout: 300,
+    timeout: CLI_CONFIG.MCP_TOOL_TIMEOUT_S,
     envSection: hadNeohive ? undefined : envSection,
   });
   fs.writeFileSync(configPath, config);
@@ -402,7 +413,7 @@ function setupCursor(serverPath, cwd) {
     command: mcpNodeCommand(),
     args: [serverPath],
     env: { NEOHIVE_DATA_DIR: abDataDir },
-    timeout: 300,
+    timeout: CLI_CONFIG.MCP_TOOL_TIMEOUT_S,
   };
 
   fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
@@ -514,10 +525,10 @@ async function processMessages() {
 
 // Main loop
 register();
-const hb = setInterval(heartbeat, 10000);
+const hb = setInterval(heartbeat, CLI_CONFIG.OLLAMA_HEARTBEAT_MS);
 hb.unref();
 console.log('[' + name + '] Listening for messages... (Ctrl+C to stop)');
-setInterval(processMessages, 2000);
+setInterval(processMessages, CLI_CONFIG.OLLAMA_POLL_MS);
 
 // Cleanup on exit
 process.on('SIGINT', function() { console.log('\\n[' + name + '] Shutting down.'); process.exit(0); });
@@ -818,8 +829,8 @@ function cliMsg() {
     process.exit(1);
   }
   const text = textParts.join(' ');
-  if (text.length > 10000) {
-    console.error('  Message text exceeds maximum length of 10,000 characters.');
+  if (text.length > CLI_CONFIG.MSG_MAX_CHARS) {
+    console.error(`  Message text exceeds maximum length of ${CLI_CONFIG.MSG_MAX_CHARS} characters.`);
     process.exit(1);
   }
   if (!text.trim().length) {
