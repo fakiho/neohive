@@ -15,12 +15,17 @@ const _log = require('./lib/logger');
 const _state = require('./lib/state');
 const _config = require('./lib/config');
 const _fileIo = require('./lib/file-io');
+const { cachedRead, invalidateCache, lockAgentsFile, unlockAgentsFile, lockConfigFile, unlockConfigFile, withFileLock, readJsonl, readJsonlFromOffset, tailReadJsonl, readJsonFile, writeJsonFile, registerFileCacheKey } = _fileIo;
 const _agents = require('./lib/agents');
 const _messaging = require('./lib/messaging');
+const _audit = require('./lib/audit');
 const _compact = require('./lib/compact');
 const { readIdeActivity, applyIdeActivityHint } = require('./lib/ide-activity');
 
 const DATA_DIR = _config.DATA_DIR;
+
+// Initialize audit logging
+_audit.init(DATA_DIR);
 
 const _envLog = process.env.NEOHIVE_LOG_LEVEL;
 const LOG_LEVEL = (_envLog != null && String(_envLog).trim() !== '' ? String(_envLog).trim() : 'warn').toLowerCase();
@@ -41,7 +46,7 @@ if (_rawNeohiveEnv && /\$\{|\$\s*workspaceFolder/i.test(_rawNeohiveEnv)) {
 // Auto-migrate from .agent-bridge/ to .neohive/ (v5 → v6 rename)
 const _legacyDir = path.join(path.dirname(DATA_DIR), '.agent-bridge');
 if (!fs.existsSync(DATA_DIR) && fs.existsSync(_legacyDir)) {
-  try { fs.renameSync(_legacyDir, DATA_DIR); } catch {}
+  try { fs.renameSync(_legacyDir, DATA_DIR); } catch (e) { log.warn('Legacy migration failed:', e.message); }
 }
 
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.jsonl');
@@ -122,17 +127,7 @@ let unaddressedSends = 0; // response budget: unaddressed sends counter
 let budgetResetTime = Date.now(); // resets every 60s
 let _channelSendTimes = {}; // per-channel rate limit sliding window
 
-// --- Read cache (eliminates 70%+ redundant disk I/O) ---
-const _cache = {};
-function cachedRead(key, readFn, ttlMs = SERVER_CONFIG.READ_CACHE_DEFAULT_TTL_MS) {
-  const now = Date.now();
-  const entry = _cache[key];
-  if (entry && now - entry.ts < ttlMs) return entry.val;
-  const val = readFn();
-  _cache[key] = { val, ts: now };
-  return val;
-}
-function invalidateCache(key) { delete _cache[key]; }
+// cachedRead, invalidateCache imported from lib/file-io.js
 
 // --- Group conversation mode ---
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
@@ -142,20 +137,7 @@ function getConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; }
 }
 
-// File-based lock for config.json (prevents managed state race conditions)
-const CONFIG_LOCK = CONFIG_FILE + '.lock';
-function lockConfigFile() {
-  const maxWait = SERVER_CONFIG.FILE_LOCK_MAX_WAIT_MS; const start = Date.now();
-  while (Date.now() - start < maxWait) {
-    try { fs.writeFileSync(CONFIG_LOCK, String(process.pid), { flag: 'wx' }); return true; }
-    catch { /* lock exists, wait */ }
-    try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50); } catch {} // non-blocking 50ms wait
-  }
-  try { fs.unlinkSync(CONFIG_LOCK); } catch {}
-  try { fs.writeFileSync(CONFIG_LOCK, String(process.pid), { flag: 'wx' }); return true; } catch {}
-  return false;
-}
-function unlockConfigFile() { try { fs.unlinkSync(CONFIG_LOCK); } catch {} }
+// lockConfigFile, unlockConfigFile imported from lib/file-io.js
 
 function saveConfig(config) {
   ensureDataDir();
@@ -306,7 +288,7 @@ function migrateIfNeeded() {
   // if (dataVersion < 2) { /* migrate v1 → v2 */ }
 
   // Stamp current version
-  try { fs.writeFileSync(DATA_VERSION_FILE, String(CURRENT_DATA_VERSION)); } catch {}
+  try { fs.writeFileSync(DATA_VERSION_FILE, String(CURRENT_DATA_VERSION)); } catch (e) { log.warn('Failed to write data version:', e.message); }
 }
 
 const RESERVED_NAMES = ['__system__', '__all__', '__open__', '__close__', '__user__', 'system', 'dashboard', 'Dashboard'];
@@ -365,99 +347,9 @@ function trimConsumedIds(agentName, ids) {
   } catch (e) { log.debug("consumed ID trim failed:", e.message); }
 }
 
-function readJsonl(file) {
-  if (!fs.existsSync(file)) return [];
-  const content = fs.readFileSync(file, 'utf8').trim();
-  if (!content) return [];
-  return content.split(/\r?\n/).map(line => {
-    try { return JSON.parse(line); } catch { return null; }
-  }).filter(Boolean);
-}
+// readJsonl, readJsonlFromOffset, tailReadJsonl imported from lib/file-io.js
 
-// Optimized: read only NEW lines from a JSONL file starting at byte offset
-// Returns { messages, newOffset } — caller tracks offset between calls
-function readJsonlFromOffset(file, offset) {
-  if (!fs.existsSync(file)) return { messages: [], newOffset: 0 };
-  const stat = fs.statSync(file);
-  if (stat.size <= offset) return { messages: [], newOffset: offset };
-  const fd = fs.openSync(file, 'r');
-  const buf = Buffer.alloc(stat.size - offset);
-  fs.readSync(fd, buf, 0, buf.length, offset);
-  fs.closeSync(fd);
-  const content = buf.toString('utf8').trim();
-  if (!content) return { messages: [], newOffset: stat.size };
-  const messages = content.split(/\r?\n/).map(line => {
-    try { return JSON.parse(line); } catch { return null; }
-  }).filter(Boolean);
-  return { messages, newOffset: stat.size };
-}
-
-// Scale fix: read only last N lines of a JSONL file (for history context)
-// Seeks near end of file instead of parsing entire file — O(N) instead of O(all)
-function tailReadJsonl(file, lineCount = 100) {
-  if (!fs.existsSync(file)) return [];
-  const stat = fs.statSync(file);
-  if (stat.size === 0) return [];
-  // Estimate ~300 bytes per line, read enough from the end
-  const readSize = Math.min(stat.size, lineCount * 300);
-  const offset = Math.max(0, stat.size - readSize);
-  const fd = fs.openSync(file, 'r');
-  const buf = Buffer.alloc(readSize);
-  fs.readSync(fd, buf, 0, readSize, offset);
-  fs.closeSync(fd);
-  const content = buf.toString('utf8');
-  const lines = content.split(/\r?\n/).filter(l => l.trim());
-  // If we started mid-file, first line may be partial — skip it
-  if (offset > 0 && lines.length > 0) lines.shift();
-  const messages = lines.map(line => {
-    try { return JSON.parse(line); } catch { return null; }
-  }).filter(Boolean);
-  return messages.slice(-lineCount);
-}
-
-// File-based lock for agents.json (prevents registration race conditions)
-const AGENTS_LOCK = AGENTS_FILE + '.lock';
-function lockAgentsFile() {
-  const maxWait = 5000; const start = Date.now();
-  let backoff = 1; // exponential backoff: 1ms → 2ms → 4ms → ... → 500ms max
-  while (Date.now() - start < maxWait) {
-    try { fs.writeFileSync(AGENTS_LOCK, String(process.pid), { flag: 'wx' }); return true; }
-    catch { /* lock exists, wait with exponential backoff */ }
-    try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, backoff); } catch {}
-    backoff = Math.min(backoff * 2, 500);
-  }
-  // Force-break stale lock after timeout
-  try { fs.unlinkSync(AGENTS_LOCK); } catch {}
-  try { fs.writeFileSync(AGENTS_LOCK, String(process.pid), { flag: 'wx' }); return true; } catch {}
-  return false;
-}
-function unlockAgentsFile() { try { fs.unlinkSync(AGENTS_LOCK); } catch {} }
-
-// Generic file lock for any JSON file (tasks, workflows, channels, etc.)
-function withFileLock(filePath, fn) {
-  const lockPath = filePath + '.lock';
-  const maxWait = 5000; const start = Date.now();
-  let backoff = 1;
-  while (Date.now() - start < maxWait) {
-    try { fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' }); break; }
-    catch { /* lock exists, wait with exponential backoff */ }
-    try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, backoff); } catch {}
-    backoff = Math.min(backoff * 2, 500);
-    if (Date.now() - start >= maxWait) {
-      // Force-break stale lock — only if holding PID is dead
-      try {
-        const lockPid = parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10);
-        if (lockPid && lockPid !== process.pid) {
-          try { process.kill(lockPid, 0); /* PID alive — skip, don't corrupt */ return null; } catch { /* PID dead — safe to break */ }
-        }
-      } catch (e) { log.debug("lock PID check failed:", e.message); }
-      try { fs.unlinkSync(lockPath); } catch {}
-      try { fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' }); } catch { return fn(); }
-      break;
-    }
-  }
-  try { return fn(); } finally { try { fs.unlinkSync(lockPath); } catch {} }
-}
+// lockAgentsFile, unlockAgentsFile, withFileLock imported from lib/file-io.js
 
 function getAgents() {
   return cachedRead('agents', () => {
@@ -5617,38 +5509,17 @@ function toolListBranches() {
 
 // --- Tier 1: Briefing, File Locking, Decisions, Recovery ---
 
-// Helpers for new data files
-function readJsonFile(file) { if (!fs.existsSync(file)) return null; try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } }
-// File-to-cache-key map: writeJsonFile auto-invalidates the right cache entry
-const _fileCacheKeys = {};
-_fileCacheKeys[DECISIONS_FILE] = 'decisions';
-_fileCacheKeys[KB_FILE] = 'kb';
-_fileCacheKeys[LOCKS_FILE] = 'locks';
-_fileCacheKeys[PROGRESS_FILE] = 'progress';
-_fileCacheKeys[VOTES_FILE] = 'votes';
-_fileCacheKeys[REVIEWS_FILE] = 'reviews';
-_fileCacheKeys[DEPS_FILE] = 'deps';
-_fileCacheKeys[REPUTATION_FILE] = 'reputation';
-_fileCacheKeys[RULES_FILE] = 'rules';
-
-function writeJsonFile(file, data) {
-  ensureDataDir();
-  const str = JSON.stringify(data);
-  if (str && str.length > 0) {
-    // Use file lock to prevent concurrent write corruption
-    const lockPath = file + '.lock';
-    let locked = false;
-    try { fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' }); locked = true; } catch {}
-    try {
-      fs.writeFileSync(file, str);
-    } finally {
-      if (locked) try { fs.unlinkSync(lockPath); } catch {}
-    }
-    // Auto-invalidate cache for this file
-    const cacheKey = _fileCacheKeys[file];
-    if (cacheKey) invalidateCache(cacheKey);
-  }
-}
+// readJsonFile, writeJsonFile, registerFileCacheKey imported from lib/file-io.js
+// Register file-to-cache-key mappings so writeJsonFile auto-invalidates
+registerFileCacheKey(DECISIONS_FILE, 'decisions');
+registerFileCacheKey(KB_FILE, 'kb');
+registerFileCacheKey(LOCKS_FILE, 'locks');
+registerFileCacheKey(PROGRESS_FILE, 'progress');
+registerFileCacheKey(VOTES_FILE, 'votes');
+registerFileCacheKey(REVIEWS_FILE, 'reviews');
+registerFileCacheKey(DEPS_FILE, 'deps');
+registerFileCacheKey(REPUTATION_FILE, 'reputation');
+registerFileCacheKey(RULES_FILE, 'rules');
 
 function getDecisions() { return cachedRead('decisions', () => readJsonFile(DECISIONS_FILE) || [], 2000); }
 function getKB() { return cachedRead('kb', () => readJsonFile(KB_FILE) || {}, 2000); }
@@ -5878,7 +5749,7 @@ function triggerStandupIfDue() {
     const standupFile = path.join(DATA_DIR, '.last-standup');
     let lastStandup = 0;
     if (fs.existsSync(standupFile)) {
-      try { lastStandup = parseInt(fs.readFileSync(standupFile, 'utf8').trim()) || 0; } catch {}
+      try { lastStandup = parseInt(fs.readFileSync(standupFile, 'utf8').trim()) || 0; } catch (e) { log.debug('standup file read failed:', e.message); }
     }
     if (now - lastStandup < intervalMs) return;
 
@@ -6074,7 +5945,28 @@ function fireEvent(eventName, data) {
       break;
     }
   }
+
+  // Hook system: emit to all subscribers of mapped events
+  try {
+    const hooksLib = require('./lib/hooks');
+    const hookEvent = EVENT_TO_HOOK[eventName];
+    if (hookEvent) {
+      const hookData = { ...data, _source_agent: registeredName };
+      const notifications = hooksLib.emit(hookEvent, hookData);
+      for (const n of notifications) {
+        if (agents[n.agent] && isPidAlive(agents[n.agent].pid, agents[n.agent].last_activity)) {
+          sendSystemMessage(n.agent, n.message);
+        }
+      }
+    }
+  } catch (e) { log.debug('hook emit failed:', e.message); }
 }
+
+// Map internal event names to hook event names
+const EVENT_TO_HOOK = {
+  task_complete: 'task.status_changed',
+  review_approved: 'review.submitted',
+};
 
 function toolGetGuide(level = 'standard') {
   if (!registeredName) return { error: 'You must call register() first' };
@@ -7014,6 +6906,43 @@ const _safetyCtx = {
 };
 const safety = require('./tools/safety')(_safetyCtx);
 
+const _systemCtx = {
+  state: {
+    get registeredName() { return registeredName; },
+    get currentBranch() { return currentBranch; },
+  },
+  helpers: {
+    getProfiles, saveProfiles, getWorkspace, saveWorkspace, ensureDataDir,
+    getAgents, getBranches, getHistoryFile, getReputation, touchActivity,
+  },
+  files: {},
+};
+const system = require('./tools/system')(_systemCtx);
+
+const _hooksCtx = {
+  state: { get registeredName() { return registeredName; } },
+};
+const hooks = require('./tools/hooks')(_hooksCtx);
+
+const _messagingCtx = {
+  state: {
+    get registeredName() { return registeredName; },
+    get currentBranch() { return currentBranch; },
+    get lastReadOffset() { return lastReadOffset; },
+    set lastReadOffset(v) { lastReadOffset = v; },
+  },
+  helpers: {
+    getUnconsumedMessages, getConsumedIds, saveConsumedIds, markAsRead,
+    getNotifications, saveNotifications, getAcks, getPermissions,
+    getAgents, isPidAlive, getConfig, touchActivity,
+    tailReadJsonl, readJsonl, getMessagesFile, getHistoryFile,
+    getAgentChannels, getChannelHistoryFile,
+    withFileLock,
+  },
+  files: { ACKS_FILE },
+};
+const messaging = require('./tools/messaging')(_messagingCtx);
+
 // --- MCP Server setup ---
 
 const server = new Server(
@@ -7150,89 +7079,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           additionalProperties: false,
         },
       },
-      {
-        name: 'check_messages',
-        description: 'Non-blocking PEEK at your inbox — shows message previews but does NOT consume them. Use listen() to actually receive and process messages. Do NOT call this in a loop — it wastes tokens returning the same messages repeatedly. Use listen() instead which blocks efficiently and consumes messages.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            from: {
-              type: 'string',
-              description: 'Only show messages from this specific agent (optional)',
-            },
-          },
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'consume_messages',
-        description: 'Non-blocking check that returns ALL unconsumed messages with full content AND marks them as consumed. Unlike check_messages (peek-only) or listen (blocking), this is a one-shot "grab everything and mark it read" call. Ideal for agents that need to process a batch of messages without blocking.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            from: {
-              type: 'string',
-              description: 'Only consume messages from this specific agent (optional)',
-            },
-            limit: {
-              type: 'number',
-              description: 'Max number of messages to consume (default: all)',
-            },
-          },
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'get_notifications',
-        description: 'Get unread notifications (task completions, workflow advances, agent status changes). Returns and marks as read. Non-blocking — use this instead of listen() when you need a quick status update without waiting.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            since: {
-              type: 'string',
-              description: 'Only return notifications after this ISO timestamp (optional)',
-            },
-            type: {
-              type: 'string',
-              description: 'Filter by type: task_done, workflow_advanced, agent_online, agent_offline, approval_needed (optional)',
-            },
-          },
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'ack_message',
-        description: 'Acknowledge that you have processed a message. Lets the sender verify delivery via get_history.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            message_id: {
-              type: 'string',
-              description: 'ID of the message to acknowledge',
-            },
-          },
-          required: ['message_id'],
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'get_history',
-        description: 'Get conversation history. Optionally filter by thread.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            limit: {
-              type: 'number',
-              description: 'Number of recent messages to return (default: 50)',
-            },
-            thread_id: {
-              type: 'string',
-              description: 'Filter to only messages in this thread (optional)',
-            },
-          },
-          additionalProperties: false,
-        },
-      },
+      // --- Messaging tools (from tools/messaging.js) ---
+      ...messaging.definitions,
       {
         name: 'handoff',
         description: 'Hand off work to another agent with context. Creates a structured handoff message so the recipient knows they are taking over a task. Use when you are done with your part and another agent should continue.',
@@ -7279,20 +7127,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       ...tasks.definitions,
       // --- Knowledge tools (from tools/knowledge.js) ---
       ...knowledge.definitions,
-      {
-        name: 'search_messages',
-        description: 'Search conversation history by keyword. Returns matching messages with previews. Useful for finding past discussions, decisions, or code references.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: 'Search term (min 2 chars)' },
-            from: { type: 'string', description: 'Filter by sender agent name (optional)' },
-            limit: { type: 'number', description: 'Max results (default: 20, max: 50)' },
-          },
-          required: ['query'],
-          additionalProperties: false,
-        },
-      },
+      // search_messages included via ...messaging.definitions above
       {
         name: 'reset',
         description: 'Clear all data files and start fresh. Automatically archives the conversation before clearing.',
@@ -7302,58 +7137,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           additionalProperties: false,
         },
       },
-      // --- Phase 1: Profiles ---
-      {
-        name: 'update_profile',
-        description: 'Update your agent profile (display name, avatar, bio, role). Profile data is shown in the dashboard.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            display_name: { type: 'string', description: 'Display name (max 30 chars)' },
-            avatar: { type: 'string', description: 'Avatar URL or data URI (max 64KB)' },
-            bio: { type: 'string', description: 'Short bio (max 200 chars)' },
-            role: { type: 'string', description: 'Role/title (max 30 chars, e.g. "Architect", "Reviewer")' },
-          },
-          additionalProperties: false,
-        },
-      },
-      // --- Phase 2: Workspaces ---
-      {
-        name: 'workspace_write',
-        description: 'Write a key-value entry to your workspace. Other agents can read your workspace but only you can write to it. Max 50 keys, 100KB per value.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            key: { type: 'string', description: 'Key name (1-50 alphanumeric/underscore/hyphen/dot chars)' },
-            content: { type: 'string', description: 'Content to store (max 100KB)' },
-          },
-          required: ['key', 'content'],
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'workspace_read',
-        description: 'Read workspace entries. Read your own or another agent\'s workspace. Omit key to read all entries.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            key: { type: 'string', description: 'Specific key to read (optional — omit for all keys)' },
-            agent: { type: 'string', description: 'Agent whose workspace to read (optional — defaults to yourself)' },
-          },
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'workspace_list',
-        description: 'List workspace keys. Specify agent for one workspace, or omit for all agents\' workspace summaries.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            agent: { type: 'string', description: 'Agent name (optional — omit for all)' },
-          },
-          additionalProperties: false,
-        },
-      },
+      // --- System tools (from tools/system.js): profiles, workspaces, branches, reputation ---
+      ...system.definitions,
       // --- Workflow tools (from tools/workflows.js) ---
       ...workflows.definitions,
       // --- Phase 4: Branching ---
@@ -7382,15 +7167,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           additionalProperties: false,
         },
       },
-      {
-        name: 'list_branches',
-        description: 'List all conversation branches with message counts and metadata.',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-          additionalProperties: false,
-        },
-      },
+      // list_branches included via ...system.definitions above
       {
         name: 'set_conversation_mode',
         description: 'Switch between "direct" (point-to-point), "group" (free multi-agent chat with auto-broadcast), or "managed" (structured turn-taking with a manager who controls who speaks). Use managed mode for 3+ agent teams to prevent chaos.',
@@ -7424,16 +7201,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       // are included via ...knowledge.definitions and ...safety.definitions
       // --- Safety tools (from tools/safety.js) ---
       ...safety.definitions,
+      // --- Hook tools (from tools/hooks.js) ---
+      ...hooks.definitions,
       // --- Governance tools (from tools/governance.js) ---
       ...governance.definitions,
       // declare_dependency, check_dependencies included via ...safety.definitions
       // get_compressed_history included via ...knowledge.definitions
-      // --- Reputation ---
-      {
-        name: 'get_reputation',
-        description: 'View agent reputation — tasks completed, reviews done, bugs found, strengths. Shows leaderboard when called without agent name.',
-        inputSchema: { type: 'object', properties: { agent: { type: 'string', description: 'Agent name (optional — omit for leaderboard)' } } , additionalProperties: false},
-      },
+      // get_reputation included via ...system.definitions above
       // suggest_task is included via ...tasks.definitions above
       // Rules, audit, and push tools are included via ...governance.definitions above
       // --- Autonomy Engine tools ---
@@ -7562,6 +7336,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  const startTime = Date.now();
 
   try {
     let result;
@@ -7589,19 +7364,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = await toolListenCodex(args?.from);
         break;
       case 'check_messages':
-        result = toolCheckMessages(args?.from);
-        break;
       case 'consume_messages':
-        result = toolConsumeMessages(args?.from, args?.limit);
-        break;
       case 'get_notifications':
-        result = toolGetNotifications(args?.since, args?.type);
-        break;
       case 'ack_message':
-        result = toolAckMessage(args.message_id);
-        break;
       case 'get_history':
-        result = toolGetHistory(args?.limit, args?.thread_id);
+        result = messaging.handlers[name](args || {});
         break;
       case 'create_task':
       case 'update_task':
@@ -7627,22 +7394,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = knowledge.handlers[name](args || {});
         break;
       case 'search_messages':
-        result = toolSearchMessages(args.query, args?.from, args?.limit);
+        result = messaging.handlers[name](args || {});
         break;
       case 'reset':
         result = toolReset();
         break;
       case 'update_profile':
-        result = toolUpdateProfile(args?.display_name, args?.avatar, args?.bio, args?.role);
-        break;
       case 'workspace_write':
-        result = toolWorkspaceWrite(args.key, args.content);
-        break;
       case 'workspace_read':
-        result = toolWorkspaceRead(args?.key, args?.agent);
-        break;
       case 'workspace_list':
-        result = toolWorkspaceList(args?.agent);
+        result = system.handlers[name](args || {});
         break;
       case 'create_workflow':
       case 'advance_workflow':
@@ -7656,7 +7417,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolSwitchBranch(args.branch_name);
         break;
       case 'list_branches':
-        result = toolListBranches();
+        result = system.handlers[name](args || {});
         break;
       case 'set_conversation_mode':
         result = toolSetConversationMode(args.mode);
@@ -7694,7 +7455,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // declare_dependency, check_dependencies handled by safety module above
       // get_compressed_history handled by knowledge module above
       case 'get_reputation':
-        result = toolGetReputation(args?.agent);
+        result = system.handlers[name](args || {});
+        break;
+      case 'subscribe_hook':
+      case 'unsubscribe_hook':
+      case 'list_hooks':
+        result = hooks.handlers[name](args || {});
         break;
       case 'suggest_task':
         result = tasks.handlers[name](args || {});
@@ -7863,10 +7629,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       } catch (e) { log.debug('unread message hint failed:', e.message); }
     }
 
+    // Log successful tool call
+    const duration = Date.now() - startTime;
+    _audit.logToolCall(registeredName, name, args, result, duration, {
+      session_id: `sess_${process.pid}`,
+      branch: currentBranch || 'main'
+    });
+
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   } catch (error) {
+    // Log failed tool call
+    const duration = Date.now() - startTime;
+    const errorResult = { error: error.message };
+    _audit.logToolCall(registeredName, name, args, errorResult, duration, {
+      session_id: `sess_${process.pid}`,
+      branch: currentBranch || 'main'
+    });
+
     return {
       content: [{ type: 'text', text: `Error: ${error.message}` }],
       isError: true,

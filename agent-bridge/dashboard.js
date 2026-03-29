@@ -6,6 +6,7 @@ const os = require('os');
 const { spawn } = require('child_process');
 const { upsertNeohiveMcpInToml } = require('./lib/codex-neohive-toml');
 const { readIdeActivity, applyIdeActivityHint } = require('./lib/ide-activity');
+const _audit = require('./lib/audit');
 
 function findCursorProjectRootWithNeohive(startDir) {
   let dir = path.resolve(startDir);
@@ -1723,8 +1724,58 @@ function apiDeleteRule(body, query) {
 // Audit Log API
 function apiAuditLog(query) {
   const projectPath = query.get('project') || null;
-  // Read entries, take last 100, newest first
-  return readJsonl(filePath('audit_log.jsonl', projectPath)).slice(-100).reverse();
+  
+  // For backward compatibility, if no enhanced filters are used, use old method
+  const hasFilters = query.get('agent') || query.get('tool') || query.get('category') || 
+                    query.get('since') || query.get('until') || query.get('limit');
+  
+  if (!hasFilters) {
+    // Legacy behavior: Read entries, take last 100, newest first
+    return readJsonl(filePath('audit_log.jsonl', projectPath)).slice(-100).reverse();
+  }
+  
+  // Enhanced audit log with filters using audit module
+  const filters = {
+    agent: query.get('agent') || undefined,
+    tool: query.get('tool') || undefined,
+    category: query.get('category') || undefined,
+    since: query.get('since') || undefined,
+    until: query.get('until') || undefined,
+    limit: query.get('limit') || undefined
+  };
+  
+  // Initialize audit module with project path if needed
+  if (projectPath) {
+    const auditDataDir = path.join(projectPath, '.neohive');
+    if (fs.existsSync(auditDataDir)) {
+      _audit.init(auditDataDir);
+    }
+  }
+  
+  return _audit.readAuditLog(filters);
+}
+
+// Audit Stats API
+function apiAuditStats(query) {
+  const projectPath = query.get('project') || null;
+  
+  const filters = {
+    agent: query.get('agent') || undefined,
+    tool: query.get('tool') || undefined,
+    category: query.get('category') || undefined,
+    since: query.get('since') || undefined,
+    until: query.get('until') || undefined
+  };
+  
+  // Initialize audit module with project path if needed
+  if (projectPath) {
+    const auditDataDir = path.join(projectPath, '.neohive');
+    if (fs.existsSync(auditDataDir)) {
+      _audit.init(auditDataDir);
+    }
+  }
+  
+  return _audit.getAuditStats(filters);
 }
 
 // Auto-discover .neohive directories nearby
@@ -2200,9 +2251,14 @@ const ROUTE_TABLE = new Map([
   [routeKey('GET', '/api/tasks'),           (req, res, url) => jsonOk(res, apiTasks(url.searchParams))],
   [routeKey('GET', '/api/rules'),           (req, res, url) => jsonOk(res, apiRules(url.searchParams))],
   [routeKey('GET', '/api/audit-log'),       (req, res, url) => jsonOk(res, apiAuditLog(url.searchParams))],
+  [routeKey('GET', '/api/audit-stats'),     (req, res, url) => jsonOk(res, apiAuditStats(url.searchParams))],
   [routeKey('GET', '/api/notifications'),   (req, res, url) => jsonOk(res, apiNotifications())],
   [routeKey('GET', '/api/scores'),          (req, res, url) => jsonOk(res, apiScores(url.searchParams))],
   [routeKey('GET', '/api/search-all'),      (req, res, url) => jsonOk(res, apiSearchAll(url.searchParams))],
+  [routeKey('GET', '/api/hooks'),           (req, res, url) => {
+    try { const hooksLib = require('./lib/hooks'); jsonOk(res, hooksLib.listHooks(null)); }
+    catch (e) { jsonOk(res, { count: 0, hooks: [], error: e.message }); }
+  }],
   [routeKey('GET', '/api/export-replay'),   (req, res, url) => jsonOk(res, apiExportReplay(url.searchParams))],
   // Routes below have complex inline logic and remain in the else-if chain for safety.
   // TODO: extract to standalone functions in a future refactor:
@@ -2891,6 +2947,29 @@ const server = http.createServer(async (req, res) => {
     else if (url.pathname === '/api/discover' && req.method === 'POST') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(apiDiscover()));
+    }
+    // --- GitHub Projects sync ---
+    else if (url.pathname === '/api/github-sync' && req.method === 'GET') {
+      try {
+        const ghSync = require('./lib/github-sync');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(ghSync.getSyncStatus()));
+      } catch (e) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: e.message })); }
+    }
+    else if (url.pathname === '/api/github-sync' && req.method === 'POST') {
+      try {
+        const ghSync = require('./lib/github-sync');
+        const body = await parseBody(req);
+        if (body.action === 'discover') {
+          const result = await ghSync.discoverFields();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } else {
+          const result = await ghSync.syncAllTasks();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        }
+      } catch (e) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: e.message })); }
     }
     // --- v3.0 API endpoints ---
     else if (url.pathname === '/api/profiles' && req.method === 'GET') {
@@ -3837,6 +3916,8 @@ function startFileWatcher() {
         pendingChangeTypes.add('tasks');
       } else if (filename === 'workflows.json') {
         pendingChangeTypes.add('workflows');
+      } else if (filename === 'hooks.json') {
+        pendingChangeTypes.add('hooks');
       } else {
         pendingChangeTypes.add('update');
       }
