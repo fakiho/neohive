@@ -498,15 +498,72 @@
 
   .skill-tag {
     font-size: 9px;
-    font-weight: 700;
-    padding: 1px 6px;
+    padding: 1px 5px;
     border-radius: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
     background: var(--surface-3);
     color: var(--text-dim);
     border: 1px solid var(--border);
+  }
+
+  /* ===== NUDGE & SPARKLINE ===== */
+  .agent-nudge-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: var(--nh-red-10);
+    border: 1px solid var(--nh-red);
+    color: var(--nh-red);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
     transition: all 0.2s ease;
+    z-index: 10;
+  }
+  .agent-card:hover .agent-nudge-btn { opacity: 1; }
+  .agent-nudge-btn:hover { background: var(--nh-red); color: #fff; transform: scale(1.1); box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
+
+  .listen-sparkline {
+    display: flex;
+    gap: 3px;
+    margin-top: 8px;
+    padding-top: 4px;
+    border-top: 1px solid var(--nh-divider);
+    align-items: center;
+  }
+  .listen-sparkline-label {
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-right: 4px;
+    letter-spacing: 0.5px;
+  }
+  .hb-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--nh-divider-strong);
+    transition: all 0.3s ease;
+  }
+  .hb-dot.active {
+    background: var(--nh-green);
+    box-shadow: 0 0 6px var(--nh-green);
+  }
+  .hb-dot.stale { background: var(--nh-orange); opacity: 0.5; }
+  .hb-dot.empty { background: transparent; border: 1px solid var(--nh-divider); }
+
+  @keyframes stuck-pulse {
+    0% { border-color: var(--nh-divider); }
+    50% { border-color: var(--nh-red); box-shadow: inset 0 0 10px var(--nh-red-10); }
+    100% { border-color: var(--nh-divider); }
+  }
+  .agent-card.stuck {
+    animation: stuck-pulse 1.5s infinite ease-in-out;
   }
 
   /* Platform colors */
@@ -5374,19 +5431,66 @@ function renderAgents(agents) {
         skillsHtml += '</div>';
       }
 
+      // Nudge button (Bell icon)
+      var nudgeBtnHtml = '';
+      if (state !== 'offline' && state !== 'dead' && state !== 'unknown') {
+        nudgeBtnHtml = '<div class="agent-nudge-btn" title="Nudge agent to listen()" onclick="sendNudge(\'' + escapeHtml(name) + '\', event)">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>' +
+        '</div>';
+      }
+
+      // Liveness Sparkline (Heartbeat dots)
+      var sparklineHtml = '';
+      if (state !== 'offline' && state !== 'dead' && state !== 'unknown') {
+        var dots = '';
+        var history = info.listen_history || [];
+        for (var d = 0; d < 10; d++) {
+          var dotClass = 'hb-dot';
+          if (d < history.length) {
+            var age = (Date.now() - history[d]) / 1000;
+            if (age < 30) dotClass += ' active';
+            else if (age < 120) dotClass += ' stale';
+          } else {
+            dotClass += ' empty';
+          }
+          dots += '<div class="' + dotClass + '"></div>';
+        }
+        sparklineHtml = '<div class="listen-sparkline"><span class="listen-sparkline-label">Liveness</span>' + dots + '</div>';
+      }
+
       cardHtml += '<div class="' + cardClass + '" data-agent="' + escapeHtml(name) + '" onclick="showProfilePopup(\'' + escapeHtml(name) + '\', event)">' +
+        nudgeBtnHtml +
         '<div class="agent-top">' +
           avatarHtml +
           '<div class="agent-info">' +
             '<div class="agent-name" style="color:' + color + '">' + escapeHtml(displayName) + '</div>' +
             '<div class="agent-subtitle">' + escapeHtml(subtitleText) + '</div>' +
             skillsHtml +
+            sparklineHtml +
           '</div>' +
           '<span class="agent-status-dot ' + state + '" title="' + state + '"></span>' +
         '</div>' +
       '</div>';
     }
     return cardHtml;
+  }
+
+  function sendNudge(name, event) {
+    if (event) event.stopPropagation();
+    fetch('/api/inject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: name,
+        content: '[NUDGE] Your neohive session appears stuck. Please call listen() now to process messages.',
+        priority: 'critical'
+      })
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) showToast('Nudge sent to ' + name, 'success');
+      else showToast('Failed to nudge: ' + (d.error || 'unknown error'), 'error');
+    });
   }
 
   if (useGrouping) {
