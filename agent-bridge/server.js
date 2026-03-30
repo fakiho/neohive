@@ -396,6 +396,17 @@ function touchHeartbeat(name, isListenCall = false) {
   if (!name) return;
   try {
     const now = new Date().toISOString();
+    const target = heartbeatFile(name);
+
+    // Preserve existing last_listen_call so periodic heartbeats don't erase it
+    let prevLastListenCall = null;
+    try {
+      if (fs.existsSync(target)) {
+        const prev = JSON.parse(fs.readFileSync(target, 'utf8'));
+        if (prev.last_listen_call) prevLastListenCall = prev.last_listen_call;
+      }
+    } catch (_) { /* ignore read errors */ }
+
     const payload = {
       last_activity: now,
       pid: process.pid,
@@ -403,10 +414,11 @@ function touchHeartbeat(name, isListenCall = false) {
     };
     if (isListenCall) {
       payload.last_listen_call = now;
+    } else if (prevLastListenCall) {
+      payload.last_listen_call = prevLastListenCall;
     }
     if (_lastStdinActivity) payload.last_stdin_activity = _lastStdinActivity;
     if (process.env.CLAUDE_SESSION_ID) payload.claude_session_id = process.env.CLAUDE_SESSION_ID;
-    const target = heartbeatFile(name);
     const tmp = target + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(payload));
     fs.renameSync(tmp, target);
@@ -1729,7 +1741,8 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
   // Send-after-listen enforcement: must call listen_group between sends in group mode
   // Autonomous mode: relaxed to 5 sends per listen cycle
   const effectiveSendLimit = isAutonomousMode() ? 5 : sendLimit;
-  if (isGroupMode() && sendsSinceLastListen >= effectiveSendLimit) {
+  const myRole = (getProfiles()[registeredName] || {}).role;
+  if (isGroupMode() && sendsSinceLastListen >= effectiveSendLimit && myRole !== 'Coordinator') {
     return { error: `You must call listen_group() before sending again. You've sent ${sendsSinceLastListen} message(s) without listening (limit: ${effectiveSendLimit}). This prevents message storms.` };
   }
 
@@ -2076,7 +2089,8 @@ function toolBroadcast(content) {
 
   // Send-after-listen enforcement applies to broadcast too
   const effectiveSendLimitBcast = isAutonomousMode() ? 5 : sendLimit;
-  if (isGroupMode() && sendsSinceLastListen >= effectiveSendLimitBcast) {
+  const myRole = (getProfiles()[registeredName] || {}).role;
+  if (isGroupMode() && sendsSinceLastListen >= effectiveSendLimitBcast && myRole !== 'Coordinator') {
     return { error: `You must call listen_group() before broadcasting again. You've sent ${sendsSinceLastListen} message(s) without listening (limit: ${effectiveSendLimitBcast}).` };
   }
 
@@ -5825,16 +5839,48 @@ function checkListenCompliance(agents) {
   for (const [name, info] of Object.entries(agents)) {
     if (name === registeredName) continue; // Skip self
     if (!isPidAlive(info.pid, info.last_activity)) continue; // Skip dead agents
-    
+
+    // Skip agents currently in a listen() call — they're compliant
+    if (info.is_listening) continue;
+
+    // Skip Coordinator (lead role) in responsive mode — they use check_messages, not listen()
+    try {
+      const profiles = getProfiles();
+      if (profiles[name] && profiles[name].role === 'lead') {
+        const coordMode = (getConfig().coordinator_mode || 'responsive');
+        if (coordMode === 'responsive') continue;
+      }
+    } catch (_) { /* fall through */ }
+
+    // Skip agents that registered recently (within 60s) — give them time to call listen()
+    const registeredAt = info.registered_at ? new Date(info.registered_at).getTime() : 0;
+    if (registeredAt && (now - registeredAt) < 60000) continue;
+
     // Check if agent has recent activity but no recent listen call
     const lastActivity = info.last_activity ? new Date(info.last_activity).getTime() : 0;
     const timeSinceActivity = now - lastActivity;
-    
+
     // Only check agents that have been active recently (within 5 minutes)
     if (timeSinceActivity > 300000) continue; // Skip inactive agents
+
+    // Determine agent's start time and role for filtering
+    const startedAt = info.started_at ? new Date(info.started_at).getTime() : lastActivity || now;
+    const profiles = getProfiles();
+    const role = (profiles[name] || {}).role;
+
+    // GUARD: Skip Coordinator role (they orchestrate, let them skip listen cycles)
+    if (role === 'Coordinator') continue;
+
+    // GUARD: Skip agents registered within the last 60 seconds (grace period)
+    if (now - startedAt < 60000) continue;
+
+    // GUARD: Skip agents currently in a listen loop
+    if (info.listening_since) continue;
     
     // Check for recent listen call in heartbeat file
-    let lastListenCall = lastActivity; // Default to last activity time to avoid massive time differences
+    // Fallback to registry last_listened_at before defaulting to startedAt
+    let lastListenCall = info.last_listened_at ? new Date(info.last_listened_at).getTime() : startedAt;
+    
     try {
       const heartbeatPath = heartbeatFile(name);
       if (fs.existsSync(heartbeatPath)) {
@@ -7428,17 +7474,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         consecutiveNonListenCalls = 0;
       }
     } else if (registeredName) {
-      consecutiveNonListenCalls++;
-      if (consecutiveNonListenCalls >= 5) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify({
-            error: `BLOCKED: You must call listen() before using other tools. You have made ${consecutiveNonListenCalls} tool calls without listening. Call listen() now.`,
-            blocked_tool: name,
-            calls_without_listen: consecutiveNonListenCalls,
-            fix: 'Call listen() immediately. It will reset the counter and unblock all tools.',
-          }, null, 2) }],
-          isError: true,
-        };
+      // Exempt Coordinator (lead role) from listen() blocking — in "responsive" mode
+      // Coordinators use check_messages/consume_messages instead of listen()
+      const isCoordinatorExempt = (() => {
+        try {
+          const profiles = getProfiles();
+          const myProfile = profiles[registeredName];
+          if (myProfile && myProfile.role === 'lead') {
+            const coordMode = (getConfig().coordinator_mode || 'responsive');
+            return coordMode === 'responsive';
+          }
+        } catch (_) { /* fall through */ }
+        return false;
+      })();
+
+      if (!isCoordinatorExempt) {
+        consecutiveNonListenCalls++;
+        if (consecutiveNonListenCalls >= 5) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({
+              error: `BLOCKED: You must call listen() before using other tools. You have made ${consecutiveNonListenCalls} tool calls without listening. Call listen() now.`,
+              blocked_tool: name,
+              calls_without_listen: consecutiveNonListenCalls,
+              fix: 'Call listen() immediately. It will reset the counter and unblock all tools.',
+            }, null, 2) }],
+            isError: true,
+          };
+        }
       }
     }
 
