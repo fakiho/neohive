@@ -644,6 +644,98 @@ async function commandSetupMcp() {
   }
 }
 
+// --- agentName Configuration Fallback ---
+
+/**
+ * Show a quick pick seeded with agents found in agents.json.
+ * Returns the selected/typed name, or null if cancelled.
+ */
+async function commandConfigureAgentName() {
+  const dataDir = getNeohiveDataDir();
+  const agentsFile = dataDir ? path.join(dataDir, 'agents.json') : null;
+
+  let knownAgents = [];
+  if (agentsFile && fs.existsSync(agentsFile)) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(agentsFile, 'utf8'));
+      knownAgents = Object.keys(raw).filter(n => n !== '__system__' && n !== 'Dashboard');
+    } catch {}
+  }
+
+  if (!agentsFile || !fs.existsSync(agentsFile)) {
+    vscode.window.showWarningMessage(
+      'Neohive: No agents found. Start a neohive session first (run `npx neohive dashboard` or register an agent), then run "Neohive: Configure Agent Name" again.'
+    );
+    return null;
+  }
+
+  if (knownAgents.length === 0) {
+    vscode.window.showWarningMessage(
+      'Neohive: No registered agents found. Start a neohive session first, then configure your agent name.'
+    );
+    return null;
+  }
+
+  const TYPE_OWN = '$(pencil) Type a different name…';
+  const items = [
+    ...knownAgents.map(n => ({ label: `$(person) ${n}`, name: n })),
+    { label: TYPE_OWN, name: null },
+  ];
+
+  const picked = await vscode.window.showQuickPick(items, {
+    title: 'Neohive: Select Your Agent Name',
+    placeHolder: 'Pick your registered agent name or type a custom one',
+  });
+
+  if (!picked) return null;
+
+  let finalName = picked.name;
+  if (!finalName) {
+    finalName = await vscode.window.showInputBox({
+      title: 'Neohive: Agent Name',
+      prompt: 'Enter your agent name (1–20 alphanumeric, _ or - characters)',
+      validateInput: (v) => {
+        if (!v || !v.trim()) return 'Name cannot be empty';
+        if (!/^[a-zA-Z0-9_-]{1,20}$/.test(v.trim())) return 'Must be 1–20 alphanumeric characters (with _ or -)';
+        return null;
+      },
+    });
+  }
+
+  if (!finalName) return null;
+  const sanitized = sanitizeAgentName(finalName);
+  if (!sanitized) {
+    vscode.window.showErrorMessage('Invalid agent name. Must be 1–20 alphanumeric characters (with _ or -).');
+    return null;
+  }
+
+  // Persist to workspace settings
+  const config = vscode.workspace.getConfiguration('neohive');
+  await config.update('agentName', sanitized, vscode.ConfigurationTarget.Workspace);
+  vscode.window.showInformationMessage(`Neohive: Agent name set to "${sanitized}". IDE liveness tracking is now active.`);
+  return sanitized;
+}
+
+/**
+ * On activation: if neohive.agentName is not configured, show a warning
+ * notification with a "Configure" button that triggers commandConfigureAgentName().
+ * The neohive.configureAgentName command is always registered in activate().
+ */
+async function checkAgentNameConfigured() {
+  const configured = sanitizeAgentName(
+    vscode.workspace.getConfiguration('neohive').get('agentName', '')
+  );
+  if (configured) return; // already set
+
+  const action = await vscode.window.showWarningMessage(
+    'Neohive: No agent name configured. IDE liveness tracking and heartbeat won\'t work until you set one.',
+    'Configure'
+  );
+  if (action === 'Configure') {
+    await vscode.commands.executeCommand('neohive.configureAgentName');
+  }
+}
+
 // --- Extension Activation ---
 
 function activate(context) {
@@ -673,10 +765,14 @@ function activate(context) {
     vscode.commands.registerCommand('neohive.showWorkflows', () => {
       vscode.commands.executeCommand('neohive-workflows.focus');
     }),
-    vscode.commands.registerCommand('neohive.setupMcp', commandSetupMcp)
+    vscode.commands.registerCommand('neohive.setupMcp', commandSetupMcp),
+    vscode.commands.registerCommand('neohive.configureAgentName', commandConfigureAgentName)
   );
 
   checkMcpOnActivate();
+
+  // agentName fallback: warn and offer configuration if not set
+  checkAgentNameConfigured();
 
   // Polling loop
   let connected = false;

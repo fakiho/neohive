@@ -54,6 +54,11 @@
       {
         "command": "neohive.setupMcp",
         "title": "Neohive: Set Up MCP for Copilot Chat"
+      },
+      {
+        "command": "neohive.configureAgentName",
+        "title": "Neohive: Configure Agent Name",
+        "icon": "$(person)"
       }
     ],
     "menus": {
