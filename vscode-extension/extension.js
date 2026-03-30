@@ -463,10 +463,10 @@ function getMcpStatus() {
   if (!fs.existsSync(mcpPath)) return 'not_configured';
   try {
     const config = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
-    if (ide === 'cursor') {
+    if (ide === 'cursor' || ide === 'antigravity') {
       if (config.mcpServers && config.mcpServers.neohive) return 'ready';
     } else {
-      // vscode and antigravity both use the `servers` key
+      // VSCode uses the `servers` key
       if (config.servers && config.servers.neohive) return 'ready';
     }
     return 'missing_entry';
@@ -487,7 +487,8 @@ function writeMcpConfig() {
   const nodePath = detectNodePath();
   const dev = isDevMode();
 
-  if (ide === 'cursor') {
+  if (ide === 'cursor' || ide === 'antigravity') {
+    // Cursor and Antigravity both use { mcpServers: { neohive: {...} } }
     let config = { mcpServers: {} };
     if (fs.existsSync(mcpPath)) {
       try {
@@ -517,7 +518,7 @@ function writeMcpConfig() {
     }
     fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n');
   } else {
-    // vscode and antigravity both use { servers: { neohive: {...} } }
+    // VSCode uses { servers: { neohive: {...} } }
     let config = { servers: {} };
     if (fs.existsSync(mcpPath)) {
       try {
