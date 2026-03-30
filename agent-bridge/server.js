@@ -123,6 +123,7 @@ let currentBranch = 'main'; // which branch this agent is on
 let lastSentAt = 0; // timestamp of last sent message (for group cooldown)
 let sendsSinceLastListen = 0; // enforced: must listen between sends in group mode
 let consecutiveNonListenCalls = 0; // escalating listen() enforcement counter
+let _isCurrentlyListening = false; // true when agent is in a listen() call
 let sendLimit = 1; // default: 1 send per listen cycle (2 if addressed)
 let unaddressedSends = 0; // response budget: unaddressed sends counter
 let budgetResetTime = Date.now(); // resets every 60s
@@ -631,6 +632,7 @@ function autoCompact() {
     // Keep messages that are NOT fully consumed
     // For __group__ messages: consumed when ALL registered agents consumed OR message exceeds retention period
     // For direct messages: consumed when the recipient has consumed it
+    const now = Date.now();
     const active = messages.filter(m => {
       if (m.to === '__group__') {
         // Time-based retention: critical messages get 2x retention
@@ -1408,7 +1410,7 @@ function toolRegister(name, provider = null, skills = null) {
   lockAgentsFile();
 
   try {
-    const agents = getAgents();
+    const agents = getAgents(true);
     if (agents[name] && agents[name].pid !== process.pid && isPidAlive(agents[name].pid, agents[name].last_activity)) {
       return { error: `Agent "${name}" is already registered by a live process. Choose a different name.` };
     }
@@ -1441,8 +1443,8 @@ function toolRegister(name, provider = null, skills = null) {
     }
 
     const now = new Date().toISOString();
-    const token = (agents[name] && agents[name].token) || generateToken();
-    const agentEntry = { pid: process.pid, ppid: process.ppid, timestamp: now, last_activity: now, provider: provider || 'unknown', branch: currentBranch, token, started_at: now };
+    const token = generateToken();
+    const agentEntry = { pid: process.pid, ppid: process.ppid, timestamp: now, last_activity: now, last_listened_at: now, provider: provider || 'unknown', branch: currentBranch, token, started_at: now };
     if (process.env.CLAUDE_SESSION_ID) agentEntry.claude_session_id = process.env.CLAUDE_SESSION_ID;
     agents[name] = agentEntry;
     saveAgents(agents);
@@ -1478,7 +1480,9 @@ function toolRegister(name, provider = null, skills = null) {
       try {
         // Scale fix: write per-agent heartbeat file instead of lock+read+write agents.json
         // Eliminates write contention — each agent writes only its own file, no locking needed
-        touchHeartbeat(registeredName);
+        // Pass isListenCall=true when agent is actively in listen() so other agents
+        // see a fresh last_listen_call timestamp and don't send false-positive nudges.
+        touchHeartbeat(registeredName, _isCurrentlyListening);
         const agents = getAgents(); // cached + merges heartbeat files automatically
         // Managed mode: detect dead manager and dead turn holder
         if (isManagedMode()) {
@@ -1638,7 +1642,8 @@ function touchActivity(isListenCall = false) {
 // Set or clear the listening_since flag
 function setListening(isListening) {
   if (!registeredName) return;
-  
+  _isCurrentlyListening = !!isListening;
+
   // Track listen calls in heartbeat for auto-nudge system
   if (isListening) {
     touchActivity(true); // Mark as listen call
@@ -5829,13 +5834,16 @@ function checkListenCompliance(agents) {
     if (timeSinceActivity > 300000) continue; // Skip inactive agents
     
     // Check for recent listen call in heartbeat file
-    let lastListenCall = 0;
+    let lastListenCall = lastActivity; // Default to last activity time to avoid massive time differences
     try {
       const heartbeatPath = heartbeatFile(name);
       if (fs.existsSync(heartbeatPath)) {
         const heartbeat = JSON.parse(fs.readFileSync(heartbeatPath, 'utf8'));
         if (heartbeat.last_listen_call) {
           lastListenCall = new Date(heartbeat.last_listen_call).getTime();
+        } else if (heartbeat.listen_history && heartbeat.listen_history.length > 0) {
+          // Fallback to latest history entry
+          lastListenCall = heartbeat.listen_history[0];
         }
       }
     } catch (e) {
@@ -7728,7 +7736,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // Keeps the instruction in the agent's immediate context even after extended
     // processing pushes earlier instructions out of working memory.
     if (registeredName && typeof result === 'object' && result !== null && !listenTools.includes(name)) {
-      result._listen = 'After processing this result, call listen() to receive messages. Do NOT skip this.';
+      if (consecutiveNonListenCalls >= 3) {
+        result._listen = `WARNING: You have NOT called listen() in ${consecutiveNonListenCalls} tool calls. Tools will be BLOCKED at 5. Call listen() NOW.`;
+      } else {
+        result._listen = 'After processing this result, call listen() to receive messages. Do NOT skip this.';
+      }
     }
 
     // Log successful tool call

@@ -36,7 +36,8 @@ function isPidAlive(pid, lastActivity) {
   return alive;
 }
 
-function getAgents() {
+function getAgents(force = false) {
+  if (force) invalidateCache('agents');
   return cachedRead('agents', () => {
     if (!fs.existsSync(AGENTS_FILE)) return {};
     let agents;
@@ -50,6 +51,7 @@ function getAgents() {
             const hb = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
             if (hb.last_activity) agents[name].last_activity = hb.last_activity;
             if (hb.pid) agents[name].pid = hb.pid;
+            if (hb.listen_history) agents[name].listen_history = hb.listen_history;
           } catch {}
         }
       }
@@ -68,13 +70,25 @@ function saveAgents(agents) {
 
 function heartbeatFile(name) { return path.join(DATA_DIR, `heartbeat-${name}.json`); }
 
-function touchHeartbeat(name) {
+function touchHeartbeat(name, type = null) {
   if (!name) return;
   try {
-    fs.writeFileSync(heartbeatFile(name), JSON.stringify({
-      last_activity: new Date().toISOString(),
-      pid: process.pid,
-    }));
+    const file = heartbeatFile(name);
+    let data = { last_activity: new Date().toISOString(), pid: process.pid, listen_history: [] };
+    if (fs.existsSync(file)) {
+      try { data = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
+    }
+    data.last_activity = new Date().toISOString();
+    data.pid = process.pid;
+
+    if (type === 'listen' || type === true) {
+      if (!data.listen_history) data.listen_history = [];
+      const nowTs = Date.now();
+      data.listen_history.unshift(nowTs);
+      data.listen_history = data.listen_history.slice(0, 10);
+      data.last_listen_call = new Date(nowTs).toISOString();
+    }
+    fs.writeFileSync(file, JSON.stringify(data));
   } catch {}
 }
 
