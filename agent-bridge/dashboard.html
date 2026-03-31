@@ -2920,59 +2920,68 @@
     font-size: 10px;
   }
 
-  /* ===== SYSTEM MESSAGE (full card — for CRITICAL/WARNING) ===== */
-  .message.system-msg.nh-msg-card {
-    justify-content: center;
-    padding: var(--nh-space-3) var(--nh-space-5);
-  }
-
-  .message.system-msg .msg-body {
-    max-width: 36rem;
-    text-align: center;
-    width: 100%;
-  }
-
-  .message.system-msg .msg-content {
-    color: var(--nh-text-secondary);
-    font-style: italic;
-    font-size: 13px;
-  }
-
-  /* ===== COMPACT EVENT (Slack-style inline) ===== */
-  .message.system-event-inline {
+  /* ===== SYSTEM EVENT BANNER (all system messages) ===== */
+  .message.system-event-banner {
     background: none;
     border: none;
-    border-radius: 0;
+    border-radius: 6px;
     box-shadow: none;
-    padding: 2px 16px;
-    margin: 0;
+    padding: 6px 16px;
+    margin: 2px 0;
     min-height: auto;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
+    border-left: 3px solid var(--nh-border, var(--border));
   }
-  .system-event-inline .event-line {
+  .system-event-banner .event-icon {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin-top: 1px;
+    opacity: 0.8;
+  }
+  .system-event-banner .event-icon svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+  }
+  .system-event-banner .event-body {
     flex: 1;
-    height: 1px;
-    background: var(--border, var(--nh-border));
-    opacity: 0.4;
+    min-width: 0;
   }
-  .system-event-inline .event-text {
-    font-size: 11px;
+  .system-event-banner .event-text {
+    font-size: 12px;
     color: var(--nh-text-secondary, var(--text-muted));
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 80%;
-    flex-shrink: 1;
+    line-height: 1.4;
+    word-wrap: break-word;
   }
-  .system-event-inline .event-time {
+  .system-event-banner .event-text p { margin: 0; }
+  .system-event-banner .event-time {
     font-size: 10px;
     color: var(--nh-text-secondary, var(--text-muted));
     opacity: 0.5;
-    white-space: nowrap;
     flex-shrink: 0;
+    margin-top: 2px;
   }
+  /* Type colors — left border + icon color */
+  .system-event-banner.evt-critical { border-left-color: #ef4444; }
+  .system-event-banner.evt-critical .event-icon { color: #ef4444; }
+  .system-event-banner.evt-critical .event-text { color: #ef4444; font-weight: 500; }
+  .system-event-banner.evt-warning { border-left-color: #f59e0b; }
+  .system-event-banner.evt-warning .event-icon { color: #f59e0b; }
+  .system-event-banner.evt-warning .event-text { color: #f59e0b; }
+  .system-event-banner.evt-event { border-left-color: #22c55e; }
+  .system-event-banner.evt-event .event-icon { color: #22c55e; }
+  .system-event-banner.evt-review { border-left-color: #3b82f6; }
+  .system-event-banner.evt-review .event-icon { color: #3b82f6; }
+  .system-event-banner.evt-status { border-left-color: #6b7280; }
+  .system-event-banner.evt-status .event-icon { color: #6b7280; }
+  .system-event-banner.evt-role { border-left-color: #8b5cf6; }
+  .system-event-banner.evt-role .event-icon { color: #8b5cf6; }
+  .system-event-banner.evt-violation { border-left-color: #ef4444; background: rgba(239,68,68,0.05); }
+  .system-event-banner.evt-violation .event-icon { color: #ef4444; }
+  .system-event-banner.evt-violation .event-text { color: var(--text); font-weight: 500; }
 
   /* ===== VIOLATION MESSAGES ===== */
   .message.violation-msg.nh-msg-card {
@@ -5987,28 +5996,36 @@ function renderMessages(messages) {
     var msgAvatarHtml = getMsgAvatar(m.from, color);
 
     if (isSystem) {
-      if (m.content.toLowerCase().indexOf('violation') !== -1 || m.content.indexOf('[VIOLATION]') !== -1) {
-        html += '<div class="message nh-msg-card system-msg violation-msg' + newClass + '"' + msgIdAttr + '>' +
-          '<div class="msg-body">' +
-            '<div class="msg-content violation-content"><span class="violation-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span><span class="violation-label">VIOLATION:</span> ' + renderMarkdown(m.content.replace(/\[?VIOLATION\]?:?\s*/i, '')) + '</div>' +
-          '</div></div>';
-      } else if (/^\[(CRITICAL|WARNING)\]/.test(m.content)) {
-        // Keep full card for critical/warning messages
-        html += '<div class="message nh-msg-card system-msg' + newClass + '"' + msgIdAttr + '>' +
-          '<div class="msg-body">' +
-            '<div class="msg-content">' + renderMarkdown(m.content) + '</div>' +
-          '</div></div>';
-      } else {
-        // Compact inline event for EVENT, REVIEW, STATUS, ROLE, etc.
-        var evtTime = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-        var evtText = m.content.replace(/^\[[\w\s]+\]\s*/, ''); // strip [TAG] prefix
-        html += '<div class="message system-event-inline' + newClass + '"' + msgIdAttr + '>' +
-          '<span class="event-line"></span>' +
-          '<span class="event-text" title="' + escapeHtml(m.content) + '">' + escapeHtml(evtText) + '</span>' +
-          '<span class="event-time">' + evtTime + '</span>' +
-          '<span class="event-line"></span>' +
-        '</div>';
+      var evtType = 'status';
+      var evtIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+      if (/\[CRITICAL\]/.test(m.content)) {
+        evtType = 'critical';
+        evtIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+      } else if (/\[WARNING\]/.test(m.content)) {
+        evtType = 'warning';
+        evtIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+      } else if (/\[VIOLATION\]/i.test(m.content)) {
+        evtType = 'violation';
+        evtIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>';
+      } else if (/\[EVENT\]/.test(m.content)) {
+        evtType = 'event';
+        evtIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      } else if (/\[REVIEW/.test(m.content)) {
+        evtType = 'review';
+        evtIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+      } else if (/\[ROLE/.test(m.content)) {
+        evtType = 'role';
+        evtIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+      } else if (/\[STATUS\]/.test(m.content) || /\[QUALITY/.test(m.content)) {
+        evtType = 'status';
       }
+      var evtTime = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+      var evtText = m.content.replace(/^\[[\w\s]+\]\s*/, '');
+      html += '<div class="message system-event-banner evt-' + evtType + newClass + '"' + msgIdAttr + '>' +
+        '<span class="event-icon">' + evtIcon + '</span>' +
+        '<div class="event-body"><span class="event-text">' + renderMarkdown(evtText) + '</span></div>' +
+        '<span class="event-time">' + evtTime + '</span>' +
+      '</div>';
       lastFrom = '';
       lastTo = '';
     } else if (m.type === 'handoff') {
@@ -6098,18 +6115,21 @@ function renderMessages(messages) {
       var nToDisp = nm.to === '__user__' ? 'You' : (cachedAgents[nm.to] && cachedAgents[nm.to].display_name) || nm.to;
       var nContent = renderMarkdown(nm.content);
       if (nm.system === true) {
-        if (/\[VIOLATION\]/i.test(nm.content) || /\[(CRITICAL|WARNING)\]/.test(nm.content)) {
-          newMsgHtml += '<div class="message nh-msg-card system-msg message-new" data-msg-id="' + escapeHtml(nm.id) + '"><div class="msg-body"><div class="msg-content">' + nContent + '</div></div></div>';
-        } else {
-          var neTime = new Date(nm.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-          var neText = nm.content.replace(/^\[[\w\s]+\]\s*/, '');
-          newMsgHtml += '<div class="message system-event-inline message-new" data-msg-id="' + escapeHtml(nm.id) + '">' +
-            '<span class="event-line"></span>' +
-            '<span class="event-text" title="' + escapeHtml(nm.content) + '">' + escapeHtml(neText) + '</span>' +
-            '<span class="event-time">' + neTime + '</span>' +
-            '<span class="event-line"></span>' +
-          '</div>';
-        }
+        var neType = 'status';
+        var neIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+        if (/\[CRITICAL\]/.test(nm.content)) { neType = 'critical'; neIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'; }
+        else if (/\[WARNING\]/.test(nm.content)) { neType = 'warning'; neIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'; }
+        else if (/\[VIOLATION\]/i.test(nm.content)) { neType = 'violation'; neIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'; }
+        else if (/\[EVENT\]/.test(nm.content)) { neType = 'event'; neIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'; }
+        else if (/\[REVIEW/.test(nm.content)) { neType = 'review'; neIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'; }
+        else if (/\[ROLE/.test(nm.content)) { neType = 'role'; neIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'; }
+        var neTime = new Date(nm.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+        var neText = nm.content.replace(/^\[[\w\s]+\]\s*/, '');
+        newMsgHtml += '<div class="message system-event-banner evt-' + neType + ' message-new" data-msg-id="' + escapeHtml(nm.id) + '">' +
+          '<span class="event-icon">' + neIcon + '</span>' +
+          '<div class="event-body"><span class="event-text">' + renderMarkdown(neText) + '</span></div>' +
+          '<span class="event-time">' + neTime + '</span>' +
+        '</div>';
         continue;
       }
       var nAvatar = getMsgAvatar(nm.from, nColor);
