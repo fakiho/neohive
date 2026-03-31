@@ -7892,6 +7892,15 @@ function ppPing(agentName) {
   }).catch(function(e) { log.error('Ping failed:', e); });
 }
 
+function ppMessage(agentName) {
+  var sel = document.getElementById('inject-target');
+  if (sel) sel.value = agentName;
+  var ta = document.getElementById('inject-content');
+  if (ta) { ta.value = ''; ta.focus(); }
+  updateSendBtn();
+  document.getElementById('profile-popup').classList.remove('open');
+}
+
 function ppNudge(agentName) {
   var sel = document.getElementById('inject-target');
   if (sel) sel.value = agentName;
@@ -7986,7 +7995,10 @@ function showProfilePopup(agentName, event) {
 
   // === Actions Tab ===
   var eName = escapeHtml(agentName);
-  var actionsHtml = '<button class="pp-action-btn pp-ping-btn" onclick="ppPing(\'' + eName + '\')">' +
+  var actionsHtml = '<button class="pp-action-btn" onclick="ppMessage(\'' + eName + '\')">' +
+    '<svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>' +
+    'Message</button>' +
+    '<button class="pp-action-btn pp-ping-btn" onclick="ppPing(\'' + eName + '\')">' +
     '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>' +
     'Ping</button>' +
     '<button class="pp-action-btn" onclick="ppNudge(\'' + eName + '\')">' +
