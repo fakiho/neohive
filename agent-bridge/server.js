@@ -5907,18 +5907,12 @@ function checkListenCompliance(agents) {
       if (now - lastNudge > 120000) { // 2 minutes
         _lastNudgeSent[name] = now;
         
-        // Send critical system message to the agent
-        const minutesSinceActivity = Math.round(timeSinceActivity / 60000);
+        // Log only — don't inject messages. Agents that lost listen() can't
+        // receive messages anyway; the in-server tool response warnings and
+        // 5-call blocking handle active agents. Injecting CRITICAL messages
+        // just spams the dashboard with no effect.
         const minutesSinceListenCall = Math.round(timeSinceListenCall / 60000);
-        
-        const nudgeMessage = `[CRITICAL] You have been active for ${minutesSinceActivity}m but haven't called listen() in ${minutesSinceListenCall}m. Please call listen() now to stay reachable for coordination.`;
-        
-        try {
-          sendSystemMessage(name, nudgeMessage);
-          log.info(`[auto-nudge] Sent listen() reminder to ${name} (${minutesSinceListenCall}m since last listen)`);
-        } catch (e) {
-          log.warn(`[auto-nudge] Failed to send nudge to ${name}:`, e.message);
-        }
+        log.info(`[auto-nudge] ${name} hasn't called listen() in ${minutesSinceListenCall}m`);
       }
     }
   }
