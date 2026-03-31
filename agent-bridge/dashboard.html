@@ -7942,8 +7942,8 @@ function showProfilePopup(agentName, event) {
   document.getElementById('pp-status-badge').className = 'pp-status-badge ' + badgeClass;
   document.getElementById('pp-status-badge').textContent = statusLabel;
 
-  // Reset to Stats tab
-  switchPpTab('stats');
+  // Default to Actions tab when opening agent popup
+  switchPpTab('actions');
 
   // === Stats Tab ===
   var badgesHtml = '';
