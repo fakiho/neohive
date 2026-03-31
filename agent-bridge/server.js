@@ -1896,8 +1896,8 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
   const sizeErr = validateContentSize(content);
   if (sizeErr) return sizeErr;
 
-  // Check if recipient is alive — warn if dead
-  const recipientAlive = isPidAlive(agents[to].pid, agents[to].last_activity);
+  // Check if recipient is alive — warn if dead (skip for __user__ — human is always reachable)
+  const recipientAlive = to === '__user__' ? true : isPidAlive(agents[to].pid, agents[to].last_activity);
 
   // Resolve threading — search main messages + channel files
   let thread_id = null;
@@ -2036,7 +2036,7 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
   }
   if (!recipientAlive) {
     result.warning = `Agent "${to}" appears offline (PID not running). Message queued but may not be received until they reconnect.`;
-  } else if (agents[to] && !agents[to].listening_since) {
+  } else if (to !== '__user__' && agents[to] && !agents[to].listening_since) {
     result.note = `Agent "${to}" is currently working (not in listen mode). Message queued — they'll see it when they finish their current task and call listen_group().`;
   }
 
@@ -3377,6 +3377,10 @@ function toolCreateTask(title, description = '', assignee = null) {
   tasks.push(task);
   saveTasks(tasks);
   touchActivity();
+
+  // Broadcast task creation event
+  const assigneeLabel = task.assignee ? `, assigned to ${task.assignee}` : '';
+  broadcastSystemMessage(`[EVENT] Task "${task.title}" created by ${registeredName}${assigneeLabel}`, registeredName);
 
   const result = { success: true, task_id: task.id, assignee: task.assignee };
   if (taskChannel) result.channel = taskChannel;
