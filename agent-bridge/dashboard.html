@@ -5489,6 +5489,14 @@ function renderAgents(agents) {
       if (state !== 'offline' && state !== 'dead' && state !== 'unknown') {
         var dots = '';
         var history = info.listen_history || [];
+        // Fallback: synthesize from last_listen_call if listen_history is missing
+        if (history.length === 0) {
+          var llc = info.last_listen_call || info.last_listened_at;
+          if (llc) {
+            var llcTs = typeof llc === 'string' ? new Date(llc).getTime() : llc;
+            if (llcTs > 0) history = [llcTs];
+          }
+        }
         for (var d = 0; d < 10; d++) {
           var dotClass = 'hb-dot';
           if (d < history.length) {
