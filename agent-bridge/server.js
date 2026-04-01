@@ -590,6 +590,12 @@ function buildMessageResponse(msg, consumedIds) {
     }
   } catch (e) { log.debug('task reminder in listen failed:', e.message); }
 
+  // Append report-back protocol reminder to all non-system messages
+  const isSystemMsg = msg.from === '__system__' || msg.system === true;
+  const reportBackReminder = isSystemMsg
+    ? undefined
+    : 'When done: send_message() with (1) what you did (2) files changed (3) findings (4) blockers. Then call listen().';
+
   return {
     success: true,
     message: {
@@ -600,6 +606,7 @@ function buildMessageResponse(msg, consumedIds) {
       priority: classifyPriority(msg),
       ...(msg.reply_to && { reply_to: msg.reply_to }),
       ...(msg.thread_id && { thread_id: msg.thread_id }),
+      ...(reportBackReminder && { _protocol: reportBackReminder }),
     },
     pending_count: pendingCount,
     agents_online: agentsOnline,
@@ -1866,7 +1873,8 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
   const agents = getAgents();
   const otherAgents = Object.keys(agents).filter(n => n !== registeredName);
 
-  if (otherAgents.length === 0) {
+  // Allow sending to __user__ (dashboard human) even when no other agents are registered
+  if (otherAgents.length === 0 && to !== '__user__') {
     return { error: 'No other agents registered' };
   }
 
@@ -2362,15 +2370,30 @@ function toolAckMessage(messageId) {
 }
 
 // Listen indefinitely — loops wait_for_reply in 5-min chunks until a message arrives
-async function toolListen(from = null) {
+async function toolListen(from = null, outcome = null, task_id = null, summary = null) {
   if (!registeredName) {
     return { error: 'You must call register() first' };
+  }
+
+  // Outcome validation: update task state before entering the wait loop
+  if (outcome && outcome !== 'in_progress' && task_id) {
+    const taskList = getTasks();
+    const task = taskList.find(t => t.id === task_id);
+    if (!task) {
+      return { error: true, message: `Invalid task_id "${task_id}" — task does not exist. Check list_tasks() and call listen() again with the correct task_id.` };
+    }
+    if (task.assignee && task.assignee !== registeredName) {
+      return { error: true, message: `Task "${task_id}" is assigned to ${task.assignee}, not to you (${registeredName}). You cannot update another agent's task via listen().` };
+    }
+    const statusMap = { completed: 'done', blocked: 'blocked', failed: 'blocked_permanent' };
+    const newStatus = statusMap[outcome];
+    if (newStatus) toolUpdateTask(task_id, newStatus, summary || '');
   }
 
   // Auto-detect group/managed mode and delegate to toolListenGroup
   // This prevents agents from calling the "wrong" listen function
   if (isGroupMode() || isManagedMode()) {
-    return toolListenGroup();
+    return toolListenGroup(null, null, null);
   }
 
   setListening(true);
@@ -2473,9 +2496,24 @@ async function toolListen(from = null) {
 
 // Codex-compatible listen — returns after 90s (under Codex's 120s tool timeout)
 // with retry:true so the agent knows to call again immediately
-async function toolListenCodex(from = null) {
+async function toolListenCodex(from = null, outcome = null, task_id = null, summary = null) {
   if (!registeredName) {
     return { error: 'You must call register() first' };
+  }
+
+  // Outcome validation: update task state before entering the wait loop
+  if (outcome && outcome !== 'in_progress' && task_id) {
+    const taskList = getTasks();
+    const task = taskList.find(t => t.id === task_id);
+    if (!task) {
+      return { error: true, message: `Invalid task_id "${task_id}" — task does not exist. Check list_tasks() and call listen_codex() again with the correct task_id.` };
+    }
+    if (task.assignee && task.assignee !== registeredName) {
+      return { error: true, message: `Task "${task_id}" is assigned to ${task.assignee}, not to you (${registeredName}). You cannot update another agent's task via listen_codex().` };
+    }
+    const statusMap = { completed: 'done', blocked: 'blocked', failed: 'blocked_permanent' };
+    const newStatus = statusMap[outcome];
+    if (newStatus) toolUpdateTask(task_id, newStatus, summary || '');
   }
 
   setListening(true);
@@ -2754,12 +2792,27 @@ function hashStagger(name) {
   return 500 + (hash * 137) % 1000; // 0.5-1.5s range
 }
 
-async function toolListenGroup() {
+async function toolListenGroup(outcome = null, task_id = null, summary = null) {
   if (!registeredName) return { error: 'You must call register() first' };
+
+  // Outcome validation: update task state before entering the wait loop
+  if (outcome && outcome !== 'in_progress' && task_id) {
+    const taskList = getTasks();
+    const task = taskList.find(t => t.id === task_id);
+    if (!task) {
+      return { error: true, message: `Invalid task_id "${task_id}" — task does not exist. Check list_tasks() and call listen_group() again with the correct task_id.` };
+    }
+    if (task.assignee && task.assignee !== registeredName) {
+      return { error: true, message: `Task "${task_id}" is assigned to ${task.assignee}, not to you (${registeredName}). You cannot update another agent's task via listen_group().` };
+    }
+    const statusMap = { completed: 'done', blocked: 'blocked', failed: 'blocked_permanent' };
+    const newStatus = statusMap[outcome];
+    if (newStatus) toolUpdateTask(task_id, newStatus, summary || '');
+  }
 
   // Auto-detect direct mode and delegate to toolListen (prevents wrong-function bugs)
   if (!isGroupMode() && !isManagedMode()) {
-    return toolListen();
+    return toolListen(null, null, null, null);
   }
 
   setListening(true);
@@ -6092,6 +6145,7 @@ function fireEvent(eventName, data) {
 const EVENT_TO_HOOK = {
   task_complete: 'task.status_changed',
   review_approved: 'review.submitted',
+  rule_changed: 'rule.changed',
 };
 
 function toolGetGuide(level = 'standard') {
@@ -6804,6 +6858,16 @@ function toolAddRule(text, category = 'custom', scope = null) {
   rules.push(rule);
   writeJsonFile(RULES_FILE, rules);
   const scopeMsg = scope ? ` (scoped to ${JSON.stringify(scope)})` : '';
+  fireEvent('rule_changed', {
+    action: 'added',
+    rule_id: rule.id,
+    text: rule.text,
+    category: rule.category,
+    scope_role: rule.scope_role || null,
+    scope_provider: rule.scope_provider || null,
+    scope_agent: rule.scope_agent || null,
+    changed_by: registeredName,
+  });
   return { success: true, rule_id: rule.id, message: `Rule added: "${text.substring(0, 80)}"${scopeMsg}. Matching agents will see this in their guide.` };
 }
 
@@ -6827,6 +6891,16 @@ function toolRemoveRule(ruleId) {
   if (idx === -1) return { error: `Rule not found: ${ruleId}` };
   const removed = rules.splice(idx, 1)[0];
   writeJsonFile(RULES_FILE, rules);
+  fireEvent('rule_changed', {
+    action: 'removed',
+    rule_id: removed.id,
+    text: removed.text,
+    category: removed.category,
+    scope_role: removed.scope_role || null,
+    scope_provider: removed.scope_provider || null,
+    scope_agent: removed.scope_agent || null,
+    changed_by: registeredName,
+  });
   return { success: true, removed: removed.text.substring(0, 80), message: 'Rule removed.' };
 }
 
@@ -6838,6 +6912,16 @@ function toolToggleRule(ruleId) {
   if (!rule) return { error: `Rule not found: ${ruleId}` };
   rule.active = !rule.active;
   writeJsonFile(RULES_FILE, rules);
+  fireEvent('rule_changed', {
+    action: rule.active ? 'activated' : 'deactivated',
+    rule_id: rule.id,
+    text: rule.text,
+    category: rule.category,
+    scope_role: rule.scope_role || null,
+    scope_provider: rule.scope_provider || null,
+    scope_agent: rule.scope_agent || null,
+    changed_by: registeredName,
+  });
   return { success: true, rule_id: ruleId, active: rule.active, message: `Rule ${rule.active ? 'activated' : 'deactivated'}.` };
 }
 
@@ -7187,6 +7271,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'string',
               description: 'Only listen for messages from this specific agent (optional)',
             },
+            outcome: {
+              type: 'string',
+              enum: ['completed', 'blocked', 'failed', 'in_progress'],
+              description: 'Optional: report the outcome of your last task before listening. "completed" marks task done, "blocked" marks it blocked, "failed" marks it permanently blocked.',
+            },
+            task_id: {
+              type: 'string',
+              description: 'Task ID to update with the outcome (required when outcome is set and outcome is not "in_progress")',
+            },
+            summary: {
+              type: 'string',
+              description: 'Optional: brief summary of what was done or why it was blocked (used as task notes)',
+            },
           },
           additionalProperties: false,
         },
@@ -7200,6 +7297,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             from: {
               type: 'string',
               description: 'Only listen for messages from this specific agent (optional)',
+            },
+            outcome: {
+              type: 'string',
+              enum: ['completed', 'blocked', 'failed', 'in_progress'],
+              description: 'Optional: report the outcome of your last task before listening.',
+            },
+            task_id: {
+              type: 'string',
+              description: 'Task ID to update with the outcome (required when outcome is set and outcome is not "in_progress")',
+            },
+            summary: {
+              type: 'string',
+              description: 'Optional: brief summary of what was done or why it was blocked',
             },
           },
           additionalProperties: false,
@@ -7311,7 +7421,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: 'Listen for messages in group or managed conversation mode. Auto-detects mode: in direct mode, behaves like listen(). Returns ALL unconsumed messages as a sorted batch (system > threaded > direct > broadcast), plus batch_summary, agent statuses, and hints. Either listen() or listen_group() works in any mode — they auto-delegate. Call again immediately after responding.',
         inputSchema: {
           type: 'object',
-          properties: {},
+          properties: {
+            outcome: {
+              type: 'string',
+              enum: ['completed', 'blocked', 'failed', 'in_progress'],
+              description: 'Optional: report the outcome of your last task before listening.',
+            },
+            task_id: {
+              type: 'string',
+              description: 'Task ID to update with the outcome (required when outcome is set and outcome is not "in_progress")',
+            },
+            summary: {
+              type: 'string',
+              description: 'Optional: brief summary of what was done or why it was blocked',
+            },
+          },
           additionalProperties: false,
         },
       },
@@ -7466,7 +7590,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     // Escalating listen() enforcement — block tools after too many non-listen calls
-    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'listen_group', 'listen_codex', 'wait_for_reply', 'check_messages', 'consume_messages', 'update_profile', 'list_agents']);
+    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'listen_group', 'listen_codex', 'wait_for_reply', 'check_messages', 'consume_messages', 'update_profile', 'list_agents', 'add_rule', 'remove_rule', 'toggle_rule', 'list_rules']);
     if (listenExemptTools.has(name)) {
       if (name === 'listen' || name === 'listen_group' || name === 'listen_codex' || name === 'wait_for_reply' || name === 'consume_messages') {
         consecutiveNonListenCalls = 0;
@@ -7502,6 +7626,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
     }
 
+    // Middleware: deterministic agent status tracking before each tool call
+    if (registeredName) {
+      const _listenTools = new Set(['listen', 'listen_group', 'listen_codex', 'wait_for_reply']);
+      const _agents = getAgents();
+      if (_agents[registeredName]) {
+        _agents[registeredName].status = _listenTools.has(name) ? 'listening' : 'working';
+        _agents[registeredName].current_tool = name;
+        _agents[registeredName].last_activity = new Date().toISOString();
+        saveAgents(_agents);
+      }
+    }
+
     let result;
 
     switch (name) {
@@ -7521,10 +7657,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolBroadcast(args.content);
         break;
       case 'listen':
-        result = await toolListen(args?.from);
+        result = await toolListen(args?.from, args?.outcome, args?.task_id, args?.summary);
         break;
       case 'listen_codex':
-        result = await toolListenCodex(args?.from);
+        result = await toolListenCodex(args?.from, args?.outcome, args?.task_id, args?.summary);
         break;
       case 'check_messages':
       case 'consume_messages':
@@ -7586,7 +7722,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolSetConversationMode(args.mode);
         break;
       case 'listen_group':
-        result = await toolListenGroup();
+        result = await toolListenGroup(args?.outcome, args?.task_id, args?.summary);
         break;
       case 'join_channel':
       case 'leave_channel':
