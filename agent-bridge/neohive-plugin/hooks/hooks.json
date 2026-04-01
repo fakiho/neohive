@@ -39,7 +39,7 @@
         ]
       },
       {
-        "matcher": "mcp__neohive__send_message|mcp__neohive__advance_workflow|mcp__neohive__update_task|mcp__neohive__broadcast",
+        "matcher": "mcp__neohive__send_message|mcp__neohive__advance_workflow|mcp__neohive__update_task|mcp__neohive__broadcast|mcp__neohive__add_rule|mcp__neohive__remove_rule|mcp__neohive__toggle_rule",
         "hooks": [
           {
             "type": "command",

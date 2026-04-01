@@ -1,9 +1,8 @@
 ---
 name: neoHive
 description: Neohive multi-agent coordination rules — applied when using neohive MCP tools
-tools: vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vscode/newWorkspace, vscode/resolveMemoryFileUri, vscode/runCommand, vscode/vscodeAPI, vscode/extensions, vscode/askQuestions, execute/runNotebookCell, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/getNotebookSummary, read/problems, read/readFile, read/viewImage, read/terminalSelection, read/terminalLastCommand, agent/runSubagent, edit/createDirectory, edit/createFile, edit/createJupyterNotebook, edit/editFiles, edit/editNotebook, edit/rename, search/changes, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/usages, web/fetch, web/githubRepo, browser/openBrowserPage, neohive/ack_message, neohive/add_rule, neohive/advance_workflow, neohive/broadcast, neohive/call_vote, neohive/cast_vote, neohive/check_dependencies, neohive/check_messages, neohive/claim_manager, neohive/consume_messages, neohive/create_task, neohive/create_workflow, neohive/declare_dependency, neohive/distribute_prompt, neohive/fork_conversation, neohive/get_briefing, neohive/get_compressed_history, neohive/get_decisions, neohive/get_guide, neohive/get_history, neohive/get_notifications, neohive/get_progress, neohive/get_reputation, neohive/get_summary, neohive/get_work, neohive/handoff, neohive/join_channel, neohive/kb_list, neohive/kb_read, neohive/kb_write, neohive/leave_channel, neohive/list_agents, neohive/list_branches, neohive/list_channels, neohive/list_rules, neohive/list_tasks, neohive/listen, neohive/listen_codex, neohive/listen_group, neohive/lock_file, neohive/log_decision, neohive/register, neohive/remove_rule, neohive/request_review, neohive/reset, neohive/retry_with_improvement, neohive/search_messages, neohive/send_message, neohive/set_conversation_mode, neohive/set_phase, neohive/share_file, neohive/start_plan, neohive/submit_review, neohive/suggest_task, neohive/switch_branch, neohive/toggle_rule, neohive/unlock_file, neohive/update_profile, neohive/update_progress, neohive/update_task, neohive/verify_and_advance, neohive/vote_status, neohive/wait_for_reply, neohive/workflow_status, neohive/workspace_list, neohive/workspace_read, neohive/workspace_write, neohive/yield_floor, todo # specify the tools this agent can use. If not set, all enabled tools are allowed.
-alwaysApply: true
 ---
+
 
 # Neohive Agent — Cursor
 
@@ -22,6 +21,7 @@ Do NOT explore the codebase or take initiative before completing these 3 steps.
 - **After every action** — call `listen()`. This is how you receive your next task.
 - **Before starting a task** — call `update_task(id, status="in_progress")`
 - **After finishing** — call `update_task(id, status="done")`, report to Coordinator
+- **After completing ANY task** — you MUST send a report back via `send_message()` with: (1) what you did, (2) files changed, (3) findings/output, (4) blockers or follow-up. Silent completion is a protocol violation.
 - **Before editing a file** — call `lock_file(path)`. Call `unlock_file(path)` when done.
 - **Check tasks first** — call `list_tasks()` before starting anything. Never take another agent's task.
 - **Keep messages short** — 2–3 paragraphs max. Lead with what changed, then files, then decisions.

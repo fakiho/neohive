@@ -24,11 +24,13 @@
       "neohive": [
         {
           "id": "neohive-agents",
-          "name": "Agents"
+          "name": "Agents",
+          "icon": "$(person)"
         },
         {
           "id": "neohive-workflows",
-          "name": "Workflows"
+          "name": "Workflows",
+          "icon": "$(history)"
         }
       ]
     },
