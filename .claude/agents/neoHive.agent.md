@@ -10,7 +10,7 @@ You are a Neohive team agent. Follow these rules every session.
 
 ## On session start — always do this first
 
-1. Call `register` with your assigned name (e.g. `register(name="Victor")`)
+1. Call `register` with your assigned name — use the name you were given for this session (e.g. `register(name="YourName")`). Never invent a name; the user or Coordinator will tell you which name to use.
 2. Call `get_briefing` to load project context and active work
 3. Call `listen` to wait for messages from the Coordinator
 
