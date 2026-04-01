@@ -7590,7 +7590,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     // Escalating listen() enforcement — block tools after too many non-listen calls
-    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'listen_group', 'listen_codex', 'wait_for_reply', 'check_messages', 'consume_messages', 'update_profile', 'list_agents', 'add_rule', 'remove_rule', 'toggle_rule', 'list_rules']);
+    // send_message is exempt so blocked agents can escalate to coordinator before calling listen()
+    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'listen_group', 'listen_codex', 'wait_for_reply', 'check_messages', 'consume_messages', 'update_profile', 'list_agents', 'add_rule', 'remove_rule', 'toggle_rule', 'list_rules', 'send_message']);
     if (listenExemptTools.has(name)) {
       if (name === 'listen' || name === 'listen_group' || name === 'listen_codex' || name === 'wait_for_reply' || name === 'consume_messages') {
         consecutiveNonListenCalls = 0;
@@ -7613,12 +7614,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!isCoordinatorExempt) {
         consecutiveNonListenCalls++;
         if (consecutiveNonListenCalls >= 5) {
+          const coordinator = (() => {
+            try {
+              const profs = getProfiles();
+              const lead = Object.entries(profs).find(([, p]) => p.role === 'lead' || p.role === 'Coordinator');
+              return lead ? lead[0] : 'your coordinator';
+            } catch { return 'your coordinator'; }
+          })();
           return {
             content: [{ type: 'text', text: JSON.stringify({
               error: `BLOCKED: You must call listen() before using other tools. You have made ${consecutiveNonListenCalls} tool calls without listening. Call listen() now.`,
               blocked_tool: name,
               calls_without_listen: consecutiveNonListenCalls,
-              fix: 'Call listen() immediately. It will reset the counter and unblock all tools.',
+              fix: `1. Call send_message(to='${coordinator}', content='BLOCKED: I made ${consecutiveNonListenCalls} tool calls without listen(). I was trying to call ${name}. Requesting instructions — should I proceed?') 2. Then call listen() immediately to unblock all tools.`,
+              _listen: 'After send_message(), call listen() immediately. It will reset the counter and unblock all tools.',
             }, null, 2) }],
             isError: true,
           };
