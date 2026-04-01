@@ -9,6 +9,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/design-system.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -3363,6 +3366,20 @@
     overflow-x: hidden;
   }
   .pp-tab-content.active { display: block; }
+  .terminal-wrapper {
+    background: #000;
+    border-radius: var(--nh-radius-md);
+    padding: 10px;
+    margin-top: 8px;
+    height: 320px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--nh-border);
+  }
+  #pp-terminal-container {
+    width: 100%;
+    height: 100%;
+  }
 
   .profile-popup-bio {
     font-size: 12px;
@@ -4663,6 +4680,7 @@
     <button class="pp-tab active" data-tab="stats" onclick="switchPpTab('stats')">Stats</button>
     <button class="pp-tab" data-tab="actions" onclick="switchPpTab('actions')">Actions</button>
     <button class="pp-tab" data-tab="profile" onclick="switchPpTab('profile')">Profile</button>
+    <button class="pp-tab" data-tab="terminal" onclick="switchPpTab('terminal', true)">Terminal</button>
   </div>
   <!-- Stats Tab -->
   <div class="pp-tab-content active" id="pp-tab-stats">
@@ -4680,6 +4698,17 @@
     <div id="pp-skills-container" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"></div>
     <button class="btn btn-primary" style="width:100%;margin-top:12px" id="pp-edit-btn" onclick="openProfileEditor()">Edit Profile</button>
     <button class="btn btn-danger" style="width:100%;margin-top:6px" id="pp-delete-btn" onclick="confirmDeleteAgent()">Delete Agent</button>
+  </div>
+  <!-- Terminal Tab -->
+  <div class="pp-tab-content" id="pp-tab-terminal">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:6px">Live Terminal Bridge</div>
+    <div class="terminal-wrapper">
+      <div id="pp-terminal-container"></div>
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);margin-top:8px;display:flex;justify-content:space-between">
+      <span>Real-time agent stream</span>
+      <span id="terminal-status">Ready</span>
+    </div>
   </div>
 </div>
 
@@ -7866,16 +7895,91 @@ function getMsgAvatar(name, color) {
 
 // ==================== v3.0: PROFILE POPUP ====================
 
-function switchPpTab(tabName) {
+function switchPpTab(tabName, forceInit) {
+  var popup = document.getElementById('profile-popup');
+  var agentName = popup.dataset.agent || editingAgent;
+  
   var tabs = document.querySelectorAll('.pp-tab');
   var contents = document.querySelectorAll('.pp-tab-content');
-  for (var i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); }
-  for (var j = 0; j < contents.length; j++) { contents[j].classList.remove('active'); }
-  document.getElementById('pp-tab-' + tabName).classList.add('active');
-  var tabBtns = document.querySelectorAll('.pp-tab');
-  for (var k = 0; k < tabBtns.length; k++) {
-    if (tabBtns[k].getAttribute('data-tab') === tabName) tabBtns[k].classList.add('active');
+  
+  tabs.forEach(function(t) { t.classList.toggle('active', t.dataset.tab === tabName); });
+  contents.forEach(function(c) { c.classList.toggle('active', c.id === 'pp-tab-' + tabName); });
+  
+  activePpTab = tabName;
+  if (tabName === 'terminal' || forceInit) {
+    if (agentName) initTerminal(agentName);
   }
+}
+
+var terminalInstances = new Map(); // agentName -> { term: Terminal, fit: FitAddon, lastMsgId: string }
+
+function initTerminal(agentName) {
+  var container = document.getElementById('pp-terminal-container');
+  if (!container || !agentName) return;
+
+  // Fix: Clear previous terminal output before opening/switching
+  container.innerHTML = '';
+
+  if (terminalInstances.has(agentName)) {
+    var inst = terminalInstances.get(agentName);
+    inst.term.open(container);
+    if (inst.fit) {
+      setTimeout(function() { inst.fit.fit(); }, 50);
+    }
+    return inst.term;
+  }
+
+  var term = new Terminal({
+    cursorBlink: true,
+    theme: { background: '#111827', cursor: '#fbbf24' },
+    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+    fontSize: 12
+  });
+  var fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  
+  // Ensure DOM is ready
+  setTimeout(function() {
+    term.open(container);
+    fit.fit();
+    terminalInstances.set(agentName, { term: term, fit: fit, lastMsgId: null });
+    
+    term.writeln('\x1b[33m[Neohive]\x1b[0m Connecting terminal stream for \x1b[32m' + agentName + '\x1b[0m...');
+    
+    // Real Stream: sync current history immediately
+    syncTerminalsFromHistory(agentName, term);
+  }, 50);
+  
+  return term;
+}
+
+function syncTerminalsFromHistory(targetAgent, specificTerm) {
+  // If targetAgent provided, sync only that one, else sync all open instances
+  var targets = targetAgent ? [targetAgent] : Array.from(terminalInstances.keys());
+  
+  targets.forEach(function(agent) {
+    var inst = terminalInstances.get(agent);
+    if (!inst) return;
+    var term = specificTerm || inst.term;
+    
+    // Find messages from this agent starting with [terminal:
+    // cachedHistory is global, oldest to newest
+    cachedHistory.forEach(function(msg) {
+      if (msg.from === agent && msg.content && msg.content.startsWith('[terminal:')) {
+        // Simple deduplication based on unique message ID
+        if (inst.lastMsgId && msg.id <= inst.lastMsgId) return;
+        
+        // Extract content: "[terminal: some command] output..." -> "output..." 
+        var clean = msg.content.replace(/^\[terminal:.*?\]/, '');
+        if (clean) {
+          // If the clean content is empty, it might be just the command tag
+          // We can echo the command tag if we want, or just the output
+          term.writeln(clean);
+        }
+        inst.lastMsgId = msg.id;
+      }
+    });
+  });
 }
 
 function ppPing(agentName) {
@@ -7935,6 +8039,7 @@ function showProfilePopup(agentName, event) {
   if (!agent) return;
 
   editingAgent = agentName;
+  popup.dataset.agent = agentName;
   var color = getColor(agentName);
 
   // Header: avatar, name, status badge
@@ -7952,7 +8057,7 @@ function showProfilePopup(agentName, event) {
   document.getElementById('pp-status-badge').textContent = statusLabel;
 
   // Default to Actions tab when opening agent popup
-  switchPpTab('actions');
+  switchPpTab('actions', false);
 
   // === Stats Tab ===
   var badgesHtml = '';
@@ -9447,6 +9552,8 @@ function poll() {
     // Browser notification for new messages
     if (prevHistLen > 0 && cachedHistory.length > prevHistLen) {
       sendBrowserNotification(cachedHistory[cachedHistory.length - 1]);
+      // Real-time terminal sync: new messages arrived, update any open terminals
+      syncTerminalsFromHistory();
     }
 
     $id('stat-messages').textContent = status.messageCount;
