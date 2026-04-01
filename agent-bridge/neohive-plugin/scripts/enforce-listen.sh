@@ -12,32 +12,32 @@ SESSION="${CLAUDE_SESSION_ID:-}"
 [ -f "$ACTIVITY_FILE" ] || exit 0
 
 # Get the last neohive tool used in THIS session
-LAST_TOOL=$(tail -100 "$ACTIVITY_FILE" 2>/dev/null | python3 -c "
-import sys, json, os
-session = os.environ.get('CLAUDE_SESSION_ID', '')
-last = None
-for line in sys.stdin:
-    line = line.strip()
-    if not line: continue
-    try:
-        entry = json.loads(line)
-        # If session ID is available, filter to this session only
-        if session and entry.get('session', '') != session:
-            continue
-        tool = entry.get('tool', '')
-        if tool.startswith('mcp__neohive__'):
-            last = tool
-    except:
-        pass
-print(last or '')
-" 2>/dev/null)
+# Uses jq for robust parsing and filtering
+LAST_TOOL=$(tail -100 "$ACTIVITY_FILE" 2>/dev/null | jq -r --arg session "$SESSION" '
+  select(.session == $session or $session == "") | .tool
+' | grep "^mcp__neohive__" | tail -1)
 
 # No neohive tools used in this session — allow stop
 [ -z "$LAST_TOOL" ] && exit 0
 
-# Last action was listen/register — agent is in listen mode, allow stop
+# ROLE EXEMPTION: Exempt Coordinator from blocking (they orchestrate multiple agents)
+# Look up the agent name from the last activity and check profiles.json
+AGENT_NAME=$(tail -100 "$ACTIVITY_FILE" 2>/dev/null | jq -r --arg session "$SESSION" '
+  select(.session == $session or $session == "") | .agent
+' | tail -1)
+
+if [ -f "$NEOHIVE_DIR/profiles.json" ]; then
+  ROLE=$(jq -r --arg name "$AGENT_NAME" '.[$name].role // empty' "$NEOHIVE_DIR/profiles.json")
+  if [ "$ROLE" = "Coordinator" ]; then
+    exit 0
+  fi
+fi
+
+# Last action was listen/register/rules management — allow stop
 case "$LAST_TOOL" in
-  mcp__neohive__listen|mcp__neohive__listen_codex|mcp__neohive__listen_group|mcp__neohive__register)
+  mcp__neohive__listen|mcp__neohive__listen_codex|mcp__neohive__listen_group|\
+  mcp__neohive__register|mcp__neohive__consume_messages|\
+  mcp__neohive__add_rule|mcp__neohive__remove_rule|mcp__neohive__toggle_rule)
     exit 0
     ;;
 esac

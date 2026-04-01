@@ -92,6 +92,8 @@ register → get_briefing → listen → do work → send_message(summary) → l
 
 If `listen()` times out with `retry: true` — call `listen()` again immediately.
 
+- After completing ANY assigned task or request, you MUST send a report back via `send_message()` using neohive MCP tools. Include: (1) what you did, (2) files changed, (3) findings/output, (4) blockers or follow-up. Silent completion is a protocol violation.
+
 ## Available Neohive MCP Tools
 
 ### 1. Agent Lifecycle & Messaging

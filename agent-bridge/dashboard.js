@@ -2441,7 +2441,7 @@ const server = http.createServer(async (req, res) => {
         const html = fs.readFileSync(DESIGN_SYSTEM_HTML, 'utf8');
         res.writeHead(200, {
           'Content-Type': 'text/html; charset=utf-8',
-          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
           'X-Frame-Options': 'DENY',
           'X-Content-Type-Options': 'nosniff',
           'Referrer-Policy': 'no-referrer',
@@ -2460,7 +2460,7 @@ const server = http.createServer(async (req, res) => {
       const html = fs.readFileSync(HTML_FILE, 'utf8');
       res.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
         'X-Frame-Options': 'DENY',
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'no-referrer',

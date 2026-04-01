@@ -16,7 +16,7 @@ const { DATA_DIR } = require('./config');
 const log = require('./logger');
 
 const HOOKS_FILE = path.join(DATA_DIR, 'hooks.json');
-const VALID_EVENTS = ['task.status_changed', 'agent.idle', 'agent.stuck', 'workflow.advanced', 'review.submitted'];
+const VALID_EVENTS = ['task.status_changed', 'agent.idle', 'agent.stuck', 'workflow.advanced', 'review.submitted', 'rule.changed'];
 
 // --- Registry ---
 
@@ -151,6 +151,13 @@ function formatEventMessage(event, data) {
     case 'review.submitted':
       return `[HOOK] Review "${data.file}" ${data.status} by ${data.reviewer}` +
         (data.feedback ? `: ${data.feedback.substring(0, 100)}` : '');
+    case 'rule.changed': {
+      const action = data.action || 'changed';
+      const scope = data.scope_role || data.scope_provider || data.scope_agent
+        ? ` (scoped to: ${[data.scope_role, data.scope_provider, data.scope_agent].filter(Boolean).join(', ')})`
+        : '';
+      return `[HOOK] Rule ${action} by ${data.changed_by || 'unknown'}: "${(data.text || data.rule_id || '').substring(0, 100)}"${scope}. Call get_briefing() to load updated rules.`;
+    }
     default:
       return `[HOOK] ${event}: ${JSON.stringify(data).substring(0, 200)}`;
   }

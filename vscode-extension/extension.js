@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFile } = require('child_process');
+const { createTerminalBridge } = require('./terminal-bridge');
 
 // --- IDE liveness bridge v2 → .neohive/ide-activity-{agent}.json ---
 const IDE_IDLE_AFTER_UNFOCUS_MS = 20000;
@@ -15,6 +16,48 @@ function sanitizeAgentName(raw) {
   const s = raw.trim();
   if (!s || !/^[a-zA-Z0-9_-]{1,20}$/.test(s)) return null;
   return s;
+}
+
+function stripAnsi(input) {
+  if (typeof input !== 'string') return '';
+  return input
+    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '') // OSC ... BEL or ST
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '') // CSI
+    .replace(/\x1b[@-Z\\-_]/g, ''); // 2-char escapes
+}
+
+function stripUnsafeControlChars(input) {
+  if (typeof input !== 'string') return '';
+  // Preserve \n and \r; drop other C0 controls and DEL.
+  return input.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+}
+
+function normalizeTerminalText(input) {
+  return stripUnsafeControlChars(stripAnsi(input)).replace(/\r\n/g, '\n');
+}
+
+function isLikelyAgentTerminal(terminal, agentName) {
+  if (!terminal || !agentName) return false;
+  const tn = String(terminal.name || '').toLowerCase();
+  const an = String(agentName).toLowerCase();
+  if (!tn || !an) return false;
+  if (tn === an) return true;
+  return tn.includes(an);
+}
+
+function appendTerminalOutputLine(outFile, agentName, terminalName, data) {
+  if (!outFile || !agentName || !data) return;
+  try {
+    const payload = {
+      ts: new Date().toISOString(),
+      agent: agentName,
+      terminal: terminalName || null,
+      data,
+    };
+    fs.appendFileSync(outFile, JSON.stringify(payload) + '\n', 'utf8');
+  } catch {
+    // best-effort; terminal output capture must not crash the extension
+  }
 }
 
 function getNeohiveDataDir() {
@@ -155,11 +198,44 @@ function createIdeLivenessBridge(context) {
   context.subscriptions.push({ dispose: () => { if (pidCheckTimer) clearInterval(pidCheckTimer); } });
 
   // --- Signal 4: Shell integration events (CLI agents in integrated terminals) ---
-  context.subscriptions.push(vscode.window.onDidStartTerminalShellExecution(() => {
+  async function captureShellExecutionOutput(e) {
+    if (disposed) return;
+    const { agentName, dataDir } = snapshotConfig();
+    if (!agentName || !dataDir) return;
+    const term = e && e.terminal;
+    if (!term || !isLikelyAgentTerminal(term, agentName)) return;
+    const exec = e.execution;
+    if (!exec || typeof exec.read !== 'function') return;
+
+    try {
+      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    } catch { return; }
+
+    const outFile = path.join(dataDir, `terminal-${agentName}.jsonl`);
+    let stream;
+    try { stream = exec.read(); } catch { return; }
+
+    try {
+      for await (const chunk of stream) {
+        if (disposed) break;
+        let text = chunk;
+        if (text && text instanceof Uint8Array) text = Buffer.from(text).toString('utf8');
+        if (typeof text !== 'string' || !text) continue;
+        const cleaned = normalizeTerminalText(text);
+        if (!cleaned) continue;
+        appendTerminalOutputLine(outFile, agentName, term.name, cleaned);
+      }
+    } catch {
+      // best-effort: shell integration output is optional
+    }
+  }
+
+  context.subscriptions.push(vscode.window.onDidStartTerminalShellExecution((e) => {
     if (disposed) return;
     if (shellGraceTimer) { clearTimeout(shellGraceTimer); shellGraceTimer = null; }
     shellWorking = true;
     pushState({ focused: vscode.window.state.focused, ide_idle: false, extension_online: true });
+    captureShellExecutionOutput(e).catch(() => {});
   }));
 
   context.subscriptions.push(vscode.window.onDidEndTerminalShellExecution(() => {
@@ -537,12 +613,14 @@ function writeMcpConfig() {
         args: [path.join(folders[0].uri.fsPath, 'agent-bridge', 'server.js')],
         env: { NEOHIVE_DATA_DIR: abDataDir },
         cwd: folders[0].uri.fsPath,
+        timeout: 300,
       };
     } else {
       config.servers.neohive = {
         command: mcpNpxCommand(),
         args: ['-y', 'neohive', 'mcp'],
         env: { NEOHIVE_DATA_DIR: abDataDir },
+        timeout: 300,
       };
     }
     fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n');
@@ -742,6 +820,17 @@ async function checkAgentNameConfigured() {
 function activate(context) {
   createIdeLivenessBridge(context);
 
+  const logChannel = vscode.window.createOutputChannel('Neohive');
+  context.subscriptions.push(logChannel);
+  const log = {
+    info: (m) => logChannel.appendLine(String(m)),
+    warn: (m) => logChannel.appendLine(String(m)),
+    error: (m) => logChannel.appendLine(String(m)),
+  };
+
+  const terminalBridge = createTerminalBridge(context, log);
+  context.subscriptions.push(terminalBridge);
+
   const agentProvider = new AgentTreeProvider();
   const workflowProvider = new WorkflowTreeProvider();
 
@@ -767,7 +856,9 @@ function activate(context) {
       vscode.commands.executeCommand('neohive-workflows.focus');
     }),
     vscode.commands.registerCommand('neohive.setupMcp', commandSetupMcp),
-    vscode.commands.registerCommand('neohive.configureAgentName', commandConfigureAgentName)
+    vscode.commands.registerCommand('neohive.configureAgentName', commandConfigureAgentName),
+    vscode.commands.registerCommand('neohive.bindAgentTerminal', () => terminalBridge.bindAgentTerminal()),
+    vscode.commands.registerCommand('neohive.testTerminalBridge', () => terminalBridge.testTerminalBridge())
   );
 
   checkMcpOnActivate();
@@ -786,6 +877,7 @@ function activate(context) {
       ]);
 
       const agents = agentsRes.agents || agentsRes;
+      try { terminalBridge.onAgentsUpdate(agents); } catch (_) {}
       agentProvider.setAgents(agents);
       workflowProvider.setWorkflows(Array.isArray(workflows) ? workflows : []);
       connected = true;

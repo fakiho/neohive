@@ -7,7 +7,8 @@
       "env": {
         "NEOHIVE_DATA_DIR": "${workspaceFolder}/.neohive"
       },
-      "cwd": "${workspaceFolder}"
+      "cwd": "${workspaceFolder}",
+      "timeout": 300
     }
   }
 }

@@ -9,9 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/design-system.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
-<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+<!-- xterm.js dependencies now lazy-loaded on terminal tab activation to prevent dashboard stalling -->
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -471,6 +469,11 @@
   .agent-status-dot.stale { background: var(--orange); animation: pulse 2s infinite; }
   .agent-status-dot.unresponsive { background: var(--orange, #f97316); box-shadow: 0 0 6px var(--orange, #f97316); animation: pulse 2s infinite; }
   .agent-status-dot.stuck { background: var(--red, #ef4444); box-shadow: 0 0 8px var(--red, #ef4444); animation: pulse 1.2s infinite; }
+
+  .agent-state-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 600; letter-spacing: 0.02em; line-height: 16px; flex-shrink: 0; }
+  .agent-state-pill.listening { background: rgba(96,165,250,0.15); color: #60a5fa; }
+  .agent-state-pill.working   { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .agent-current-tool { font-size: 10px; color: var(--nh-text-muted, #6b7280); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
 
   .agent-card.stuck { border-color: rgba(239, 68, 68, 0.3); }
   .agent-card.unresponsive { border-color: rgba(249, 115, 22, 0.3); }
@@ -5455,6 +5458,9 @@ function renderAgents(agents) {
       var color = getColor(name);
       var state = info.status || (!info.alive ? 'offline' : info.is_listening ? 'listening' : 'working');
       if (state === 'idle' || state === 'stale') sleepCount++;
+      var currentToolHtml = (state === 'working' && info.current_tool)
+        ? '<div class="agent-current-tool">\u2699 ' + escapeHtml(info.current_tool) + '</div>'
+        : '';
 
       // Compact activity text
       var activityText = '';
@@ -5540,6 +5546,9 @@ function renderAgents(agents) {
         sparklineHtml = '<div class="listen-sparkline"><span class="listen-sparkline-label">Liveness</span>' + dots + '</div>';
       }
 
+      var indicatorHtml = (state === 'listening' || state === 'working')
+        ? '<span class="agent-state-pill ' + state + '">' + state + '</span>'
+        : '<span class="agent-status-dot ' + state + '" title="' + state + '"></span>';
       cardHtml += '<div class="' + cardClass + '" data-agent="' + escapeHtml(name) + '" onclick="showProfilePopup(\'' + escapeHtml(name) + '\', event)">' +
         nudgeBtnHtml +
         '<div class="agent-top">' +
@@ -5547,10 +5556,11 @@ function renderAgents(agents) {
           '<div class="agent-info">' +
             '<div class="agent-name" style="color:' + color + '">' + escapeHtml(displayName) + '</div>' +
             '<div class="agent-subtitle">' + escapeHtml(subtitleText) + '</div>' +
+            currentToolHtml +
             skillsHtml +
             sparklineHtml +
           '</div>' +
-          '<span class="agent-status-dot ' + state + '" title="' + state + '"></span>' +
+          indicatorHtml +
         '</div>' +
       '</div>';
     }
@@ -5611,6 +5621,10 @@ function renderAgents(agents) {
       var pState = pInfo.status || (!pInfo.alive ? 'offline' : pInfo.is_listening ? 'listening' : 'working');
       var dot = pCard.querySelector('.agent-status-dot');
       if (dot) { dot.className = 'agent-status-dot ' + pState; dot.title = pState; }
+      var pill = pCard.querySelector('.agent-state-pill');
+      if (pill) { pill.className = 'agent-state-pill ' + pState; pill.textContent = pState; }
+      var ctEl = pCard.querySelector('.agent-current-tool');
+      if (ctEl) { ctEl.textContent = (pState === 'working' && pInfo.current_tool) ? '\u2699 ' + pInfo.current_tool : ''; }
       var sub = pCard.querySelector('.agent-subtitle');
       if (sub) {
         var parts = [];
@@ -7911,13 +7925,51 @@ function switchPpTab(tabName, forceInit) {
   }
 }
 
+var _xtermLoadPromise = null;
+function loadXterm() {
+  if (_xtermLoadPromise) return _xtermLoadPromise;
+  _xtermLoadPromise = new Promise(function(resolve, reject) {
+    console.log('[Neohive] Lazy-loading xterm.js dependencies...');
+    var css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css';
+    document.head.appendChild(css);
+    
+    var s1 = document.createElement('script');
+    s1.src = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js';
+    s1.onload = function() {
+      var s2 = document.createElement('script');
+      s2.src = 'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js';
+      s2.onload = function() {
+        console.log('[Neohive] xterm.js loaded successfully.');
+        resolve();
+      };
+      s2.onerror = reject;
+      document.head.appendChild(s2);
+    };
+    s1.onerror = reject;
+    document.head.appendChild(s1);
+  });
+  return _xtermLoadPromise;
+}
+
 var terminalInstances = new Map(); // agentName -> { term: Terminal, fit: FitAddon, lastMsgId: string }
 
-function initTerminal(agentName) {
+async function initTerminal(agentName) {
   var container = document.getElementById('pp-terminal-container');
   if (!container || !agentName) return;
 
-  // Fix: Clear previous terminal output before opening/switching
+  // Clear previous terminal output
+  container.innerHTML = '<div style="padding:20px; color:var(--nh-text-muted); font-family:monospace;">Connecting terminal stream...</div>';
+
+  try {
+    await loadXterm();
+  } catch (err) {
+    console.error('[Neohive] Failed to load xterm.js:', err);
+    container.innerHTML = '<div style="padding:20px; color:var(--nh-red); font-family:monospace;">Terminal unavailable — check network connection.</div>';
+    return;
+  }
+
   container.innerHTML = '';
 
   if (terminalInstances.has(agentName)) {
