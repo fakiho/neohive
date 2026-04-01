@@ -4683,7 +4683,7 @@
     <button class="pp-tab active" data-tab="stats" onclick="switchPpTab('stats')">Stats</button>
     <button class="pp-tab" data-tab="actions" onclick="switchPpTab('actions')">Actions</button>
     <button class="pp-tab" data-tab="profile" onclick="switchPpTab('profile')">Profile</button>
-    <button class="pp-tab" data-tab="terminal" onclick="switchPpTab('terminal', true)">Terminal</button>
+    <button class="pp-tab" data-tab="terminal" onclick="switchPpTab('terminal', true)" style="display:none">Terminal</button>
   </div>
   <!-- Stats Tab -->
   <div class="pp-tab-content active" id="pp-tab-stats">
@@ -4703,7 +4703,7 @@
     <button class="btn btn-danger" style="width:100%;margin-top:6px" id="pp-delete-btn" onclick="confirmDeleteAgent()">Delete Agent</button>
   </div>
   <!-- Terminal Tab -->
-  <div class="pp-tab-content" id="pp-tab-terminal">
+  <div class="pp-tab-content" id="pp-tab-terminal" style="display:none">
     <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:6px">Live Terminal Bridge</div>
     <div class="terminal-wrapper">
       <div id="pp-terminal-container"></div>
