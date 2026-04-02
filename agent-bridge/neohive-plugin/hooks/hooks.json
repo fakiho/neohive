@@ -13,6 +13,18 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/before-prompt.sh",
+            "timeout": 5,
+            "statusMessage": "Loading Neohive team context..."
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
@@ -45,6 +57,17 @@
             "type": "command",
             "command": "echo '\\n📡 NEOHIVE: Call listen() now to receive your next task. Do not stop without calling listen().'",
             "timeout": 3
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|mcp__neohive__update_task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-tool-use.sh",
+            "async": true,
+            "timeout": 5
           }
         ]
       }
