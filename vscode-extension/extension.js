@@ -726,6 +726,40 @@ async function commandSetupMcp() {
 // --- agentName Configuration Fallback ---
 
 /**
+ * Try to auto-detect a usable agent name without user interaction:
+ *   1. Explicitly configured neohive.agentName → use it.
+ *   2. agents.json has exactly one live agent → adopt it (silent).
+ *   3. Fall back to a sanitized OS username so liveness features still work.
+ *
+ * Never prompts the user — callers decide whether to show UI.
+ * Returns a non-empty sanitized string, always.
+ */
+function getEffectiveAgentName() {
+  // 1. Configured value wins
+  const configured = sanitizeAgentName(
+    vscode.workspace.getConfiguration('neohive').get('agentName', '')
+  );
+  if (configured) return configured;
+
+  // 2. Single registered agent in agents.json
+  const dataDir = getNeohiveDataDir();
+  if (dataDir) {
+    const agentsFile = path.join(dataDir, 'agents.json');
+    if (fs.existsSync(agentsFile)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(agentsFile, 'utf8'));
+        const live = Object.keys(raw).filter(n => n !== '__system__' && n !== 'Dashboard');
+        if (live.length === 1) return live[0];
+      } catch {}
+    }
+  }
+
+  // 3. OS username fallback — sanitized to the allowed character set
+  const username = sanitizeAgentName(os.userInfo().username) || 'CursorUser';
+  return username;
+}
+
+/**
  * Show a quick pick seeded with agents found in agents.json.
  * Returns the selected/typed name, or null if cancelled.
  */
@@ -796,22 +830,151 @@ async function commandConfigureAgentName() {
 }
 
 /**
- * On activation: if neohive.agentName is not configured, show a warning
- * notification with a "Configure" button that triggers commandConfigureAgentName().
- * The neohive.configureAgentName command is always registered in activate().
+ * On activation: if neohive.agentName is not explicitly configured AND a
+ * .neohive/ directory exists (neohive is actually active in this workspace),
+ * notify the user about the fallback name being used and offer to configure.
+ *
+ * Skips silently for workspaces that have never run neohive — no false alerts.
  */
 async function checkAgentNameConfigured() {
   const configured = sanitizeAgentName(
     vscode.workspace.getConfiguration('neohive').get('agentName', '')
   );
-  if (configured) return; // already set
+  if (configured) return; // explicitly set — nothing to do
 
-  const action = await vscode.window.showWarningMessage(
-    'Neohive: No agent name configured. IDE liveness tracking and heartbeat won\'t work until you set one.',
-    'Configure'
+  // Only prompt when neohive is actually active in this workspace
+  const dataDir = getNeohiveDataDir();
+  if (!dataDir || !fs.existsSync(dataDir)) return;
+
+  const fallback = getEffectiveAgentName();
+  const action = await vscode.window.showInformationMessage(
+    `Neohive: Using "${fallback}" as your agent name (auto-detected). Set a specific name to avoid conflicts.`,
+    'Configure',
+    'Keep this name'
   );
+
   if (action === 'Configure') {
     await vscode.commands.executeCommand('neohive.configureAgentName');
+  } else if (action === 'Keep this name') {
+    // Persist the auto-detected fallback so it stops prompting
+    const config = vscode.workspace.getConfiguration('neohive');
+    await config.update('agentName', fallback, vscode.ConfigurationTarget.Workspace);
+    vscode.window.showInformationMessage(`Neohive: Agent name saved as "${fallback}".`);
+  }
+}
+
+// --- Claude Hooks Auto-Setup ---
+
+/**
+ * Write/merge neohive hooks into .claude/settings.json on activate.
+ * Only runs if the workspace has a .claude/ directory (Claude Code is in use).
+ * Merges — never removes existing user hooks outside the neohive keys.
+ * Script paths use ${CLAUDE_PROJECT_DIR} so they work on any machine.
+ */
+function setupClaudeHooks() {
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || !folders.length) return;
+  const root = folders[0].uri.fsPath;
+  const claudeDir = path.join(root, '.claude');
+  const settingsPath = path.join(claudeDir, 'settings.json');
+
+  // Only auto-setup if .claude/ already exists (user is a Claude Code user)
+  if (!fs.existsSync(claudeDir)) return;
+
+  // Detect whether the neohive plugin scripts directory is present
+  const scriptsDir = path.join(root, 'agent-bridge', 'neohive-plugin', 'scripts');
+  const hasScripts = fs.existsSync(scriptsDir);
+  const scriptRef = hasScripts
+    ? '${CLAUDE_PROJECT_DIR}/agent-bridge/neohive-plugin/scripts'
+    : null;
+
+  // Build the hook definitions — use script references when available,
+  // fall back to minimal inline commands for external installs
+  const listenReminder = "echo '\\n📡 NEOHIVE: Call listen() now to receive your next task. Do not stop without calling listen().'";
+
+  const neohiveHooks = {
+    UserPromptSubmit: scriptRef ? [
+      {
+        hooks: [{
+          type: 'command',
+          command: `${scriptRef}/before-prompt.sh`,
+          timeout: 5,
+          statusMessage: 'Loading Neohive team context...',
+        }],
+      },
+    ] : [],
+    PreToolUse: scriptRef ? [
+      {
+        matcher: 'Edit|Write',
+        hooks: [{
+          type: 'command',
+          command: `${scriptRef}/enforce-locks.sh`,
+          timeout: 5,
+          statusMessage: 'Checking file locks...',
+        }],
+      },
+    ] : [],
+    PostToolUse: [
+      ...(scriptRef ? [{
+        matcher: 'mcp__neohive__.*',
+        hooks: [{
+          type: 'command',
+          command: `${scriptRef}/track-activity.sh`,
+          async: true,
+          timeout: 5,
+        }],
+      }] : []),
+      {
+        matcher: 'mcp__neohive__send_message|mcp__neohive__advance_workflow|mcp__neohive__update_task|mcp__neohive__broadcast|mcp__neohive__add_rule|mcp__neohive__remove_rule|mcp__neohive__toggle_rule',
+        hooks: [{
+          type: 'command',
+          command: listenReminder,
+          timeout: 3,
+        }],
+      },
+      ...(scriptRef ? [{
+        matcher: 'Edit|Write|MultiEdit|mcp__neohive__update_task',
+        hooks: [{
+          type: 'command',
+          command: `${scriptRef}/post-tool-use.sh`,
+          async: true,
+          timeout: 5,
+        }],
+      }] : []),
+    ],
+    Stop: [
+      {
+        hooks: [{
+          type: 'command',
+          command: scriptRef
+            ? `${scriptRef}/enforce-listen.sh`
+            : `node -e "const h=require('fs').existsSync(process.env.CLAUDE_PROJECT_DIR+'/.neohive/activity.jsonl');process.exit(h?0:0)"`,
+          timeout: 5,
+        }],
+      },
+    ],
+  };
+
+  try {
+    let existing = {};
+    if (fs.existsSync(settingsPath)) {
+      try { existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); } catch {}
+    }
+
+    // Merge: replace only the neohive-managed hook events; preserve everything else
+    existing.hooks = Object.assign({}, existing.hooks || {}, neohiveHooks);
+
+    // Drop empty arrays (e.g. UserPromptSubmit when no scripts available)
+    for (const key of Object.keys(existing.hooks)) {
+      if (Array.isArray(existing.hooks[key]) && existing.hooks[key].length === 0) {
+        delete existing.hooks[key];
+      }
+    }
+
+    fs.mkdirSync(claudeDir, { recursive: true });
+    fs.writeFileSync(settingsPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
+  } catch (e) {
+    console.error('[neohive] Failed to write .claude/settings.json:', e.message);
   }
 }
 
@@ -857,9 +1020,16 @@ function activate(context) {
     }),
     vscode.commands.registerCommand('neohive.setupMcp', commandSetupMcp),
     vscode.commands.registerCommand('neohive.configureAgentName', commandConfigureAgentName),
+    vscode.commands.registerCommand('neohive.setupHooks', () => {
+      setupClaudeHooks();
+      vscode.window.showInformationMessage('Neohive: Claude Code hooks configured in .claude/settings.json');
+    }),
     vscode.commands.registerCommand('neohive.bindAgentTerminal', () => terminalBridge.bindAgentTerminal()),
     vscode.commands.registerCommand('neohive.testTerminalBridge', () => terminalBridge.testTerminalBridge())
   );
+
+  // Auto-configure Claude Code hooks on every activate (idempotent merge)
+  setupClaudeHooks();
 
   checkMcpOnActivate();
 

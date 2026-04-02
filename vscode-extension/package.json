@@ -58,6 +58,10 @@
         "title": "Neohive: Set Up MCP for Copilot Chat"
       },
       {
+        "command": "neohive.setupHooks",
+        "title": "Neohive: Set Up Claude Code Hooks"
+      },
+      {
         "command": "neohive.configureAgentName",
         "title": "Neohive: Configure Agent Name",
         "icon": "$(person)"
