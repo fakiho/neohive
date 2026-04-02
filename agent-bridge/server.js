@@ -2370,10 +2370,14 @@ function toolAckMessage(messageId) {
 }
 
 // Listen indefinitely — loops wait_for_reply in 5-min chunks until a message arrives
-async function toolListen(from = null, outcome = null, task_id = null, summary = null) {
+async function toolListen(from = null, outcome = null, task_id = null, summary = null, mode = null) {
   if (!registeredName) {
     return { error: 'You must call register() first' };
   }
+
+  // Mode-based dispatch: explicit mode overrides auto-detection
+  if (mode === 'codex') return toolListenCodex(from, outcome, task_id, summary);
+  if (mode === 'group') return toolListenGroup(outcome, task_id, summary);
 
   // Outcome validation: update task state before entering the wait loop
   if (outcome && outcome !== 'in_progress' && task_id) {
@@ -7263,10 +7267,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'listen',
-        description: 'Listen for messages indefinitely. Auto-detects conversation mode: in group/managed mode, behaves like listen_group() (returns batched messages with agent statuses). In direct mode, returns one message at a time. Either listen() or listen_group() works in any mode — they auto-delegate to the correct behavior.',
+        description: 'Listen for messages. Use mode="standard" (default, direct 1:1), mode="group" (group/managed conversation, batched), or mode="codex" (Codex CLI — returns after 90s). Auto-detects mode from conversation state when mode is omitted. Replaces listen_group and listen_codex (now deprecated aliases).',
         inputSchema: {
           type: 'object',
           properties: {
+            mode: {
+              type: 'string',
+              enum: ['standard', 'group', 'codex'],
+              description: 'Listen mode: "standard" (default, direct), "group" (group/managed batched), "codex" (Codex CLI 90s cap). Auto-detected when omitted.',
+            },
             from: {
               type: 'string',
               description: 'Only listen for messages from this specific agent (optional)',
@@ -7290,32 +7299,42 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'listen_codex',
-        description: 'ONLY for Codex CLI agents — do NOT use if you are Claude Code or Gemini CLI. Same as listen() but returns after 90 seconds due to Codex tool timeout limits. Claude and Gemini agents must use listen() instead.',
+        description: '[DEPRECATED] Use listen({ mode: "codex" }) instead. ONLY for Codex CLI agents. Returns after 90 seconds due to Codex tool timeout limits.',
         inputSchema: {
           type: 'object',
           properties: {
-            from: {
-              type: 'string',
-              description: 'Only listen for messages from this specific agent (optional)',
-            },
-            outcome: {
-              type: 'string',
-              enum: ['completed', 'blocked', 'failed', 'in_progress'],
-              description: 'Optional: report the outcome of your last task before listening.',
-            },
-            task_id: {
-              type: 'string',
-              description: 'Task ID to update with the outcome (required when outcome is set and outcome is not "in_progress")',
-            },
-            summary: {
-              type: 'string',
-              description: 'Optional: brief summary of what was done or why it was blocked',
-            },
+            from: { type: 'string', description: 'Only listen for messages from this specific agent (optional)' },
+            outcome: { type: 'string', enum: ['completed', 'blocked', 'failed', 'in_progress'] },
+            task_id: { type: 'string' },
+            summary: { type: 'string' },
           },
           additionalProperties: false,
         },
       },
-      // --- Messaging tools (from tools/messaging.js) ---
+      // --- Unified messages tool (consolidates check/consume/history/search/ack) ---
+      {
+        name: 'messages',
+        description: 'Unified message management. action="check" peeks at unconsumed messages (non-consuming), "consume" marks them read, "history" returns conversation history, "search" searches by keyword, "ack" acknowledges a specific message. Replaces check_messages, consume_messages, get_history, search_messages, ack_message (still available as deprecated aliases).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: {
+              type: 'string',
+              enum: ['check', 'consume', 'history', 'search', 'ack'],
+              description: 'Message action to perform',
+            },
+            from: { type: 'string', description: 'Filter by sender agent name (optional)' },
+            limit: { type: 'number', description: 'Max results (default varies by action)' },
+            query: { type: 'string', description: 'Search term — required for action="search"' },
+            message_id: { type: 'string', description: 'Message ID — required for action="ack"' },
+            thread_id: { type: 'string', description: 'Filter by thread ID (optional, action="history")' },
+            since: { type: 'string', description: 'ISO timestamp filter (optional, action="check" or "consume")' },
+          },
+          required: ['action'],
+          additionalProperties: false,
+        },
+      },
+      // --- Messaging tools (from tools/messaging.js) — deprecated individually, use messages() ---
       ...messaging.definitions,
       {
         name: 'handoff',
@@ -7418,23 +7437,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'listen_group',
-        description: 'Listen for messages in group or managed conversation mode. Auto-detects mode: in direct mode, behaves like listen(). Returns ALL unconsumed messages as a sorted batch (system > threaded > direct > broadcast), plus batch_summary, agent statuses, and hints. Either listen() or listen_group() works in any mode — they auto-delegate. Call again immediately after responding.',
+        description: '[DEPRECATED] Use listen({ mode: "group" }) instead. Listen for messages in group/managed mode — returns batched messages with agent statuses.',
         inputSchema: {
           type: 'object',
           properties: {
-            outcome: {
-              type: 'string',
-              enum: ['completed', 'blocked', 'failed', 'in_progress'],
-              description: 'Optional: report the outcome of your last task before listening.',
-            },
-            task_id: {
-              type: 'string',
-              description: 'Task ID to update with the outcome (required when outcome is set and outcome is not "in_progress")',
-            },
-            summary: {
-              type: 'string',
-              description: 'Optional: brief summary of what was done or why it was blocked',
-            },
+            outcome: { type: 'string', enum: ['completed', 'blocked', 'failed', 'in_progress'] },
+            task_id: { type: 'string' },
+            summary: { type: 'string' },
           },
           additionalProperties: false,
         },
@@ -7591,7 +7600,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     // Escalating listen() enforcement — block tools after too many non-listen calls
     // send_message is exempt so blocked agents can escalate to coordinator before calling listen()
-    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'listen_group', 'listen_codex', 'wait_for_reply', 'check_messages', 'consume_messages', 'update_profile', 'list_agents', 'add_rule', 'remove_rule', 'toggle_rule', 'list_rules', 'send_message']);
+    // messages is exempt (unified query tool — like check_messages/consume_messages)
+    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'listen_group', 'listen_codex', 'wait_for_reply', 'check_messages', 'consume_messages', 'update_profile', 'list_agents', 'add_rule', 'remove_rule', 'toggle_rule', 'list_rules', 'send_message', 'messages']);
     if (listenExemptTools.has(name)) {
       if (name === 'listen' || name === 'listen_group' || name === 'listen_codex' || name === 'wait_for_reply' || name === 'consume_messages') {
         consecutiveNonListenCalls = 0;
@@ -7666,11 +7676,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolBroadcast(args.content);
         break;
       case 'listen':
-        result = await toolListen(args?.from, args?.outcome, args?.task_id, args?.summary);
+        result = await toolListen(args?.from, args?.outcome, args?.task_id, args?.summary, args?.mode);
         break;
       case 'listen_codex':
+        // Deprecated alias — routes to listen(mode="codex")
         result = await toolListenCodex(args?.from, args?.outcome, args?.task_id, args?.summary);
         break;
+      case 'messages': {
+        // Unified message management — routes by action param
+        const action = (args || {}).action;
+        const actionMap = {
+          check: 'check_messages',
+          consume: 'consume_messages',
+          history: 'get_history',
+          search: 'search_messages',
+          ack: 'ack_message',
+        };
+        const target = actionMap[action];
+        if (!target) {
+          result = { error: `Unknown action "${action}". Must be one of: check, consume, history, search, ack` };
+        } else {
+          result = messaging.handlers[target](args || {});
+        }
+        break;
+      }
       case 'check_messages':
       case 'consume_messages':
       case 'get_notifications':
