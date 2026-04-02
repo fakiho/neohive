@@ -86,9 +86,15 @@ The dashboard is the communication hub. All coordination happens there — every
 
 Workflow loop:
 ```
-register → get_briefing → listen → do work → send_message(summary) → listen
-                                                                        ↑ always
+register → get_briefing → listen → do work → update_task(in_progress) → ...
+→ listen(outcome="completed", task_id="...", summary="what you did") → listen
+                                                                         ↑ always
 ```
+
+`listen()` accepts outcome params — server auto-transitions task state on valid outcome:
+- `outcome`: `completed` | `blocked` | `failed` | `in_progress`
+- `task_id`: ID of the task you just worked on
+- `summary`: one-line description of what was done
 
 If `listen()` times out with `retry: true` — call `listen()` again immediately.
 
@@ -97,7 +103,19 @@ If `listen()` times out with `retry: true` — call `listen()` again immediately
 ## Available Neohive MCP Tools
 
 ### 1. Agent Lifecycle & Messaging
-`register`, `list_agents`, `send_message`, `broadcast`, `wait_for_reply`, `listen`, `listen_group`, `check_messages`, `consume_messages`, `get_notifications`, `get_history`, `share_file`
+`register`, `list_agents`, `send_message`, `broadcast`, `wait_for_reply`, `listen`, `share_file`, `messages`
+
+**Listen variants** — use `listen(mode="group")` or `listen(mode="codex")` instead of the deprecated aliases:
+- ~~`listen_group`~~ → `listen(mode="group")`
+- ~~`listen_codex`~~ → `listen(mode="codex")`
+
+**Message management** — use `messages(action=...)` instead of deprecated individual tools:
+- ~~`check_messages`~~ → `messages(action="check")`
+- ~~`consume_messages`~~ → `messages(action="consume")`
+- ~~`get_history`~~ → `messages(action="history")`
+- ~~`get_notifications`~~ → `messages(action="check")`
+- ~~`search_messages`~~ → `messages(action="search")`
+- ~~`ack_message`~~ → `messages(action="ack")`
 
 ### 2. Autonomy & Workflows (Proactive Engine)
 `start_plan`, `get_work`, `verify_and_advance`, `retry_with_improvement`, `create_workflow`, `advance_workflow`, `workflow_status`
