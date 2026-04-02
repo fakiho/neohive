@@ -1,6 +1,8 @@
 # Contributing to Neohive
 
-Thanks for your interest in contributing! Here's how to get involved.
+Glad you're here. Contributions of any size are welcome — a typo fix is as useful as a new feature if it makes the project clearer.
+
+Neohive is a solo project by Alionix. The server and CLI live in `agent-bridge/`, the npm package is `neohive`, and everything at runtime goes into `.neohive/` in your project. If you're coming from another MCP tool, heads up: Neohive is its own thing — different package, different data directory, different IDE integrations, different roadmap. [ROADMAP.md](ROADMAP.md) has the full picture.
 
 ## Ways to Contribute
 
@@ -8,7 +10,7 @@ Thanks for your interest in contributing! Here's how to get involved.
 - **Feature requests** — [Open an issue](https://github.com/fakiho/neohive/issues/new?template=feature_request.md) describing the use case
 - **Code** — Fork, branch, implement, open a PR
 - **Templates** — Create new agent team templates (drop a JSON in `templates/`)
-- **Plugins** — Build and share custom tools
+- **Plugins** — Build custom tools using the plugin API
 - **Docs** — Fix typos, improve explanations, add examples
 
 ## Development Setup

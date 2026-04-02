@@ -37,7 +37,7 @@ Use this doc **before** diving into code: it orients you on what the project is,
 
 1. **[README.md](../README.md)** — quick start, features, env vars, CLI table.
 2. **[docs/documentation.md](./documentation.md)** — short hub; deep dives under **[docs/reference/](./reference/)** (especially **[tools.md](./reference/tools.md)**, **[dashboard.md](./reference/dashboard.md)**, **[data-directory.md](./reference/data-directory.md)**).
-3. **[VISION.md](../VISION.md)** — roadmap and intentional direction (modularization, tests, SQLite option, remote agents, etc.).
+3. **[ROADMAP.md](../ROADMAP.md)** — Neohive roadmap: active initiatives, planned features, and Alionix's development priorities.
 4. **[SECURITY.md](../SECURITY.md)** — threat model and dashboard/MCP safety notes.
 5. **[CONTRIBUTING.md](../CONTRIBUTING.md)** — style and PR expectations (see caveat below).
 

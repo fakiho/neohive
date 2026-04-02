@@ -10,7 +10,7 @@ Use **kebab-case** for Markdown files in this folder: `lowercase-with-hyphens.md
 **Exceptions (repo-wide conventions, not kebab-case):**
 
 - **`README.md`** — standard directory index (this file, `reference/README.md`).
-- **Repository root** files such as `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `VISION.md` stay as usual for GitHub/npm discoverability.
+- **Repository root** files such as `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `ROADMAP.md` stay as usual for GitHub/npm discoverability.
 
 ## Quick links
 
@@ -18,6 +18,5 @@ Use **kebab-case** for Markdown files in this folder: `lowercase-with-hyphens.md
 |-----|---------|
 | [documentation.md](./documentation.md) | Main entry |
 | [ai-onboarding.md](./ai-onboarding.md) | AI contributor orientation |
-| [documentation-audit.md](./documentation-audit.md) | Doc debt / audit log |
 | [mcp-tools-documentation.md](./mcp-tools-documentation.md) | High-level MCP tool tour |
 | [reference/next-action-chain.md](./reference/next-action-chain.md) | `next_action` response chain, coordinator flows |

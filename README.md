@@ -435,7 +435,7 @@ Full details: [SECURITY.md](SECURITY.md)
 | MCP tools (full) | [docs/reference/tools.md](docs/reference/tools.md) |
 | AI onboarding (repo map) | [docs/ai-onboarding.md](docs/ai-onboarding.md) |
 | MCP tools (high-level tour) | [docs/mcp-tools-documentation.md](docs/mcp-tools-documentation.md) |
-| Vision & Roadmap | [VISION.md](VISION.md) |
+| Roadmap | [ROADMAP.md](ROADMAP.md) |
 | Security Policy | [SECURITY.md](SECURITY.md) |
 | Contributing Guide | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) · [agent-bridge/CHANGELOG.md](agent-bridge/CHANGELOG.md) |
