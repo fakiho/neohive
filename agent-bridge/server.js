@@ -7297,45 +7297,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           additionalProperties: false,
         },
       },
-      {
-        name: 'listen_codex',
-        description: '[DEPRECATED] Use listen({ mode: "codex" }) instead. ONLY for Codex CLI agents. Returns after 90 seconds due to Codex tool timeout limits.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            from: { type: 'string', description: 'Only listen for messages from this specific agent (optional)' },
-            outcome: { type: 'string', enum: ['completed', 'blocked', 'failed', 'in_progress'] },
-            task_id: { type: 'string' },
-            summary: { type: 'string' },
-          },
-          additionalProperties: false,
-        },
-      },
       // --- Unified messages tool (consolidates check/consume/history/search/ack) ---
       {
         name: 'messages',
-        description: 'Unified message management. action="check" peeks at unconsumed messages (non-consuming), "consume" marks them read, "history" returns conversation history, "search" searches by keyword, "ack" acknowledges a specific message. Replaces check_messages, consume_messages, get_history, search_messages, ack_message (still available as deprecated aliases).',
+        description: 'Unified message management. action="check" peeks at unconsumed messages, "consume" marks them read, "history" returns conversation history, "search" searches by keyword, "ack" acknowledges a message, "notifications" returns task/workflow/agent notifications.',
         inputSchema: {
           type: 'object',
           properties: {
             action: {
               type: 'string',
-              enum: ['check', 'consume', 'history', 'search', 'ack'],
-              description: 'Message action to perform',
+              enum: ['check', 'consume', 'history', 'search', 'ack', 'notifications'],
+              description: 'Message action: check (peek), consume (mark read), history, search, ack, notifications',
             },
             from: { type: 'string', description: 'Filter by sender agent name (optional)' },
             limit: { type: 'number', description: 'Max results (default varies by action)' },
             query: { type: 'string', description: 'Search term — required for action="search"' },
             message_id: { type: 'string', description: 'Message ID — required for action="ack"' },
             thread_id: { type: 'string', description: 'Filter by thread ID (optional, action="history")' },
-            since: { type: 'string', description: 'ISO timestamp filter (optional, action="check" or "consume")' },
+            since: { type: 'string', description: 'ISO timestamp filter (optional)' },
+            type: { type: 'string', description: 'Notification type filter (optional, action="notifications")' },
           },
           required: ['action'],
           additionalProperties: false,
         },
       },
-      // --- Messaging tools (from tools/messaging.js) — deprecated individually, use messages() ---
-      ...messaging.definitions,
       {
         name: 'handoff',
         description: 'Hand off work to another agent with context. Creates a structured handoff message so the recipient knows they are taking over a task. Use when you are done with your part and another agent should continue.',
@@ -7382,7 +7367,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       ...tasks.definitions,
       // --- Knowledge tools (from tools/knowledge.js) ---
       ...knowledge.definitions,
-      // search_messages included via ...messaging.definitions above
       {
         name: 'reset',
         description: 'Clear all data files and start fresh. Automatically archives the conversation before clearing.',
@@ -7432,19 +7416,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             mode: { type: 'string', description: '"direct" (default), "group" for free chat, or "managed" for structured turn-taking', enum: ['group', 'direct', 'managed'] },
           },
           required: ['mode'],
-          additionalProperties: false,
-        },
-      },
-      {
-        name: 'listen_group',
-        description: '[DEPRECATED] Use listen({ mode: "group" }) instead. Listen for messages in group/managed mode — returns batched messages with agent statuses.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            outcome: { type: 'string', enum: ['completed', 'blocked', 'failed', 'in_progress'] },
-            task_id: { type: 'string' },
-            summary: { type: 'string' },
-          },
           additionalProperties: false,
         },
       },
@@ -7600,10 +7571,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     // Escalating listen() enforcement — block tools after too many non-listen calls
     // send_message is exempt so blocked agents can escalate to coordinator before calling listen()
-    // messages is exempt (unified query tool — like check_messages/consume_messages)
-    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'listen_group', 'listen_codex', 'wait_for_reply', 'check_messages', 'consume_messages', 'update_profile', 'list_agents', 'add_rule', 'remove_rule', 'toggle_rule', 'list_rules', 'send_message', 'messages']);
+    // messages is exempt (unified query tool — replaces check_messages/consume_messages)
+    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'wait_for_reply', 'update_profile', 'list_agents', 'add_rule', 'remove_rule', 'toggle_rule', 'list_rules', 'send_message', 'messages']);
     if (listenExemptTools.has(name)) {
-      if (name === 'listen' || name === 'listen_group' || name === 'listen_codex' || name === 'wait_for_reply' || name === 'consume_messages') {
+      if (name === 'listen' || name === 'wait_for_reply') {
         consecutiveNonListenCalls = 0;
       }
     } else if (registeredName) {
@@ -7647,7 +7618,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // Middleware: deterministic agent status tracking before each tool call
     if (registeredName) {
-      const _listenTools = new Set(['listen', 'listen_group', 'listen_codex', 'wait_for_reply']);
+      const _listenTools = new Set(['listen', 'wait_for_reply']);
       const _agents = getAgents();
       if (_agents[registeredName]) {
         _agents[registeredName].status = _listenTools.has(name) ? 'listening' : 'working';
@@ -7678,10 +7649,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'listen':
         result = await toolListen(args?.from, args?.outcome, args?.task_id, args?.summary, args?.mode);
         break;
-      case 'listen_codex':
-        // Deprecated alias — routes to listen(mode="codex")
-        result = await toolListenCodex(args?.from, args?.outcome, args?.task_id, args?.summary);
-        break;
       case 'messages': {
         // Unified message management — routes by action param
         const action = (args || {}).action;
@@ -7691,22 +7658,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           history: 'get_history',
           search: 'search_messages',
           ack: 'ack_message',
+          notifications: 'get_notifications',
         };
         const target = actionMap[action];
         if (!target) {
-          result = { error: `Unknown action "${action}". Must be one of: check, consume, history, search, ack` };
+          result = { error: `Unknown action "${action}". Must be one of: check, consume, history, search, ack, notifications` };
         } else {
           result = messaging.handlers[target](args || {});
         }
         break;
       }
-      case 'check_messages':
-      case 'consume_messages':
-      case 'get_notifications':
-      case 'ack_message':
-      case 'get_history':
-        result = messaging.handlers[name](args || {});
-        break;
       case 'create_task':
       case 'update_task':
       case 'list_tasks':
@@ -7729,9 +7690,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_progress':
       case 'get_compressed_history':
         result = knowledge.handlers[name](args || {});
-        break;
-      case 'search_messages':
-        result = messaging.handlers[name](args || {});
         break;
       case 'reset':
         result = toolReset();
@@ -7758,9 +7716,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case 'set_conversation_mode':
         result = toolSetConversationMode(args.mode);
-        break;
-      case 'listen_group':
-        result = await toolListenGroup(args?.outcome, args?.task_id, args?.summary);
         break;
       case 'join_channel':
       case 'leave_channel':
@@ -7871,7 +7826,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // Global hook: on non-listen tools, check for pending messages and nudge with escalating urgency
     // Enhanced nudge: includes sender names, addressed count, and message preview
-    const listenTools = ['listen', 'listen_group', 'listen_codex', 'wait_for_reply', 'check_messages', 'consume_messages'];
+    const listenTools = ['listen', 'wait_for_reply'];
     if (registeredName && !listenTools.includes(name) && (isGroupMode() || isManagedMode())) {
       try {
         const pending = getUnconsumedMessages(registeredName);
