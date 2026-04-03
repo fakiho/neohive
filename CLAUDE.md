@@ -35,11 +35,12 @@ No tests, linter, or build step. Raw Node.js (CommonJS).
 ## Architecture
 
 **Core files:**
-- `server.js` — MCP server (70+ built-in tools, StdioServerTransport, heartbeat system)
+- `server.js` — MCP server (StdioServerTransport, heartbeat system, self-healing watchdog)
 - `lib/` — Shared modules (`config`, `messaging`, `file-io`, …); prefer adding logic here and requiring from `server.js`
 - `dashboard.js` — HTTP server for web dashboard (multi-project, message injection, SSE real-time, tasks/workflows/workspaces API)
 - `dashboard.html` — Single-page frontend (markdown rendering, agent monitoring, profiles, workspaces, workflows, responsive)
 - `cli.js` — CLI entry point with multi-CLI auto-detection
+- `vscode-extension/` — VS Code extension with `@neohive` chat participant, terminal bridge, and Claude hook auto-setup
 
 **Multiple MCP server processes, one shared filesystem:**
 - Each CLI terminal spawns its own `server.js` process
@@ -57,6 +58,7 @@ No tests, linter, or build step. Raw Node.js (CommonJS).
   - `branch-{name}-messages.jsonl` / `branch-{name}-history.jsonl` — per-branch message files
   - `plugins.json` — plugin registry
   - `plugins/*.js` — plugin code files
+  - `heartbeat-{agent}.json` — per-agent heartbeat file (replaces agents.json write contention at scale)
 - Dashboard reads the same directory for real-time monitoring via SSE
 
 **Data directory resolution (server.js + dashboard.js):**
@@ -123,6 +125,10 @@ If `listen()` times out with `retry: true` — call `listen()` again immediately
 ### 3. Task Management
 `create_task`, `update_task`, `list_tasks`
 
+**Task statuses:** `pending` → `in_progress` → `in_review` → `done` | `blocked` | `blocked_permanent`
+- `blocked_permanent` — set by the self-healing watchdog when `retry_count` reaches 3; requires coordinator intervention. Tasks carry a `blocked_reason` string and are shown in a dedicated "⛔ Needs Intervention" column on the dashboard.
+- `retry_count` — incremented each time the watchdog reclaims a stale task. Shown as a `↺N` badge on the dashboard.
+
 ### 4. Profiles & Workspaces
 `update_profile`, `workspace_write`, `workspace_read`, `workspace_list`
 
@@ -166,6 +172,8 @@ If `listen()` times out with `retry: true` — call `listen()` again immediately
 - **Workflows** — step statuses: pending/in_progress/done, auto-handoff on advance
 - **Branching** — `main` branch uses existing files for backward compatibility, branch-aware file resolution via `getMessagesFile(branch)`/`getHistoryFile(branch)`
 - **Plugins** — sandboxed execution context with 30s timeout, tools appear as `plugin_{name}` in MCP
+- **Self-healing watchdog** — runs every 60s inside the heartbeat loop on every registered agent; scans `in_progress` tasks whose assignee PID is dead + heartbeat stale >5min; strips assignee and resets to `pending` (increments `retry_count`); at `retry_count=3` marks `blocked_permanent` and wakes the coordinator (poison pill). No manual intervention needed for routine agent flakiness.
+- **VS Code extension** — `vscode-extension/` adds: `@neohive` chat participant (`/status /who /tasks /messages` read `.neohive/` directly; free-form text fires POST to `/api/inject`), terminal bridge (captures agent terminal output → dashboard), Claude hook auto-setup (merges neohive hooks into `.claude/settings.json` on activate)
 
 ## Debugging and fix attempts
 
