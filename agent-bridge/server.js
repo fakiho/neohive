@@ -1561,6 +1561,8 @@ function toolRegister(name, provider = null, skills = null) {
         checkStuckWorkflowSteps();
         // Stale task detection: warn about tasks in_progress for >30 minutes without update
         checkStaleTasks();
+        // Self-healing: silently reclaim tasks from dead agents, poison-pill at retry 3
+        selfHealingWatchdog();
         // Watchdog: nudge idle agents, reassign stuck work (autonomous mode only)
         watchdogCheck();
       } catch (e) { log.warn("heartbeat loop error:", e.message); }
@@ -4671,6 +4673,86 @@ function checkStaleTasks() {
       log.warn(`Stale task detected: ${task.id} "${task.title}" (${mins}min)`);
     }
   } catch (e) { log.debug('stale task check failed:', e.message); }
+}
+
+// Self-healing watchdog: silently reclaim stale in_progress tasks from dead/idle agents.
+// Runs at most once per 60s (throttled inside the 10s heartbeat loop).
+// retry_count < 3 → strip assignee + reset to pending (next agent picks it up via get_work)
+// retry_count >= 3 → mark blocked_permanent + wake coordinator
+let _lastSelfHealRun = 0;
+function selfHealingWatchdog() {
+  const now = Date.now();
+  if (now - _lastSelfHealRun < 60000) return;
+  _lastSelfHealRun = now;
+
+  try {
+    const tasks = getTasks();
+    const agents = getAgents();
+    const IDLE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+    const POISON_PILL_COUNT = 3;
+
+    let changed = false;
+    const reclaimed = [];
+    const poisoned = [];
+
+    for (const task of tasks) {
+      if (task.status !== 'in_progress') continue;
+      if (!task.assignee) continue;
+
+      const assignee = agents[task.assignee];
+      // Only reclaim if the assignee is definitively dead (PID gone + heartbeat stale)
+      if (assignee && isPidAlive(assignee.pid, assignee.last_activity)) continue;
+      // Also reclaim if assignee entry missing entirely (agent never re-registered)
+      const lastActivity = assignee ? new Date(assignee.last_activity).getTime() : 0;
+      if (assignee && (now - lastActivity) < IDLE_THRESHOLD_MS) continue;
+
+      const retryCount = (task.retry_count || 0) + 1;
+      task.retry_count = retryCount;
+      task.updated_at = new Date().toISOString();
+
+      if (retryCount >= POISON_PILL_COUNT) {
+        // Poison pill: task has been abandoned too many times — escalate
+        task.status = 'blocked_permanent';
+        task.blocked_reason = `Abandoned ${retryCount} times by agents (last: ${task.assignee}). Needs coordinator intervention.`;
+        task.assignee = null;
+        poisoned.push(task);
+      } else {
+        // Normal self-heal: reset to pending for next available agent
+        const prevAssignee = task.assignee;
+        task.assignee = null;
+        task.status = 'pending';
+        reclaimed.push({ task, prevAssignee });
+      }
+      changed = true;
+    }
+
+    if (!changed) return;
+    saveTasks(tasks);
+
+    // Notify team about reclaimed tasks (one broadcast)
+    if (reclaimed.length > 0) {
+      const names = reclaimed.map(r => `"${r.task.title}" (was: ${r.prevAssignee})`).join(', ');
+      broadcastSystemMessage(`[WATCHDOG] ${reclaimed.length} stale task(s) reset to pending: ${names}. Call get_work() to claim.`);
+      log.info(`[self-heal] Reclaimed ${reclaimed.length} task(s): ${reclaimed.map(r => r.task.id).join(', ')}`);
+    }
+
+    // Wake coordinator for poison-pill tasks
+    if (poisoned.length > 0) {
+      const profiles = readJsonFileSafe(PROFILES_FILE, {});
+      const lead = Object.entries(agents).find(([n, a]) =>
+        isPidAlive(a.pid, a.last_activity) && profiles[n] && (profiles[n].role === 'lead' || profiles[n].role === 'coordinator')
+      );
+      const leadName = lead ? lead[0] : null;
+      const taskList = poisoned.map(t => `"${t.title}" (${t.id})`).join(', ');
+      const msg = `[WATCHDOG] POISON PILL: ${poisoned.length} task(s) abandoned ${POISON_PILL_COUNT}+ times and marked blocked_permanent: ${taskList}. Manual intervention required.`;
+      if (leadName) {
+        sendSystemMessage(leadName, msg);
+      } else {
+        broadcastSystemMessage(msg);
+      }
+      log.warn(`[self-heal] Poison pill tasks: ${poisoned.map(t => t.id).join(', ')}`);
+    }
+  } catch (e) { log.warn('[self-heal] watchdog error:', e.message); }
 }
 
 function watchdogCheck() {
