@@ -81,6 +81,32 @@
         }
       ]
     },
+    "chatParticipants": [
+      {
+        "id": "neohive.coordinator",
+        "name": "neohive",
+        "description": "Query agent status, tasks, and messages — or pipe requests to the coordinator",
+        "isSticky": false,
+        "commands": [
+          {
+            "name": "status",
+            "description": "Show online agents and their status"
+          },
+          {
+            "name": "who",
+            "description": "List all registered agents and their roles"
+          },
+          {
+            "name": "tasks",
+            "description": "List active tasks (pending, in_progress, in_review)"
+          },
+          {
+            "name": "messages",
+            "description": "Show the last 10 messages from the team"
+          }
+        ]
+      }
+    ],
     "configuration": {
       "title": "Neohive",
       "properties": {
