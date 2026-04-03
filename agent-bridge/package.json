@@ -28,6 +28,7 @@
     "tools/",
     "templates/",
     "conversation-templates/",
+    "logo.svg",
     "logo.png",
     "LICENSE",
     "SECURITY.md",
