@@ -32,7 +32,6 @@
 ### Breaking — Full Rebrand & Modularization
 
 - **Renamed** — data directory migrated from `.agent-bridge/` → `.neohive/`; startup auto-migrates legacy directories
-- **3D Hub removed** — Three.js virtual office, avatars, world builder, jukebox, and all 3D engine code removed; package size drops ~95%
 - **Modularization** — core business logic extracted to `lib/` modules (`messaging`, `file-io`, `config`, `hooks`, `resolve-server-data-dir`, etc.)
 - **Security hardening** — comprehensive audit: path traversal, XSS, CSRF, symlink, injection, and DoS fixes across dashboard and MCP server
 - **New README** — professional redesign with badges, feature showcase, architecture diagram, and visual hierarchy
@@ -116,10 +115,8 @@
 ### Fixed
 
 - 11 full-file read optimizations (tailReadJsonl)
-- AI City environment removed from 3D Hub
 - Test script updated (referenced deleted files)
 - Node engine requirement updated to >=18.0.0
-- Three.js updated to 0.175.0
 - Tool count console message corrected (66 tools)
 - SSE heartbeat `.unref()` added
 - Monitor workspace log capped with safe fallback
@@ -127,7 +124,7 @@
 
 ## [5.1.0] - 2026-03-19
 
-### Major — True Autonomy Engine + Team Intelligence + Scale to 100
+### Major — True Autonomy Engine + Team Intelligence + Scale to 100 Agents
 
 Built by a 4-agent team (Backend, Protocol, Tester, Coordinator) + Advisor agent, working autonomously.
 
@@ -185,39 +182,16 @@ Built by a 4-agent team (Backend, Protocol, Tester, Coordinator) + Advisor agent
 
 ## [4.3.0] - 2026-03-17
 
-### Major — 3D Hub Game World, World Builder, Jukebox
+### Major — Agent Respawn, Team Automation
 
 Built by a 5-agent team (Architect, Builder, Tester, Optimizer, Protocol) working in parallel.
 
-### Added — 3D Hub Game Features
-- **World Builder** — Press B in player mode to open builder panel. 16 placeable assets across 5 categories (structural, furniture, decor, tech, lighting). Grid snap, ghost preview, R to rotate, right-click delete, Ctrl+Z undo. Draggable panel, works in fullscreen.
-- **Jukebox** — Wurlitzer 1015-style jukebox in bar area with neon glow animation. Press E to interact. 4 playlist selector with YouTube popup player. Music persists while exploring.
-- **Minimap** — 140px radar overlay showing agent positions (color-coded by status) and player location. Only visible in fullscreen mode.
-- **Controls HUD** — Press H to toggle keybind reference panel. Auto-shows for 4 seconds on world entry.
-- **Fullscreen** — Dashboard fullscreen button now fullscreens only the 3D Hub (game mode), not the entire page.
-
-### Added — Character Intelligence
-- **Emotion system** — 11 emotion presets (happy, frustrated, thinking, excited, surprised, etc.) with auto-triggers from message content. Temporary face expression changes with auto-revert.
-- **Social visits** — Idle agents randomly walk to other agents' desks to chat (max 2 concurrent walks).
-- **Glance reactions** — Sitting agents turn heads toward speakers when messages are sent.
-- **Head nods** — Periodic nod animation when being visited by another agent.
-- **Auto coffee break** — Sleeping agents walk to rest area, return to desk when active again.
-- **Non-blocking input overlay** — Replaced browser prompt() dialogs with styled HTML overlay for click commands.
-
 ### Added — Dashboard
-- **Respawn button** — One-click respawn for dead agents. Generates resume prompt from recovery snapshot + profile + tasks + recent history.
-- **Respawn API** — `GET /api/agents/:name/respawn-prompt` endpoint with full context generation.
-- **World Builder API** — `GET /api/world-layout` + `POST /api/world-save` for persistent world placements.
-- **3D-only fullscreen** — Fullscreen targets 3D container when on 3D Hub tab.
+- **Respawn button** — One-click respawn for dead agents. Generates a resume prompt from the agent's recovery snapshot, profile, active tasks, and recent message history.
+- **Respawn API** — `GET /api/agents/:name/respawn-prompt` endpoint returns full context for agent resurrection.
 
 ### Fixed
-- **Manager chair spawn** — Stand-up now places player in front of desk (toward door), preventing wall collision.
-- **CSRF on 3D Hub** — Added X-LTT-Request header to all office module POST requests (builder save, command menu actions).
 - **Respawn endpoint validation** — Agent name validated (alphanumeric, max 20 chars) to prevent path traversal.
-- **Builder lazy-load** — Dynamic import() with silent failure prevents builder issues from breaking 3D Hub.
-- **Jukebox popup orphan** — Module-scoped reference survives overlay dismiss/reopen cycles.
-- **Builder drag listener leak** — Stored refs removed in hidePanel().
-- **Jukebox prompt cleanup** — dismissJukebox() called in office3dStop().
 
 ### Security
 - npm audit: 0 vulnerabilities
@@ -268,16 +242,6 @@ Built by a 4-agent team (Architect, Tester, Protocol, Builder) working in parall
 
 ### Fixed
 - **Recovery lock notes** — snapshot correctly labels locked files as `locked_files_released` with note that locks were auto-released.
-
-## [4.0.2] - 2026-03-17
-
-### Fixed
-- 3D Hub empty on fresh installs — bundle Three.js as a proper npm dependency so it resolves from `node_modules` instead of relying on CDN
-
-## [4.0.1] - 2026-03-17
-
-### Fixed
-- 3D Hub empty on fresh installs — load Three.js from CDN when `node_modules` is unavailable (interim fix before v4.0.2 bundled it properly)
 
 ## [4.0.0] - 2026-03-17
 
@@ -390,11 +354,6 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 - Own messages are auto-consumed on sight
 - Own messages still visible in `context` array for reference
 
-### Added — 3D World: Player Mode & Improvements
-- **Player character** — users can spawn as a controllable character in the 3D Hub
-- **Spectator camera improvements** — refined controls and speed
-- **Environment updates** — campus environment refinements
-
 ## [3.7.0] - 2026-03-16
 
 ### Added — Agent Ecosystem (20 new tools, 52 total)
@@ -420,8 +379,6 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 - **Auto-reputation tracking** — global hook tracks every action (messages, tasks, reviews, decisions, KB writes) without manual calls
 
 ### Fixed
-- **Monitor screens stay red** when agent stops listening — persistent color state instead of 300ms flash
-- **"NOT LISTENING" warning** shown prominently on desk monitor canvas
 - **Status color logic** — green = listening, red = active but not listening, yellow = sleeping, dim = dead
 
 ## [3.6.2] - 2026-03-16
@@ -433,18 +390,6 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 - **Agent status in batch** — `listen_group` returns `agents_status` map showing who is `listening` vs `working`
 - **listen_group retry** — timeout now returns `retry: true` with explicit instruction to call again immediately
 - **next_action field** — successful `listen_group` response tells agent to call `listen_group()` again after responding
-- **Ctrl key removed from camera** — no longer moves camera down (Q/E only)
-
-### Added — 3D World: Campus Environment & Navigation
-- **Campus environment** — new outdoor environment option with buildings, paths, green spaces
-- **Navigation system** — pathfinding for agents to walk around obstacles instead of through walls
-- **Door animations** — manager office door slides open when agents approach, closes when they leave
-- **Roof visibility** — roof hides when camera is above ceiling height
-
-## [3.6.1] - 2026-03-16
-
-### Fixed
-- **3D Hub black screen on page load** — the office module loads asynchronously, but the initial `switchView('office')` fired before `office3dStart` was defined. Added auto-start at end of module so the 3D Hub loads immediately on refresh.
 
 ## [3.6.0] - 2026-03-16
 
@@ -464,31 +409,6 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 - **Dashboard Docs tab** — in-dashboard documentation with full tool reference, managed mode guide, architecture, version history
 - **Dashboard managed mode badge** — header shows current phase and floor status when managed mode is active
 
-### Added — 3D World Improvements
-
-- **Spectator camera** — free-fly WASD + mouse camera replacing OrbitControls, no distance limits, Shift for fast movement, Q/E up/down
-- **6 new hairstyles** — curly, afro, bun, braids, mohawk, wavy
-- **6 new eye styles** — surprised, angry, happy, wink, confident, tired
-- **5 new mouth styles** — grin, frown, smirk, tongue, whistle
-- **6 outfit types** — hoodie, suit, dress, lab coat, vest, jacket with color customization
-- **3 body types** — default, stocky, slim (scale multipliers on torso/legs/arms)
-- **5 gesture animations** — wave, think, point, celebrate, stretch with idle gesture system
-- **New furniture** — bookshelf (random colored books), wall TV (animated dashboard with agent stats, scrolling ticker, clock), arcade machine (cabinet + screen + joystick + buttons), floor lamp (warm point light), area rug
-- **Agent behavior** — realistic conversation distance (1.8m), listener turns toward speaker, broadcast triggers wave gesture, task completion triggers celebrate
-- **3D Hub** — renamed from "Office", now default tab on page load
-- **Speed slider** — camera speed control in toolbar (1-20)
-
-### Added — 3D Virtual Office (v1 foundation from previous session)
-
-- **Modular 3D engine** — 14 ES modules under `office/`
-- **Expanded office** — 28x16 floor with right wing, dividing wall, LOUNGE archway
-- **Dressing room** — mirror, raised platform, privacy partitions, coat hooks
-- **Rest area** — beanbags, circular rug, side table, warm ambient lighting
-- **Click-to-command** — Dressing Room, Go Rest, Back to Work, Edit Profile
-- **Character designer** — 5-tab panel with live 3D rotating preview
-- **Accessory system** — glasses, headwear, neckwear with color customization
-- **Mod system infrastructure** — GLB/GLTF pipeline with validation
-
 ### Security
 - **Config file lock** — `config.json` read-modify-write operations now use file-based locking (same pattern as `agents.json`)
 - **Reserved name blocklist** — `__system__`, `__all__`, `__open__`, `__close__`, `system` cannot be registered as agent names
@@ -496,12 +416,6 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 - **Floor enforcement on all message paths** — `handoff` and `share_file` now enforce managed mode floor control
 - **Branch-aware system messages** — floor/phase notifications sent to recipient's branch, not sender's
 - **Phase history cap** — limited to 50 entries to prevent config.json bloat
-- `/office/*` and `/mods/*` static routes with path traversal protection
-- Mod file type allowlist blocks all executable formats
-- GLB magic bytes validation (server + client)
-
-### Removed
-- ~1,100 lines of dead 2D isometric office code
 
 ## [3.5.0] - 2026-03-15
 
