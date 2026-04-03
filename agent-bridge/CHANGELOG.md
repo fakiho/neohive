@@ -7,6 +7,37 @@
 - **MCP data directory** — When the MCP process starts with cwd outside the repo (e.g. Cursor home) and no `NEOHIVE_DATA_DIR`, resolve the hive from repo `.cursor/mcp.json` / sibling config (`lib/resolve-server-data-dir.js`); `lib/config.js` uses the same root so agents and dashboard agree.
 - **Dashboard `projects.json`** — Only rewrite the projects file when the canonical list differs from on-disk data (`pack(nonRedundant) !== pack(raw)`), not on every load when duplicates or default-hive rows were only present in the normalized pass-through list.
 
+## [6.0.2] - 2026-04-02
+
+### Added
+- **Human agent mode** — users can join the team as a human agent via the dashboard
+- **Agent card grid** — overview page shows agent cards with status, active tasks, and quick actions
+- **Checkpoint system** — save and restore agent state snapshots for resumable work
+- **Agent approval flow** — tasks can require explicit agent approval before advancing
+
+### Fixed
+- Message loss on SSE reconnect
+- Token hijack race condition in `listen()`
+- Spinlock in file-based task claiming
+- Silent errors in workflow advancement
+- Messages nav item flickering (switchView scope was too broad)
+- Version strings synced to v6.0.0 across all files
+
+### Changed
+- Dashboard full visual rebrand — amber/gold NeoHive identity with icon rail, overview page, agent bar, and toast notifications
+- Full layout redesign: icon rail sidebar, overview landing page, agent status bar
+
+## [6.0.0] - 2026-04-02
+
+### Breaking — Full Rebrand & Modularization
+
+- **Renamed** — data directory migrated from `.agent-bridge/` → `.neohive/`; startup auto-migrates legacy directories
+- **3D Hub removed** — Three.js virtual office, avatars, world builder, jukebox, and all 3D engine code removed; package size drops ~95%
+- **Modularization** — core business logic extracted to `lib/` modules (`messaging`, `file-io`, `config`, `hooks`, `resolve-server-data-dir`, etc.)
+- **Security hardening** — comprehensive audit: path traversal, XSS, CSRF, symlink, injection, and DoS fixes across dashboard and MCP server
+- **New README** — professional redesign with badges, feature showcase, architecture diagram, and visual hierarchy
+- **`.agent-bridge/` auto-migration** — startup detects and renames legacy data directory with zero data loss
+
 ## [5.3.0] - 2026-03-20
 
 ### Listen System Overhaul — Zero Token Waste
@@ -18,6 +49,37 @@
 - **Managed mode task tracking** — manager creates tasks/workflows, agents update status as they work (Tasks/Plan tabs stay current)
 - **check_messages warns against loops** — response includes `action_required` telling agents to use `listen()` instead
 - **listen_codex restricted** — description explicitly says "ONLY for Codex CLI, Claude/Gemini must use listen()"
+
+## [5.2.6] - 2026-03-20
+
+### Changed
+- Managed mode guide updated — agents now track active tasks with `update_task` and advance workflows with `advance_workflow` as they work, keeping the Tasks/Plan tabs current in real time
+
+## [5.2.5] - 2026-03-20
+
+### Fixed
+- Token waste — `check_messages` response now includes `action_required` field warning agents to use `listen()` instead of polling loops
+- `listen_codex` description explicitly restricted to Codex CLI only; Claude and Gemini agents must use `listen()`
+
+## [5.2.4] - 2026-03-20
+
+### Fixed
+- All listen instruction strings updated to be mode-aware: managed mode instructs `listen()`, group mode instructs `listen_group()`, all modes say "NEVER use sleep()"
+
+## [5.2.3] - 2026-03-20
+
+### Fixed
+- Mode-aware listen instructions — each conversation mode now returns the correct listen command name in its guide
+
+## [5.2.2] - 2026-03-20
+
+### Fixed
+- Managed mode guide corrected — agents should call `listen()` (not `listen_group()`) between turns in managed mode
+
+## [5.2.1] - 2026-03-20
+
+### Fixed
+- Managed mode guide corrected — agents should use `listen_group()` instead of sleep loops between turns
 
 ## [5.2.0] - 2026-03-20
 
@@ -207,6 +269,16 @@ Built by a 4-agent team (Architect, Tester, Protocol, Builder) working in parall
 ### Fixed
 - **Recovery lock notes** — snapshot correctly labels locked files as `locked_files_released` with note that locks were auto-released.
 
+## [4.0.2] - 2026-03-17
+
+### Fixed
+- 3D Hub empty on fresh installs — bundle Three.js as a proper npm dependency so it resolves from `node_modules` instead of relying on CDN
+
+## [4.0.1] - 2026-03-17
+
+### Fixed
+- 3D Hub empty on fresh installs — load Three.js from CDN when `node_modules` is unavailable (interim fix before v4.0.2 bundled it properly)
+
 ## [4.0.0] - 2026-03-17
 
 ### Major Release — 10-Agent Free Group Mode
@@ -240,6 +312,11 @@ Massive scaling overhaul designed, implemented, and audited by a 3-agent team (A
 - **Collection caps** — tasks (1000), workflows (500), votes (500), reviews (500), dependencies (1000), branches (100), channels (100). Prevents DoS via unbounded growth.
 - **Input type validation** — `reply_to` and `channel` parameters type-checked as strings in `send_message`.
 - **Channel name validation fix** — error message corrected from "1-30 chars" to "1-20 chars" to match `sanitizeName()`.
+
+## [3.10.1] - 2026-03-17
+
+### Added
+- **Stuck detector** — `listen_group()` detects when an agent has sent the same error or message pattern 3 times in a row and injects targeted hints to break the loop
 
 ## [3.10.0] - 2026-03-17
 
@@ -572,6 +649,14 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 - Copy-to-clipboard double-escaped HTML entities in template prompts
 - Duplicate deleteMessage function shadowing
 
+## [3.3.3] - 2026-03-15
+
+### Fixed
+- iOS dashboard crash — `Notification` API unavailable on iOS Safari; wrapped in availability check
+- Mobile UI overhaul — layout, font sizes, and button targets reworked for phone-sized screens
+- Phone sync — wait for `loadProjects()` to complete before first poll; auto-select project when only one is registered
+- LAN mode now persists across dashboard restarts (stored in `.lan-token` file)
+
 ## [3.3.2] - 2026-03-14
 
 ### Changed
@@ -580,6 +665,71 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 - Added CHANGELOG.md to published npm package
 - Added .npmignore for cleaner package distribution
 - Version synced across all files (server, CLI, dashboard)
+
+## [3.3.1] - 2026-03-14
+
+### Added
+- SECURITY.md with vulnerability disclosure policy
+- CHANGELOG.md added to published npm package
+- Version strings synced across server, CLI, dashboard, and package.json
+
+## [3.3.0] - 2026-03-14
+
+### Security — Deep Hardening
+- **Sandbox hardening** — eval and Function constructor blocked in message rendering context
+- **Anti-impersonation** — agents cannot register names that shadow existing live agents
+- **Rate limiting** — per-agent send rate limiting (10 messages/10s) to prevent broadcast storms
+- **Input sanitization** — agent name, message content, and task fields validated and length-capped on all endpoints
+- Discord invite link added to README and docs
+
+## [3.2.3] - 2026-03-14
+
+### Fixed
+- README added to npm package (`files` array in package.json)
+
+## [3.2.2] - 2026-03-14
+
+### Security
+- CSRF protection added to all mutating dashboard endpoints
+- XSS fixes in message rendering and export
+- Symlink traversal prevention in file-serving routes
+- Command injection guards on reset and init paths
+- DoS mitigation: request body size limits, JSON parse error handling
+
+## [3.2.1] - 2026-03-14
+
+### Changed
+- MCP SDK updated to 1.27.1
+- Removed unused `exec` import from server.js
+
+## [3.2.0] - 2026-03-14
+
+### Added
+- Documentation site scaffolding
+- LICENSE file (MIT)
+- MCP SDK version pinned to prevent breaking changes on install
+
+### Fixed
+- Reset crash when `.neohive/` directory contained unexpected files
+- Version strings updated across all files
+
+## [3.1.1] - 2026-03-14
+
+### Added
+- **Phone access modal** — dashboard shows QR code and LAN URL for mobile access
+- **LAN toggle** — enable/disable LAN mode without restarting the server
+- **Project auto-init** — adding a folder via the dashboard now initializes it if no `.neohive/` exists
+
+### Fixed
+- Avatar undefined in messages — `getMsgAvatar()` moved before conditional rendering
+- Phone URL now includes the active project for automatic sync on mobile open
+- Auto-switch to newly added project after adding via dashboard
+
+## [3.1.0] - 2026-03-14
+
+### Fixed
+- LAN IP detection now prefers real interface addresses over link-local (`169.254.x.x`) and loopback addresses
+- LAN toggle no longer kills the dashboard process (use `handle.close()` not `server.close()`)
 
 ## [3.0.0] - 2026-03-14
 
@@ -649,6 +799,21 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 - Registration guard on `reset` tool
 - Removed absolute file paths from share_file responses
 
+## [2.4.0] - 2026-03-14
+
+### Added
+- Agent metrics panel — per-agent message counts, average response time, and activity sparklines
+- Shareable HTML export — `/api/export` endpoint generates a self-contained replay file
+- Export dropdown (HTML + Markdown formats)
+- Stats panel in dashboard sidebar
+
+## [2.3.1] - 2026-03-14
+
+### Added
+- Context hints — agents warned when conversation exceeds 50 messages
+- Auto-compact — `messages.jsonl` automatically compacted when exceeding 500 lines
+- Project auto-discover — dashboard scans sibling directories and suggests projects to add
+
 ## [2.3.0] - 2026-03-14
 
 ### Added
@@ -661,6 +826,14 @@ Redesigned from the ground up based on 3-agent collaborative testing and design 
 - Graceful SSE fallback to polling
 - Handoff message rendering (purple banner)
 - File share message rendering (file icon + size)
+
+## [2.2.0] - 2026-03-14
+
+### Added
+- Agent templates — 4 built-in conversation starters (pair, team, review, debate)
+- Conversation summary tool (`get_summary`) for generating recaps
+- Auto-archive — conversations archived automatically before reset
+- Dashboard: "New Conversation" flow
 
 ## [2.1.0] - 2026-03-14
 
