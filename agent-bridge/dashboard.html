@@ -2580,6 +2580,7 @@
   .kanban-title.in_review { background: rgba(168,85,247,0.15); color: var(--purple,#a855f7); }
   .kanban-title.done { background: var(--green-dim); color: var(--green); }
   .kanban-title.blocked { background: var(--red-dim); color: var(--red); }
+  .kanban-title.blocked_permanent { background: var(--red); color: #fff; }
 
   .kanban-count {
     font-size: 10px;
@@ -7195,7 +7196,7 @@ function renderTasks() {
   if (tasksHash === _lastTasksHash) return;
   _lastTasksHash = tasksHash;
 
-  var groups = { pending: [], in_progress: [], in_review: [], done: [], blocked: [] };
+  var groups = { pending: [], in_progress: [], in_review: [], done: [], blocked: [], blocked_permanent: [] };
   for (var i = 0; i < cachedTasks.length; i++) {
     var t = cachedTasks[i];
     var status = t.status || 'pending';
@@ -7208,7 +7209,8 @@ function renderTasks() {
     { key: 'in_progress', label: 'In Progress' },
     { key: 'in_review', label: 'In Review' },
     { key: 'done', label: 'Done' },
-    { key: 'blocked', label: 'Blocked' }
+    { key: 'blocked', label: 'Blocked' },
+    { key: 'blocked_permanent', label: '⛔ Needs Intervention' }
   ];
 
   var html = '<div class="kanban">';
@@ -7247,6 +7249,7 @@ function buildTaskCard(t) {
 
   var badgesHtml = '';
   if (t.escalated_at) badgesHtml += '<span style="font-size:9px;padding:1px 5px;border-radius:6px;font-weight:600;background:var(--red-dim);color:var(--red)">ESCALATED</span>';
+  if (t.retry_count > 0) badgesHtml += '<span style="font-size:9px;padding:1px 5px;border-radius:6px;font-weight:600;background:var(--yellow)20;color:var(--yellow)" title="Reclaimed ' + t.retry_count + ' time(s) by watchdog">↺' + t.retry_count + '</span>';
   if (t.channel) badgesHtml += '<span class="badge-channel" onclick="filterChannel(\'' + escapeHtml(t.channel) + '\')">#' + escapeHtml(t.channel) + '</span>';
 
   var notesHtml = '';
@@ -7255,9 +7258,14 @@ function buildTaskCard(t) {
     notesHtml = '<div style="font-size:10px;color:var(--text-muted);margin-top:4px;font-style:italic">' + escapeHtml(lastNote.by) + ': ' + escapeHtml((lastNote.text || '').substring(0, 80)) + '</div>';
   }
 
+  var blockedReasonHtml = (t.status === 'blocked_permanent' && t.blocked_reason)
+    ? '<div style="font-size:10px;color:var(--red);margin-top:4px;font-style:italic">' + escapeHtml(t.blocked_reason) + '</div>'
+    : '';
+
   return '<div class="task-card" draggable="true" data-task-id="' + t.id + '" ondragstart="onTaskDragStart(event)" ondragend="onTaskDragEnd(event)" onclick="showTaskDetail(\'' + t.id + '\')">' +
     '<div class="task-title">' + escapeHtml(t.title || 'Untitled') + (badgesHtml ? ' ' + badgesHtml : '') + '</div>' +
     (t.description ? '<div class="task-desc">' + escapeHtml(t.description) + '</div>' : '') +
+    blockedReasonHtml +
     notesHtml +
     '<div class="task-footer">' +
       assigneeHtml +
@@ -7284,7 +7292,7 @@ function showTaskDetail(taskId) {
   if (!task) return;
   var el = document.getElementById('task-detail-content');
   if (!el) return;
-  var statusColors = { pending: 'var(--yellow)', in_progress: 'var(--accent)', in_review: 'var(--purple)', done: 'var(--green)', blocked: 'var(--red)' };
+  var statusColors = { pending: 'var(--yellow)', in_progress: 'var(--accent)', in_review: 'var(--purple)', done: 'var(--green)', blocked: 'var(--red)', blocked_permanent: 'var(--red)' };
   var statusColor = statusColors[task.status] || 'var(--text-muted)';
 
   var html = '';
@@ -7509,7 +7517,7 @@ function renderStats(data, tasks, workflows) {
     var ts = tasks[ti].status;
     if (ts === 'done') tasksDone++;
     else if (ts === 'in_progress' || ts === 'in_review') tasksActive++;
-    else if (ts === 'blocked') tasksBlocked++;
+    else if (ts === 'blocked' || ts === 'blocked_permanent') tasksBlocked++;
     else tasksPending++;
   }
 
