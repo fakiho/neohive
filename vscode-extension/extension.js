@@ -68,10 +68,10 @@ function getNeohiveDataDir() {
 
 function writeIdeActivityFile(dataDir, agentName, fields) {
   if (!dataDir || !agentName) return;
+  // Only write if .neohive/ already exists — don't auto-create it in
+  // workspaces that have never run neohive.
+  if (!fs.existsSync(dataDir)) return;
   try {
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-    }
     const f = path.join(dataDir, `ide-activity-${agentName}.json`);
     const payload = Object.assign({}, fields, { timestamp: new Date().toISOString() });
     fs.writeFileSync(f, JSON.stringify(payload) + '\n', 'utf8');
@@ -102,9 +102,9 @@ function createIdeLivenessBridge(context) {
   }
 
   function snapshotConfig() {
-    const agentName = sanitizeAgentName(
-      vscode.workspace.getConfiguration('neohive').get('agentName', '')
-    );
+    // Use effective name (configured → auto-detected → OS username fallback)
+    // so liveness tracking never silently fails just because agentName isn't set.
+    const agentName = getEffectiveAgentName();
     const dataDir = getNeohiveDataDir();
     return { agentName, dataDir };
   }
@@ -863,6 +863,178 @@ async function checkAgentNameConfigured() {
   }
 }
 
+// --- @neohive Chat Participant ---
+
+/**
+ * Register the @neohive chat participant.
+ * Gracefully no-ops on VS Code versions that don't support the Chat API (<1.90).
+ */
+function registerNeohiveChatParticipant(context) {
+  if (!vscode.chat || typeof vscode.chat.createChatParticipant !== 'function') return;
+
+  const participant = vscode.chat.createChatParticipant('neohive.coordinator', handleNeohiveChatRequest);
+  participant.iconPath = new vscode.ThemeIcon('symbol-misc');
+  context.subscriptions.push(participant);
+}
+
+async function handleNeohiveChatRequest(request, _context, stream, _token) {
+  const dataDir = getNeohiveDataDir();
+  const command = request.command;
+
+  // ── /status — online agents ────────────────────────────────────────────────
+  if (command === 'status') {
+    const agentsFile = dataDir && path.join(dataDir, 'agents.json');
+    if (!agentsFile || !fs.existsSync(agentsFile)) {
+      stream.markdown('⚠️ No `.neohive` directory or agents found. Is the server running?');
+      return { metadata: { command } };
+    }
+    const raw = JSON.parse(fs.readFileSync(agentsFile, 'utf8'));
+    const agents = Object.entries(raw).filter(([n]) => n !== '__system__' && n !== 'Dashboard');
+    if (!agents.length) {
+      stream.markdown('No agents currently registered.');
+      return { metadata: { command } };
+    }
+    const rows = agents.map(([name, info]) => {
+      const status = info.alive ? '🟢 online' : '🔴 offline';
+      const ts = info.last_activity ? new Date(info.last_activity).toLocaleTimeString() : '—';
+      return `| **${name}** | ${status} | ${ts} |`;
+    }).join('\n');
+    stream.markdown(`## Neohive Agent Status\n\n| Agent | Status | Last seen |\n|---|---|---|\n${rows}`);
+    return { metadata: { command } };
+  }
+
+  // ── /who — team roster with roles ─────────────────────────────────────────
+  if (command === 'who') {
+    const agentsFile = dataDir && path.join(dataDir, 'agents.json');
+    const profilesFile = dataDir && path.join(dataDir, 'profiles.json');
+    if (!agentsFile || !fs.existsSync(agentsFile)) {
+      stream.markdown('⚠️ No agents found.');
+      return { metadata: { command } };
+    }
+    const agents = JSON.parse(fs.readFileSync(agentsFile, 'utf8'));
+    const profiles = (profilesFile && fs.existsSync(profilesFile))
+      ? JSON.parse(fs.readFileSync(profilesFile, 'utf8')) : {};
+    const names = Object.keys(agents).filter(n => n !== '__system__' && n !== 'Dashboard');
+    const rows = names.map(name => {
+      const prof = profiles[name] || {};
+      const role = prof.role || agents[name].role || '—';
+      const provider = agents[name].provider || '—';
+      return `| **${name}** | ${role} | ${provider} |`;
+    }).join('\n');
+    stream.markdown(`## Neohive Team\n\n| Agent | Role | Provider |\n|---|---|---|\n${rows}`);
+    return { metadata: { command } };
+  }
+
+  // ── /tasks — active tasks ──────────────────────────────────────────────────
+  if (command === 'tasks') {
+    const tasksFile = dataDir && path.join(dataDir, 'tasks.json');
+    if (!tasksFile || !fs.existsSync(tasksFile)) {
+      stream.markdown('⚠️ No tasks found.');
+      return { metadata: { command } };
+    }
+    const tasksRaw = JSON.parse(fs.readFileSync(tasksFile, 'utf8'));
+    const taskArr = Array.isArray(tasksRaw) ? tasksRaw : Object.values(tasksRaw);
+    const active = taskArr.filter(t =>
+      t.status === 'pending' || t.status === 'in_progress' || t.status === 'in_review'
+    );
+    if (!active.length) {
+      stream.markdown('✅ No active tasks — all done!');
+      return { metadata: { command } };
+    }
+    const statusIcon = { pending: '⏳', in_progress: '🔄', in_review: '🔍' };
+    const rows = active.map(t => {
+      const icon = statusIcon[t.status] || '';
+      return `| ${t.title || t.id} | ${icon} ${t.status} | ${t.assignee || '—'} |`;
+    }).join('\n');
+    stream.markdown(`## Active Tasks\n\n| Title | Status | Assignee |\n|---|---|---|\n${rows}`);
+    return { metadata: { command } };
+  }
+
+  // ── /messages — last 10 messages ──────────────────────────────────────────
+  if (command === 'messages') {
+    const msgFile = dataDir && path.join(dataDir, 'messages.jsonl');
+    if (!msgFile || !fs.existsSync(msgFile)) {
+      stream.markdown('⚠️ No messages found.');
+      return { metadata: { command } };
+    }
+    const lines = fs.readFileSync(msgFile, 'utf8').trim().split('\n').filter(Boolean);
+    const recent = lines.slice(-10)
+      .map(l => { try { return JSON.parse(l); } catch { return null; } })
+      .filter(Boolean);
+    if (!recent.length) {
+      stream.markdown('No messages yet.');
+      return { metadata: { command } };
+    }
+    const items = recent.map(msg => {
+      const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
+      const from = msg.from || '?';
+      const to = msg.to ? ` → ${msg.to}` : '';
+      const content = (msg.content || '').replace(/\n/g, ' ').slice(0, 120);
+      return `**[${ts}] ${from}${to}:** ${content}`;
+    }).join('\n\n');
+    stream.markdown(`## Recent Messages\n\n${items}`);
+    return { metadata: { command } };
+  }
+
+  // ── catch-all: fire-and-forget pipe to coordinator ────────────────────────
+  const prompt = (request.prompt || '').trim();
+  if (!prompt) {
+    stream.markdown(
+      'Try `@neohive /status`, `/who`, `/tasks`, or `/messages` for local reads.\n\n' +
+      'Or type any message to pipe it to the coordinator.'
+    );
+    return {};
+  }
+
+  stream.markdown('📡 Dispatching request to ClaudeLead...\n\n');
+
+  const payload = JSON.stringify({ from: '__user__', to: 'ClaudeLead', content: prompt });
+  const serverUrl = getServerUrl();
+
+  await new Promise((resolve) => {
+    try {
+      const url = new URL('/api/inject', serverUrl);
+      const isHttps = url.protocol === 'https:';
+      const mod = isHttps ? require('https') : http;
+      const reqOptions = {
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      };
+      const req = mod.request(reqOptions, (res) => {
+        res.resume();
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          stream.markdown('✅ Request queued. Watch the dashboard for the reply, or type `@neohive /messages` in a minute.');
+        } else {
+          stream.markdown(`⚠️ Server returned HTTP ${res.statusCode}. Is the dashboard running?`);
+        }
+        resolve();
+      });
+      req.on('error', () => {
+        stream.markdown('⚠️ Could not reach neohive dashboard. Is it running? (`npx neohive dashboard`)');
+        resolve();
+      });
+      req.setTimeout(5000, () => {
+        req.destroy();
+        stream.markdown('⚠️ Request timed out. Is the neohive dashboard running?');
+        resolve();
+      });
+      req.write(payload);
+      req.end();
+    } catch {
+      stream.markdown('⚠️ Could not reach neohive dashboard. Is it running? (`npx neohive dashboard`)');
+      resolve();
+    }
+  });
+
+  return {};
+}
+
 // --- Claude Hooks Auto-Setup ---
 
 /**
@@ -1030,6 +1202,9 @@ function activate(context) {
 
   // Auto-configure Claude Code hooks on every activate (idempotent merge)
   setupClaudeHooks();
+
+  // @neohive chat participant (no-ops gracefully on VS Code < 1.90)
+  registerNeohiveChatParticipant(context);
 
   checkMcpOnActivate();
 
