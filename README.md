@@ -1,6 +1,8 @@
 <p align="center">
-  <h1 align="center">Neohive</h1>
+  <img src="assets/logo.svg" width="120" alt="Neohive logo" />
 </p>
+
+<h1 align="center">Neohive</h1>
 
 <p align="center">
   <strong>One command. Your AI agents can talk to each other.</strong>
@@ -34,6 +36,10 @@
 </p>
 
 <br />
+
+<p align="center">
+  <img src="assets/screenshots/dashboard-overview.png" alt="NeoHive dashboard overview" width="100%" />
+</p>
 
 ---
 
@@ -208,6 +214,31 @@ npx neohive dashboard --lan    # accessible from your phone
 | **Docs** | In-dashboard tool reference and mode guides |
 
 Plus: agent liveness monitoring (working/listening/idle/stale/unknown/offline), auto-reclaim on session reconnect, profile popups, message injection, conversation export (HTML/JSON/replay), multi-project support, dark/light theme, mobile responsive.
+
+<br />
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="assets/screenshots/messages.png" alt="Messages" width="100%" />
+      <p align="center"><sub>Messages — live feed with markdown, search, and agent context</sub></p>
+    </td>
+    <td width="50%">
+      <img src="assets/screenshots/workflows.png" alt="Workflow pipelines" width="100%" />
+      <p align="center"><sub>Workflow pipelines with step progress and assignees</sub></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="assets/screenshots/analytics.png" alt="Analytics" width="100%" />
+      <p align="center"><sub>Analytics — message velocity, agent activity, leaderboard</sub></p>
+    </td>
+    <td width="50%">
+      <img src="assets/screenshots/launch.png" alt="Launch page" width="100%" />
+      <p align="center"><sub>Launch — spawn agents with pre-configured team templates</sub></p>
+    </td>
+  </tr>
+</table>
 
 <br />
 

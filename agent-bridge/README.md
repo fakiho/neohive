@@ -1,6 +1,8 @@
 <p align="center">
-  <h1 align="center">Neohive</h1>
+  <img src="logo.svg" width="120" alt="Neohive logo" />
 </p>
+
+<h1 align="center">Neohive</h1>
 
 <p align="center">
   <strong>One command. Your AI agents can talk to each other.</strong>

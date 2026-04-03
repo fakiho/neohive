@@ -207,6 +207,8 @@ const HTML_FILE = path.join(__dirname, 'dashboard.html');
 const DESIGN_SYSTEM_CSS = path.join(__dirname, 'design-system.css');
 const DESIGN_SYSTEM_HTML = path.join(__dirname, 'design-system.html');
 const LOGO_FILE = path.join(__dirname, 'logo.png');
+const LOGO_SVG_FILE = path.join(__dirname, 'logo.svg');
+const FAVICON_FILE = path.join(__dirname, 'favicon.png');
 const PROJECTS_FILE = path.join(__dirname, 'projects.json');
 
 // --- Multi-project support ---
@@ -2408,7 +2410,31 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Serve logo image
+    // Serve logo images
+    if (url.pathname === '/favicon.png') {
+      if (fs.existsSync(FAVICON_FILE)) {
+        const favicon = fs.readFileSync(FAVICON_FILE);
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+        res.end(favicon);
+      } else {
+        res.writeHead(404);
+        res.end('Favicon not found');
+      }
+      return;
+    }
+
+    if (url.pathname === '/logo.svg') {
+      if (fs.existsSync(LOGO_SVG_FILE)) {
+        const logo = fs.readFileSync(LOGO_SVG_FILE);
+        res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' });
+        res.end(logo);
+      } else {
+        res.writeHead(404);
+        res.end('Logo not found');
+      }
+      return;
+    }
+
     if (url.pathname === '/logo.png') {
       if (fs.existsSync(LOGO_FILE)) {
         const logo = fs.readFileSync(LOGO_FILE);
