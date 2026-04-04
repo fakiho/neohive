@@ -206,7 +206,7 @@ if (!fs.existsSync(DEFAULT_DATA_DIR) && fs.existsSync(_legacyDir)) {
 const HTML_FILE = path.join(__dirname, 'dashboard.html');
 const DESIGN_SYSTEM_CSS = path.join(__dirname, 'design-system.css');
 const DESIGN_SYSTEM_HTML = path.join(__dirname, 'design-system.html');
-const LOGO_FILE = path.join(__dirname, 'logo.png');
+const LOGO_FILE = path.join(__dirname, 'logo.svg');
 const LOGO_SVG_FILE = path.join(__dirname, 'logo.svg');
 const FAVICON_FILE = path.join(__dirname, 'favicon.png');
 const PROJECTS_FILE = path.join(__dirname, 'projects.json');
@@ -2438,7 +2438,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/logo.png') {
       if (fs.existsSync(LOGO_FILE)) {
         const logo = fs.readFileSync(LOGO_FILE);
-        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+        res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' });
         res.end(logo);
       } else {
         res.writeHead(404);
