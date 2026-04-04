@@ -1,5 +1,47 @@
 # Changelog
 
+## [6.1.0] - 2026-04-04
+
+### Added
+
+- **Modular tools architecture** — server-side tools split into `agent-bridge/tools/` directory for maintainability; each tool file is independently loaded at startup
+- **Terminal bridge** — `terminal-bridge.js` streams live terminal output to the dashboard with lazy-loaded xterm.js and per-agent isolation; agent status pills show real-time session state
+- **Agent liveness detection v2** — deterministic online/offline/stale/unknown states with heartbeat epoch tracking; dead seats are auto-reclaimed on `register()` and spare seats offered immediately
+- **Listen outcome payload** — `listen()` returns a structured result object with `outcome`, `message`, and `agent` fields for richer branching logic
+- **Liveness sparkline + nudge UI** — dashboard renders a mini activity graph per agent and one-click nudge button for unresponsive agents
+- **Server-side auto-nudge** — coordinator receives an escalation message when a non-compliant agent misses its `listen()` window
+- **Audit log** — every MCP tool call appended to `audit_log.jsonl`; new `log_violation` tool writes policy violations to the same log; dashboard has a dedicated Audit view
+- **Push approval workflow** — `request_push_approval` / `ack_push` tools add a human-in-the-loop gate before git pushes
+- **Review gate on task completion** — `update_task(status="done")` can require `request_review` + `submit_review` before the done event fires; `review_approved` event broadcasts on approval
+- **Scoped rules** — `add_rule` / `list_rules` accept `role`, `provider`, and `agent` filters so rules are applied only to matching agents
+- **Platform-specific default skills** — `register()` auto-populates the agent's skill list based on detected IDE/CLI provider (Claude Code, Cursor, Copilot, Gemini)
+- **Token usage in profile popup** — dashboard resolves the Claude session via ppid walk and displays token usage directly in the agent profile card
+- **VS Code extension: chat participant** — `@neohive` chat participant with slash commands (`/task`, `/broadcast`, `/status`) and a coordinator pipe for inline coordination from Copilot Chat
+- **VS Code extension: Claude Code hooks setup** — extension auto-configures `UserPromptSubmit` and `PostToolUse` hooks on activation; version shown in status bar
+- **Hooks system** — `PostToolUse` hook echoes `send_message` calls to the current chat transcript; `UserPromptSubmit` hook injects context; `enforce-listen.sh` stop hook escalates non-compliant agents
+- **Self-healing watchdog** — stuck tasks are automatically reclaimed after a configurable timeout; escalates to `blocked_permanent` with poison-pill after max retries; `retry_count` badge shown in dashboard
+- **Design system** — `design-system.css` ships design tokens (colors, radii, shadows, glassmorphism variables) consumed by the dashboard; SVG logo and favicon served as dedicated endpoints
+- **Multi-IDE MCP setup** — `neohive init` upserts configs for Claude Code, Cursor, Copilot, Gemini CLI, and Codex TOML in one pass using absolute Node.js paths
+- **Agent name config in VS Code** — extension setting `neohive.agentName` with format validation; used automatically in MCP config generation
+
+### Changed
+
+- **Tool consolidation (Phase 1)** — `check_messages` / `consume_messages` merged into the unified `messages` tool with a `mode` param; deprecated aliases removed for a clean API surface
+- **Config centralization** — `SERVER_CONFIG` and `CLI_CONFIG` objects in `server.js` replace all scattered magic numbers (timeouts, limits, intervals)
+- **Dashboard route dispatch** — simple GET routes moved to a dispatch table; reduces deeply nested if-chains in `dashboard.js`
+- **Dashboard agent popup** — redesigned as a 3-tab layout (Stats · Actions · Profile) with inline profile editing, skill tags, and stuck/unresponsive indicators (orange/red dot + badge)
+- **System events** — dashboard renders system events as compact, color-coded icon banners instead of raw log lines
+- **Glassmorphism UI** — header and sidebar use backdrop-filter blur; agent cards gain micro-animations on hover and status-change
+- **Slack-style new-messages banner** — pill appears above the message list when unread messages arrive while scrolled up
+
+### Fixed
+
+- **Agent disappearance race condition** — `register()` now uses a file-level write lock to prevent two agents stomping on `agents.json` simultaneously; epoch-0 liveness spam suppressed
+- **Mobile dashboard** — menu toggle restored; textarea stretches full width; inject-target dropdown populates correctly on small screens
+- **Dashboard scroll preservation** — message list no longer jumps to top on full re-render
+- **MCP portability** — VS Code extension uses local `node` + `server.js` paths to avoid published-package port conflicts
+- **Nudge suppression** — auto-nudge only injects a message when the agent has genuinely missed its window; compliant agents are skipped
+
 ## [6.0.3] - 2026-04-03
 
 ### Fixed

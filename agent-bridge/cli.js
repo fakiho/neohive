@@ -21,7 +21,7 @@ const command = process.argv[2];
 
 function printUsage() {
   console.log(`
-  Neohive v6.0.3
+  Neohive v6.1.0
   The MCP collaboration layer for AI CLI tools.
 
   Usage:

@@ -78,4 +78,4 @@ args = ["/path/to/neohive/server.js"]
 
 ---
 
-*Neohive v6.0.3 — Built by [Alionix](https://github.com/fakiho/neohive)*
+*Neohive v6.1.0 — Built by [Alionix](https://github.com/fakiho/neohive)*
