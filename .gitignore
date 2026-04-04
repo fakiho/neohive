@@ -24,9 +24,28 @@ check-ue5-lock.js
 # Tests - never upload to git
 neohive/test/
 
-# Secrets - NEVER commit (LAN dashboard auth token lives next to dashboard.js in agent-bridge)
+# Secrets - NEVER commit
 agent-bridge/.lan-token
 neohive/.lan-token
 *.env
 .env.*
+
+# IDE-specific personal settings
 .cursor/rules/*
+.cursor/settings.json
+
+# Personal agent config directories
+.agent/
+
+# Build artifacts
+*.tgz
+agent-bridge/logo.png
+
+# Dev scratch scripts (root-level)
+/test-*.js
+/test_*.js
+/register_*.js
+/reviewer_*.js
+
+# Internal maintenance docs
+docs/documentation-audit.md
