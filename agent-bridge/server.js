@@ -7242,7 +7242,7 @@ const messaging = require('./tools/messaging')(_messagingCtx);
 // --- MCP Server setup ---
 
 const server = new Server(
-  { name: 'neohive', version: '6.0.3' },
+  { name: 'neohive', version: '6.1.0' },
   { capabilities: { tools: { listChanged: true } } }
 );
 
