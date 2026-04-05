@@ -454,40 +454,33 @@ function getAcks() {
   }
 }
 
-// Cache for isPidAlive results — avoids redundant process.kill calls at 100-agent scale
 const _pidAliveCache = {};
+const PID_TRUST_WINDOW_MS = 60000; // Beyond 60s without heartbeat, PID is unreliable (OS reuses PIDs)
 function isPidAlive(pid, lastActivity) {
-  // Cache with 5s TTL — PID status doesn't change faster than heartbeats
   const cacheKey = `${pid}_${lastActivity}`;
   const cached = _pidAliveCache[cacheKey];
   if (cached && Date.now() - cached.ts < SERVER_CONFIG.AGENT_CACHE_TTL_MS) return cached.alive;
 
-  // 30s stale threshold — 3x the 10s heartbeat interval, catches dead agents faster
   const STALE_THRESHOLD = SERVER_CONFIG.AGENT_STALE_THRESHOLD_MS;
   let alive = false;
 
-  // PRIORITY 1: Trust heartbeat freshness over PID status
-  // Heartbeat files are written by the actual running process — if fresh, agent is alive
-  // regardless of whether process.kill can see the PID (cross-process PID visibility issues)
   if (lastActivity) {
     const stale = Date.now() - new Date(lastActivity).getTime();
     if (stale < STALE_THRESHOLD) {
       alive = true;
+    } else if (stale > PID_TRUST_WINDOW_MS) {
+      // A real neohive agent writes heartbeat every 10s. If 60s have passed
+      // without one, the PID belongs to a different process (OS recycled it).
+      alive = false;
+    } else {
+      // Within trust window — verify PID as fallback
+      try { process.kill(pid, 0); alive = true; } catch { alive = false; }
     }
+  } else {
+    try { process.kill(pid, 0); alive = true; } catch { alive = false; }
   }
 
-  // PRIORITY 2: If heartbeat is stale, verify PID is actually dead
-  if (!alive) {
-    try {
-      process.kill(pid, 0);
-      alive = true; // PID exists — agent is alive even with stale heartbeat
-    } catch {
-      // PID dead AND heartbeat stale — agent is truly dead
-      alive = false;
-    }
-  }
   _pidAliveCache[cacheKey] = { alive, ts: Date.now() };
-  // Evict old entries (keep cache small)
   const keys = Object.keys(_pidAliveCache);
   if (keys.length > 200) {
     const cutoff = Date.now() - SERVER_CONFIG.POLL_INTERVAL_MS * 5;

@@ -718,6 +718,22 @@ function reset() {
     console.log('  [warn] Could not archive: ' + e.message + ' — proceeding with reset anyway.');
   }
 
+  // Kill any running MCP server processes before wiping data.
+  // Otherwise orphaned heartbeat intervals keep writing into the fresh directory.
+  try {
+    const agentsFile = path.join(targetDir, 'agents.json');
+    if (fs.existsSync(agentsFile)) {
+      const agents = JSON.parse(fs.readFileSync(agentsFile, 'utf8'));
+      let killed = 0;
+      for (const [name, info] of Object.entries(agents)) {
+        if (info.pid) {
+          try { process.kill(info.pid, 'SIGTERM'); killed++; } catch {}
+        }
+      }
+      if (killed > 0) console.log('  [ok] Terminated ' + killed + ' running agent process(es)');
+    }
+  } catch {}
+
   fs.rmSync(targetDir, { recursive: true, force: true });
   fs.mkdirSync(targetDir, { recursive: true });
   console.log('  Cleared all data from ' + targetDir);

@@ -313,22 +313,23 @@ function readJson(file) {
 }
 
 function isPidAlive(pid, lastActivity) {
-  const STALE_THRESHOLD = 30000; // 30s — 3x heartbeat interval, catches dead agents faster
+  const STALE_THRESHOLD = 30000; // 30s — 3x heartbeat interval
+  const PID_TRUST_WINDOW = 60000; // 60s — beyond this, PID check is unreliable (OS reuses PIDs)
 
-  // PRIORITY 1: Trust heartbeat freshness over PID status
-  // Heartbeats are written by the actual running process — if fresh, agent is alive
-  // regardless of whether process.kill can see the PID
   if (lastActivity) {
     const stale = Date.now() - new Date(lastActivity).getTime();
     if (stale < STALE_THRESHOLD) return true;
+    // A real neohive agent writes heartbeat every 10s. If 60s have passed
+    // without one, the PID belongs to a different process (OS recycled it).
+    if (stale > PID_TRUST_WINDOW) return false;
   }
 
-  // PRIORITY 2: If heartbeat is stale, check PID as fallback
+  // Heartbeat is stale but within the trust window — verify PID as fallback
   try {
     process.kill(pid, 0);
-    return true; // PID exists — alive even with stale heartbeat
+    return true;
   } catch {
-    return false; // PID dead AND heartbeat stale — truly dead
+    return false;
   }
 }
 
@@ -3967,12 +3968,17 @@ function startFileWatcher() {
 
 startFileWatcher();
 
-// macOS fs.watch() loses its handle when files are deleted and recreated (e.g. reset --force).
-// Periodically verify the watcher is still alive and restart if needed.
+// macOS fs.watch() silently stops emitting events when the watched directory is
+// deleted and recreated (e.g. reset --force). The watcher object stays non-null
+// but is dead. Force-restart it every 30s to guarantee the dashboard stays live.
+let _lastWatcherRestart = Date.now();
 setInterval(() => {
   const dataDir = resolveDataDir();
   if (!fs.existsSync(dataDir)) return;
-  if (!fsWatcher) startFileWatcher();
+  if (!fsWatcher || Date.now() - _lastWatcherRestart > 30000) {
+    startFileWatcher();
+    _lastWatcherRestart = Date.now();
+  }
 }, 5000).unref();
 
 server.on('error', (err) => {

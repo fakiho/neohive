@@ -12,6 +12,7 @@ const _pidAliveCache = {};
 let _isAutonomousMode = () => false;
 function setAutonomousModeCheck(fn) { _isAutonomousMode = fn; }
 
+const PID_TRUST_WINDOW_MS = 60000;
 function isPidAlive(pid, lastActivity) {
   const cacheKey = `${pid}_${lastActivity}`;
   const cached = _pidAliveCache[cacheKey];
@@ -22,9 +23,14 @@ function isPidAlive(pid, lastActivity) {
 
   if (lastActivity) {
     const stale = Date.now() - new Date(lastActivity).getTime();
-    if (stale < STALE_THRESHOLD) alive = true;
-  }
-  if (!alive) {
+    if (stale < STALE_THRESHOLD) {
+      alive = true;
+    } else if (stale > PID_TRUST_WINDOW_MS) {
+      alive = false;
+    } else {
+      try { process.kill(pid, 0); alive = true; } catch { alive = false; }
+    }
+  } else {
     try { process.kill(pid, 0); alive = true; } catch { alive = false; }
   }
   _pidAliveCache[cacheKey] = { alive, ts: Date.now() };
