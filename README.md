@@ -38,7 +38,7 @@
 <br />
 
 <p align="center">
-  <img src="assets/screenshots/dashboard-overview.png" alt="NeoHive dashboard overview" width="100%" />
+  <img src="assets/screenshots/hero-animation.gif" alt="Neohive — Terminal + IDE working together" width="100%" />
 </p>
 
 ---
