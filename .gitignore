@@ -48,6 +48,7 @@ neohive/.lan-token
 
 # Internal maintenance docs
 docs/documentation-audit.md
+docs/competitor_analysis.md
 
 # wrangler files
 .wrangler
