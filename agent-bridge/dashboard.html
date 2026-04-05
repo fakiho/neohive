@@ -3257,7 +3257,29 @@
     align-items: center;
     gap: 10px;
     padding: 14px 16px 10px;
+    position: relative;
   }
+
+  .pp-delete-x {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    color: var(--red, #ef4444);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    transition: opacity 0.15s, background 0.15s;
+  }
+  .pp-delete-x:hover { opacity: 1; background: var(--red-dim, rgba(239,68,68,0.15)); }
 
   .profile-popup-avatar {
     width: 36px;
@@ -4555,6 +4577,7 @@
       </div>
       <div class="profile-popup-id" id="pp-id"></div>
     </div>
+    <button class="pp-delete-x" id="pp-delete-x" onclick="confirmDeleteAgentX()" title="Remove agent">&times;</button>
   </div>
   <!-- Tabs (hidden but kept for JS compat) -->
   <div class="pp-tabs" style="display:none">
@@ -7832,8 +7855,7 @@ function showAgentPopup(agentName) {
 
 document.addEventListener('click', function() {
   document.getElementById('profile-popup').classList.remove('open');
-  var delBtn = document.getElementById('pp-delete-btn');
-  if (delBtn) { delBtn.textContent = 'Delete Agent'; delBtn._confirming = false; }
+  _resetDeleteBtns();
 });
 
 var _deleteConfirmTimer = null;
@@ -7841,48 +7863,69 @@ function confirmDeleteAgent() {
   var btn = document.getElementById('pp-delete-btn');
   if (!editingAgent) return;
   if (!btn._confirming) {
-    // First click: change to confirm state
     btn._confirming = true;
     btn.textContent = 'Confirm Delete';
     btn.style.background = 'var(--red-dim)';
-    // Reset after 3s if not confirmed
     _deleteConfirmTimer = setTimeout(function() {
       btn.textContent = 'Delete Agent';
       btn.style.background = '';
       btn._confirming = false;
     }, 3000);
   } else {
-    // Second click: actually delete
     if (_deleteConfirmTimer) clearTimeout(_deleteConfirmTimer);
-    btn.textContent = 'Deleting...';
-    btn.disabled = true;
-    var agentName = editingAgent;
-    var pq = projectParam();
-    lttFetch('/api/agents' + pq, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: agentName })
-    }).then(function(r) { return r.json(); }).then(function(data) {
-      if (data.error) {
-        showToast('!', 'Delete failed: ' + data.error);
-        btn.textContent = 'Delete Agent';
-        btn.disabled = false;
-        btn._confirming = false;
-      } else {
-        showToast('&#x2713;', agentName + ' removed');
-        document.getElementById('profile-popup').classList.remove('open');
-        btn.textContent = 'Delete Agent';
-        btn.disabled = false;
-        btn._confirming = false;
-        poll(); // Refresh agents
-      }
-    }).catch(function() {
-      showToast('!', 'Delete failed');
-      btn.textContent = 'Delete Agent';
-      btn.disabled = false;
-      btn._confirming = false;
-    });
+    _doDeleteAgent(editingAgent, btn);
   }
+}
+
+function confirmDeleteAgentX() {
+  var btn = document.getElementById('pp-delete-x');
+  if (!editingAgent) return;
+  if (!btn._confirming) {
+    btn._confirming = true;
+    btn.innerHTML = '&#x2713;';
+    btn.title = 'Click again to confirm';
+    btn.style.opacity = '1';
+    btn.style.background = 'var(--red-dim, rgba(239,68,68,0.15))';
+    _deleteConfirmTimer = setTimeout(function() {
+      btn.innerHTML = '&times;';
+      btn.title = 'Remove agent';
+      btn.style.opacity = '';
+      btn.style.background = '';
+      btn._confirming = false;
+    }, 3000);
+  } else {
+    if (_deleteConfirmTimer) clearTimeout(_deleteConfirmTimer);
+    _doDeleteAgent(editingAgent, btn);
+  }
+}
+
+function _doDeleteAgent(agentName, btn) {
+  btn.disabled = true;
+  var pq = projectParam();
+  lttFetch('/api/agents' + pq, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: agentName })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.error) {
+      showToast('!', 'Delete failed: ' + data.error);
+    } else {
+      showToast('&#x2713;', agentName + ' removed');
+      document.getElementById('profile-popup').classList.remove('open');
+      poll();
+    }
+    _resetDeleteBtns();
+  }).catch(function() {
+    showToast('!', 'Delete failed');
+    _resetDeleteBtns();
+  });
+}
+
+function _resetDeleteBtns() {
+  var xBtn = document.getElementById('pp-delete-x');
+  if (xBtn) { xBtn.innerHTML = '&times;'; xBtn.title = 'Remove agent'; xBtn.style.opacity = ''; xBtn.style.background = ''; xBtn._confirming = false; xBtn.disabled = false; }
+  var delBtn = document.getElementById('pp-delete-btn');
+  if (delBtn) { delBtn.textContent = 'Delete Agent'; delBtn.style.background = ''; delBtn._confirming = false; delBtn.disabled = false; }
 }
 
 // ==================== v3.0: PROFILE EDITOR ====================
