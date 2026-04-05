@@ -2800,7 +2800,6 @@ async function toolListenGroup(outcome = null, task_id = null, summary = null) {
         resolve({
           messages: [],
           message_count: 0,
-          retry: true,
           next_action: 'Call get_work() for your next assignment.',
           batch_summary: 'No new messages.',
         });

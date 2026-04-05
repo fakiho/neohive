@@ -1,5 +1,31 @@
 # Changelog
 
+## [6.3.0] - 2026-04-05
+
+### Added
+
+- **Unified `next_action` response chain** — every MCP tool response now includes a single `next_action` field that tells the AI agent exactly what to do next, replacing 10+ scattered hint fields (`_listen`, `_nudge`, `hint`, `action_required`, `unread_action`, `you_have_messages`, `urgent`, `mode_hint`, `_protocol`, etc.)
+- **Tool-specific directives** — each tool sets a context-aware `next_action` (e.g. `update_task(done)` → "Send a summary via send_message(), then call listen()"; `lock_file` → "Edit the file, then call unlock_file() when done")
+- **Coordinator-aware middleware** — post-processing middleware detects responsive coordinators and replaces any `listen()` directive with `consume_messages()` or removes it entirely, preventing coordinators from blocking in listen mode
+- **Persistent listen loop** — `listen()` and `listen_group()` no longer return `retry: true` on timeout; they loop internally with fresh watchers and heartbeats, so agents cannot break out of listen mode
+- **Managed mode next_action** — `buildListenGroupResponse` respects `should_respond` and floor state; agents without the floor get "do NOT respond" instead of "reply via send_message()"
+- **Autonomous get_work() directives** — all 10 return types from `get_work()` carry specific `next_action` values guiding agents through the workflow/verify/advance cycle
+- **Documentation** — `docs/reference/next-action-chain.md` with flow diagrams for standard agents, agent-to-agent communication, responsive/autonomous coordinators, managed mode, and persistent listen
+
+### Changed
+
+- **Post-processing middleware rewrite** — removed the scattered nudge/unread/listen injection block (~80 lines) and replaced with a unified `next_action` block using priority logic: tool-specific > coordinator override > call-count warning > urgent messages > pending messages > default
+- **`buildMessageResponse`** — `_protocol` field inside message objects replaced with top-level `next_action`; `coordinator_mode` field removed from listen responses
+- **`buildListenGroupResponse`** — simplified `next_action` with mode-aware branching (autonomous/managed/standard)
+- **`send_message` / `broadcast`** — removed `you_have_messages`, `urgent`, `mode_hint` fields; added `next_action: "Call listen() to receive replies."`
+- **`verify_and_advance`** — replaced verbose `message` strings with concise `next_action` directives
+
+### Fixed
+
+- **Responsive coordinator contradiction** — `send_message`, `broadcast`, and `create_task` no longer unconditionally tell responsive coordinators to call `listen()`; middleware overrides any `listen()` directive for responsive coordinators
+- **Managed mode contradiction** — `buildListenGroupResponse` no longer sets "Reply via send_message()" when `should_respond: false` and `instructions: "DO NOT RESPOND"` are also present
+- **Autonomous listen_group retry** — removed contradictory `retry: true` from autonomous mode timeout path where `next_action` directs to `get_work()` instead
+
 ## [6.1.0] - 2026-04-04
 
 ### Added
