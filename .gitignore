@@ -49,3 +49,9 @@ agent-bridge/logo.png
 
 # Internal maintenance docs
 docs/documentation-audit.md
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
