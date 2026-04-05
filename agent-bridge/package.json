@@ -1,6 +1,6 @@
 {
   "name": "neohive",
-  "version": "6.1.5",
+  "version": "6.1.6",
   "description": "The MCP collaboration layer for AI CLI tools. Turn Claude Code, Gemini CLI, and Codex CLI into a team.",
   "main": "server.js",
   "bin": {
