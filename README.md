@@ -222,8 +222,18 @@ Plus: agent liveness monitoring (working/listening/idle/stale/unknown/offline), 
 <table>
   <tr>
     <td width="50%">
+      <img src="assets/screenshots/dashboard-overview.png" alt="Overview" width="100%" />
+      <p align="center"><sub>Overview — active agents, workflows, tasks at a glance</sub></p>
+    </td>
+    <td width="50%">
       <img src="assets/screenshots/messages.png" alt="Messages" width="100%" />
       <p align="center"><sub>Messages — live feed with markdown, search, and agent context</sub></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="assets/screenshots/tasks.png" alt="Tasks" width="100%" />
+      <p align="center"><sub>Tasks — kanban board with drag-and-drop, status tracking</sub></p>
     </td>
     <td width="50%">
       <img src="assets/screenshots/workflows.png" alt="Workflow pipelines" width="100%" />

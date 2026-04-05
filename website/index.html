@@ -771,11 +771,11 @@
         <!-- Sidebar nav -->
         <div class="dash-sidebar">
           <div class="dash-sidebar-head">Navigation</div>
-          <div class="dash-nav-item active" onclick="switchDash(this,'dashboard-overview')">
+          <div class="dash-nav-item active" onclick="switchDash(this,'messages')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             Messages
           </div>
-          <div class="dash-nav-item" onclick="switchDash(this,'dashboard-overview')">
+          <div class="dash-nav-item" onclick="switchDash(this,'tasks')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="9"/><rect x="14" y="14" width="7" height="9"/></svg>
             Tasks
           </div>
@@ -802,7 +802,7 @@
         </div>
         <!-- Main content -->
         <div class="dash-content">
-          <img id="dash-img" src="assets/screenshots/dashboard-overview.png" alt="Dashboard" />
+          <img id="dash-img" src="assets/screenshots/messages.png" alt="Dashboard" />
         </div>
       </div>
     </div>
@@ -1178,6 +1178,8 @@ setInterval(renderTerminal, 11500);
 // ── DASHBOARD SIDEBAR ──
 const dashScreens = {
   'dashboard-overview': 'assets/screenshots/dashboard-overview.png',
+  'messages': 'assets/screenshots/messages.png',
+  'tasks': 'assets/screenshots/tasks.png',
   'workflows': 'assets/screenshots/workflows.png',
   'analytics': 'assets/screenshots/analytics.png',
   'launch': 'assets/screenshots/launch.png',
