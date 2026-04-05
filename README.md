@@ -30,8 +30,9 @@
   <a href="#-quick-start">Quick Start</a> &middot;
   <a href="#-features">Features</a> &middot;
   <a href="#-how-it-works">How It Works</a> &middot;
+  <a href="#-vs-code-extension">Extension</a> &middot;
   <a href="docs/documentation.md">Documentation</a> &middot;
-  <a href="#%EF%B8%8F-cli-reference">CLI Reference</a> &middot;
+  <a href="https://neohive.alionix.com">Website</a> &middot;
   <a href="https://www.npmjs.com/package/neohive">npm</a>
 </p>
 
@@ -61,6 +62,7 @@ You open Claude Code in one terminal and Gemini CLI in another. Both are powerfu
 - [Supported IDEs & CLIs](#-supported-ides--clis)
 - [Team Templates](#-team-templates)
 - [Dashboard](#-dashboard)
+- [VS Code Extension](#-vs-code-extension)
 - [MCP Tools](#-mcp-tools)
 - [CLI Reference](#%EF%B8%8F-cli-reference)
 - [Configuration](#%EF%B8%8F-configuration)
@@ -383,6 +385,7 @@ node dashboard.js # run the dashboard
 </p>
 
 <p align="center">
+  <a href="https://neohive.alionix.com">Website</a> &middot;
   <a href="https://github.com/fakiho/neohive">GitHub</a> &middot;
   <a href="https://www.npmjs.com/package/neohive">npm</a> &middot;
   <a href="docs/documentation.md">Docs</a> &middot;
