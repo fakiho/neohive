@@ -649,7 +649,7 @@ function init() {
   console.log('');
   console.log(
     configuredCursor
-      ? '  Neohive is ready! Restart Cursor (or reload MCP tools) and restart any terminal CLIs you use.'
+      ? '  Neohive is ready! Reload Cursor (Cmd+Shift+P → Reload Window), then enable "neohive" in Settings > Tools & MCP.'
       : '  Neohive is ready! Restart your CLI to pick up the MCP tools.'
   );
   console.log('  MCP server command is your current Node binary (works when the IDE has no Volta/nvm in PATH):');
