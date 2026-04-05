@@ -1,14 +1,29 @@
 {
   "name": "neohive",
   "displayName": "Neohive",
-  "description": "Monitor and manage Neohive AI agent collaboration from VS Code",
+  "description": "Monitor and manage Neohive AI agent collaboration from VS Code. Real-time agent liveness, workflow tracking, and quick actions — all in your sidebar.",
   "version": "0.4.0",
   "publisher": "alionix",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://neohive.alionix.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fakiho/neohive",
+    "directory": "vscode-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/fakiho/neohive/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
-  "icon": "icon.svg",
+  "categories": ["AI", "Other"],
+  "keywords": ["neohive", "mcp", "ai-agents", "multi-agent", "claude", "gemini", "cursor", "copilot", "collaboration"],
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#0f0f10",
+    "theme": "dark"
+  },
   "activationEvents": ["onStartupFinished"],
   "main": "./extension.js",
   "contributes": {
