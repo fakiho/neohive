@@ -245,19 +245,15 @@ function resolveDataDir(projectPath) {
     projectPath = normalizeMonitoredProjectRoot(projectPath);
     let dir = path.join(projectPath, '.neohive');
     const dataDir = path.join(projectPath, 'data');
-    // Prefer whichever has data (local hive only — do not redirect agents/messages to parent)
     if (hasDataFiles(dir)) return dir;
     if (hasDataFiles(dataDir)) return dataDir;
     if (fs.existsSync(dir)) return dir;
     if (fs.existsSync(dataDir)) return dataDir;
     return dir;
   }
-  const legacyDir = path.join(__dirname, 'data');
-  // Prefer dir with actual data files
-  if (hasDataFiles(DEFAULT_DATA_DIR)) return DEFAULT_DATA_DIR;
-  if (hasDataFiles(legacyDir)) return legacyDir;
-  if (fs.existsSync(DEFAULT_DATA_DIR)) return DEFAULT_DATA_DIR;
-  if (fs.existsSync(legacyDir)) return legacyDir;
+  // Always return the resolved default dir — never flip-flop to legacy.
+  // Switching directories between requests breaks the file watcher and
+  // causes agents registered in DEFAULT_DATA_DIR to be invisible.
   return DEFAULT_DATA_DIR;
 }
 
