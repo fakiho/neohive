@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
 const { upsertNeohiveMcpInToml } = require('./lib/codex-neohive-toml');
+const pkg = require(path.join(__dirname, 'package.json'));
 const { readIdeActivity, applyIdeActivityHint } = require('./lib/ide-activity');
 const _audit = require('./lib/audit');
 
@@ -3989,7 +3990,7 @@ server.listen(PORT, LAN_MODE ? '0.0.0.0' : '127.0.0.1', () => {
   const dataDir = resolveDataDir();
   const lanIP = getLanIP();
   console.log('');
-  console.log('  Neohive Dashboard v6.1.1');
+  console.log(`  Neohive Dashboard v${pkg.version}`);
   console.log('  ============================================');
   console.log('  Dashboard:  http://localhost:' + PORT);
   if (LAN_MODE && lanIP) {

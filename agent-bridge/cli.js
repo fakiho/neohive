@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
 const { upsertNeohiveMcpInToml } = require('./lib/codex-neohive-toml');
+const pkg = require('./package.json');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLI_CONFIG — centralized constants for the Neohive CLI
@@ -21,7 +22,7 @@ const command = process.argv[2];
 
 function printUsage() {
   console.log(`
-  Neohive v6.1.1
+  Neohive v${pkg.version}
   The MCP collaboration layer for AI CLI tools.
 
   Usage:

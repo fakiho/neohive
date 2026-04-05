@@ -6,6 +6,7 @@ const {
 } = require('@modelcontextprotocol/sdk/types.js');
 const fs = require('fs');
 const path = require('path');
+const pkg = require('./package.json');
 
 // --- Modular infrastructure (lib/) ---
 // These modules are the canonical implementations. The inline code below
@@ -7242,7 +7243,7 @@ const messaging = require('./tools/messaging')(_messagingCtx);
 // --- MCP Server setup ---
 
 const server = new Server(
-  { name: 'neohive', version: '6.1.1' },
+  { name: 'neohive', version: pkg.version },
   { capabilities: { tools: { listChanged: true } } }
 );
 
