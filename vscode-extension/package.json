@@ -2,7 +2,7 @@
   "name": "neohive",
   "displayName": "Neohive",
   "description": "Monitor and manage Neohive AI agent collaboration from VS Code. Real-time agent liveness, workflow tracking, and quick actions — all in your sidebar.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "alionix",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://neohive.alionix.com",
