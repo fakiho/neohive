@@ -169,6 +169,7 @@ function readNeohiveDataDirFromMcpConfigs(projectRoot) {
 }
 
 function resolveDashboardDefaultDataDir() {
+  // 1. Explicit env var — highest priority
   let envData = process.env.NEOHIVE_DATA_DIR || process.env.NEOHIVE_DATA;
   if (envData && String(envData).trim()) {
     let s = String(envData).trim();
@@ -178,10 +179,10 @@ function resolveDashboardDefaultDataDir() {
     }
     return { path: path.resolve(s), source: 'environment' };
   }
-  const fromWalk = bestNeohiveAmongAncestors(process.cwd());
-  if (fromWalk) {
-    return { path: fromWalk, source: 'walk-up' };
-  }
+
+  // 2. Project MCP config — authoritative, written by `neohive init`
+  //    Check this BEFORE the directory walk so a stale ~/.neohive/ from
+  //    a previous session doesn't shadow the project's explicit config.
   let dir = path.resolve(process.cwd());
   const root = path.parse(dir).root;
   while (true) {
@@ -192,6 +193,14 @@ function resolveDashboardDefaultDataDir() {
     if (dir === root) break;
     dir = path.dirname(dir);
   }
+
+  // 3. Walk up looking for .neohive/ directories — best-effort fallback
+  const fromWalk = bestNeohiveAmongAncestors(process.cwd());
+  if (fromWalk) {
+    return { path: fromWalk, source: 'walk-up' };
+  }
+
+  // 4. cwd/.neohive — last resort
   return { path: path.join(process.cwd(), '.neohive'), source: 'cwd' };
 }
 
