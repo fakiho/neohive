@@ -117,7 +117,7 @@ module.exports = function (ctx) {
 
     broadcastSystemMessage(`[REVIEW] ${state.registeredName} requests review of "${review.file}": ${review.description || 'No description'}. Call submit_review("${review.id}", "approved"/"changes_requested", "your feedback") to review.`, state.registeredName);
     touchActivity();
-    return { success: true, review_id: review.id, file: review.file, message: 'Review requested. Team has been notified.' };
+    return { success: true, review_id: review.id, file: review.file, next_action: 'Call listen() to wait for the review.' };
   }
 
   function toolSubmitReview(reviewId, status, feedback) {
@@ -191,7 +191,10 @@ module.exports = function (ctx) {
     writeJsonFile(REVIEWS_FILE, reviews);
     touchActivity();
 
-    const result = { success: true, review_id: reviewId, status: review.status, message: `Review submitted: ${review.status}` };
+    const reviewNextAction = review.status === 'approved'
+      ? 'Call listen() to continue.'
+      : 'Call listen() — the author will fix and resubmit.';
+    const result = { success: true, review_id: reviewId, status: review.status, next_action: reviewNextAction };
     if (review.review_round) result.review_round = review.review_round;
     if (review.auto_approved) result.auto_approved = true;
     return result;

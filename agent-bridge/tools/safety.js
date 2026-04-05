@@ -34,7 +34,7 @@ module.exports = function (ctx) {
     locks[normalized] = { agent: state.registeredName, since: new Date().toISOString() };
     writeJsonFile(LOCKS_FILE, locks);
     touchActivity();
-    return { success: true, file: normalized, message: `File locked. Other agents cannot edit "${normalized}" until you call unlock_file().` };
+    return { success: true, file: normalized, next_action: 'Edit the file, then call unlock_file() when done.' };
   }
 
   function toolUnlockFile(filePath) {

@@ -132,7 +132,7 @@ module.exports = function (ctx) {
       total_messages: compressed.segments.reduce((s, seg) => s + seg.message_count, 0) + recent.length,
       compressed_count: compressed.segments.reduce((s, seg) => s + seg.message_count, 0),
       recent_count: recent.length,
-      hint: 'Compressed segments summarize older messages. Recent messages are shown verbatim.',
+      next_action: 'Call listen() to receive messages.',
     };
   }
 
@@ -223,9 +223,9 @@ module.exports = function (ctx) {
       progress,
       your_tasks: myActiveTasks.map(t => ({ id: t.id, title: t.title, status: t.status })),
       your_completed: myCompletedCount,
-      hint: myActiveTasks.length > 0
-        ? `You have ${myActiveTasks.length} active task(s). Continue working.`
-        : 'You are now briefed. Check active tasks and start contributing.',
+      next_action: myActiveTasks.length > 0
+        ? `You have ${myActiveTasks.length} active task(s). Continue working, then call listen().`
+        : 'Call listen() to receive messages and start working.',
     };
   }
 

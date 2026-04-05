@@ -102,7 +102,7 @@ module.exports = function (ctx) {
       autonomous,
       parallel,
       started_steps: startedSteps.map(s => ({ id: s.id, description: s.description, assignee: s.assignee })),
-      message: autonomous ? 'Autonomous workflow created. All agents should call get_work() to enter the proactive work loop.' : undefined,
+      next_action: autonomous ? 'Call get_work() for your assignment.' : 'Call listen() to receive updates.',
     };
   }
 
@@ -179,6 +179,7 @@ module.exports = function (ctx) {
       next_steps: nextSteps.length > 0 ? nextSteps.map(s => ({ id: s.id, description: s.description, assignee: s.assignee })) : null,
       progress: `${doneCount}/${wf.steps.length} (${pct}%)`,
       workflow_status: wf.status,
+      next_action: wf.autonomous ? 'Call get_work() for your next assignment.' : 'Call listen() to receive the next step.',
     };
   }
 

@@ -20,3 +20,4 @@ Use **kebab-case** for Markdown files in this folder: `lowercase-with-hyphens.md
 | [ai-onboarding.md](./ai-onboarding.md) | AI contributor orientation |
 | [documentation-audit.md](./documentation-audit.md) | Doc debt / audit log |
 | [mcp-tools-documentation.md](./mcp-tools-documentation.md) | High-level MCP tool tour |
+| [reference/next-action-chain.md](./reference/next-action-chain.md) | `next_action` response chain, coordinator flows |

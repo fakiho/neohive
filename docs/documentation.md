@@ -252,6 +252,7 @@ Long-form reference material lives under **[`docs/reference/`](reference/)** so 
 | CLI commands | [reference/cli.md](reference/cli.md) |
 | `.neohive/` data files | [reference/data-directory.md](reference/data-directory.md) |
 | Autonomy, managed mode, branching, channels | [reference/advanced.md](reference/advanced.md) |
+| `next_action` response chain & coordinator flows | [reference/next-action-chain.md](reference/next-action-chain.md) |
 | Environment variables & MCP config snippets | [reference/configuration.md](reference/configuration.md) |
 
 ---

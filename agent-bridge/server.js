@@ -584,14 +584,14 @@ function buildMessageResponse(msg, consumedIds) {
     }
   } catch (e) { log.debug('task reminder in listen failed:', e.message); }
 
-  // Append report-back protocol reminder to all non-system messages
   const isSystemMsg = msg.from === '__system__' || msg.system === true;
-  const reportBackReminder = isSystemMsg
-    ? undefined
-    : 'When done: send_message() with (1) what you did (2) files changed (3) findings (4) blockers. Then call listen().';
+  const nextAction = isSystemMsg
+    ? 'Process this message, then call listen().'
+    : `Do what this message asks. When finished, send_message(to="${msg.from}") with what you did and files changed, then call listen().`;
 
   return {
     success: true,
+    next_action: nextAction,
     message: {
       id: msg.id,
       from: msg.from,
@@ -600,11 +600,9 @@ function buildMessageResponse(msg, consumedIds) {
       priority: classifyPriority(msg),
       ...(msg.reply_to && { reply_to: msg.reply_to }),
       ...(msg.thread_id && { thread_id: msg.thread_id }),
-      ...(reportBackReminder && { _protocol: reportBackReminder }),
     },
     pending_count: pendingCount,
     agents_online: agentsOnline,
-    coordinator_mode: getConfig().coordinator_mode || 'responsive',
     ...(taskReminder && { task_reminder: taskReminder }),
   };
 }
@@ -1159,57 +1157,39 @@ function buildGuide(level = 'standard') {
     const managed = getManagedConfig();
     const isManager = managed.manager === registeredName;
     if (isManager) {
-      rules.push('YOU ARE THE MANAGER. You control the conversation flow, assign work, and track progress.');
-      rules.push('TASK MANAGEMENT: Use create_task(title, description, assignee) to assign work to agents. Use create_workflow(name, steps) to create multi-step plans. These show up in the Tasks and Plan tabs of the dashboard.');
-      rules.push('YOUR MANAGER LOOP: 1) Plan the work — create tasks and workflows for the team. 2) Use yield_floor(agent) to give each agent their turn to speak. 3) Call listen() to wait for responses. 4) When agents report completion, use update_task(id, status="done") to mark tasks done and advance_workflow() to move the plan forward. 5) Assign next tasks and repeat.');
-      rules.push('PHASES: Use set_phase("discussion") for brainstorming, set_phase("planning") to assign tasks, set_phase("execution") for agents to work, set_phase("review") to collect results.');
-      rules.push('Use send_message() to give instructions. Use broadcast() for team announcements.');
-      rules.push('STRICT RULE: After EVERY action, call listen() to wait for responses. NEVER use sleep(). Your loop is: act → listen() → act → listen(). This loop NEVER ends.');
+      rules.push('ROLE: You are the Manager. You assign work and control who speaks.');
+      rules.push('LOOP: create_task/create_workflow → yield_floor(agent) → listen() → process results → repeat. Never stop.');
+      rules.push('Use update_task(id, status="done") and advance_workflow() as agents finish.');
+      rules.push('Use set_phase() to move through discussion → planning → execution → review.');
     } else {
-      rules.push('YOU ARE IN MANAGED MODE. The manager controls who speaks. Call listen() to wait for your turn.');
-      rules.push('TASK TRACKING: When the manager assigns you a task, call update_task(id, status="in_progress") to claim it. When you finish, call update_task(id, status="done") and report back to the manager. If your task is a workflow step, call advance_workflow() after completing it.');
-      rules.push('YOUR LOOP: 1) Call listen() — wait for messages and floor assignments. 2) When you receive work, update the task to "in_progress", do the work, update to "done", respond to the manager. 3) Call listen() again immediately. This loop NEVER ends.');
-      rules.push('STRICT RULES: NEVER use sleep(). NEVER use check_messages() in a loop. NEVER call get_work() in managed mode. Your ONLY loop is: listen() → work → update task → respond → listen(). If listen() times out, call listen() again immediately.');
+      rules.push('ROLE: Managed agent. The manager controls your turn.');
+      rules.push('LOOP: listen() → receive work → update_task(id, "in_progress") → do work → update_task(id, "done") → send_message(manager, summary) → listen(). Never stop.');
+      rules.push('Never call get_work() or check_messages() in managed mode.');
     }
-    rules.push('Keep messages to 2-3 paragraphs max.');
-    rules.push('When you finish work, report what you did and what files you changed.');
+    rules.push('Keep messages short (2-3 paragraphs). Report what you did and what files changed.');
   }
   // === AUTONOMOUS MODE: completely different guide ===
   else if (autonomousActive) {
     if (isAdvisor) {
-      // Advisor Agent: strategic thinker — reads everything, suggests improvements
-      rules.push('YOU ARE THE ADVISOR. You do NOT write code. You READ all messages and completed work, then give strategic ideas, suggestions, and improvements to the team.');
-      rules.push('YOUR ADVISOR LOOP: 1) Call get_work() — it returns recent messages, completed tasks, active workflows, KB lessons, and decisions. 2) THINK DEEPLY about what you see: Are there better approaches? Missing features? Architectural issues? Assumptions that should be challenged? 3) Send your insights to the team via send_message. Be specific and actionable. 4) Call get_work() again. NEVER stop thinking.');
-      rules.push('WHAT TO LOOK FOR: Patterns the team is missing. Better approaches to current problems. Connections between different agents\' work. Assumptions that need challenging. Missing edge cases. Architectural improvements. Features the team should build next.');
-      rules.push('HOW TO ADVISE: Send suggestions via send_message to specific agents or broadcast to the team. Be concise and actionable. Explain WHY your suggestion is better, not just WHAT to do differently. Reference specific code or messages when possible.');
-      rules.push('NEVER ask the user what to do. You generate ideas from observing the team. The team decides whether to follow your advice.');
+      rules.push('ROLE: Advisor. You do NOT write code. You observe the team and suggest improvements.');
+      rules.push('LOOP: get_work() → analyze messages/tasks/decisions → send_message(agent, insight) → get_work(). Never stop.');
+      rules.push('Focus on: missed patterns, better approaches, edge cases, architectural issues.');
     } else if (isMonitor) {
-      // Monitor Agent: system overseer — watches the team, not the code
-      rules.push('YOU ARE THE SYSTEM MONITOR. You do NOT write code. You do NOT do regular work. You watch the TEAM and keep it functioning.');
-      rules.push('YOUR MONITOR LOOP: 1) Call get_work() — it returns a health check report instead of a work assignment. 2) Analyze the report: who is idle? Who is stuck? Are tasks bouncing between agents? Is the queue growing? 3) INTERVENE: reassign stuck tasks, nudge idle agents via send_message, rebalance roles if workload is uneven. 4) Log every intervention to your workspace via workspace_write(key="_monitor_log"). 5) Call get_work() again. NEVER stop monitoring.');
-      rules.push('WHAT TO WATCH FOR: Idle agents (>2 minutes without activity). Circular escalations (same task rejected by 3+ agents). Queue buildup (more pending tasks than agents can handle). Stuck workflow steps (>15 minutes in progress). Agents with high rejection rates.');
-      rules.push('HOW TO INTERVENE: Use send_message to nudge idle agents. Use update_task to reassign stuck tasks. Call rebalanceRoles() via the system to shift workload. Use broadcast for team-wide alerts.');
-      rules.push('NEVER ask the user what to do. You ARE the system intelligence. The team relies on you to keep them productive.');
+      rules.push('ROLE: System Monitor. You do NOT write code. You keep the team functioning.');
+      rules.push('LOOP: get_work() → analyze health report → intervene (reassign stuck tasks, nudge idle agents) → get_work(). Never stop.');
+      rules.push('Watch for: idle agents (>2min), circular escalations, queue buildup, stuck workflows (>15min).');
     } else if (isQualityLead) {
-      rules.push('YOU ARE THE QUALITY LEAD. Your job is to review ALL work from the team, find bugs, suggest improvements, and keep the team iterating until the work is genuinely excellent. Never approve without checking. Never let mediocre work pass.');
-      rules.push('YOUR QUALITY LOOP: 1) Call get_work() — prioritize review requests and completed steps. 2) Review the work thoroughly — read the code, check for bugs, verify correctness. 3) If good: approve via submit_review() and call verify_and_advance(). 4) If needs improvement: use submit_review(status="changes_requested") with specific feedback. The author will fix and re-submit automatically. 5) Call get_work() again. NEVER stop reviewing.');
-      rules.push('QUALITY STANDARDS: Check for bugs, edge cases, security issues, code style, and correctness. Read the actual files — do not trust summaries. If something looks wrong, flag it.');
-      rules.push('NEVER ask the user what to do. NEVER wait for human approval. You ARE the approval gate. The team works, you review, they improve, you re-review. This cycle continues until the work is excellent.');
+      rules.push('ROLE: Quality Lead. You review ALL team work. Never approve without reading the actual code.');
+      rules.push('LOOP: get_work() → review code → submit_review()/verify_and_advance() or submit_review(status="changes_requested", feedback) → get_work(). Never stop.');
     } else {
-      rules.push('YOUR WORK LOOP (follow this ALWAYS): 1) Call get_work() — it gives you your next assignment. 2) Do the work — write code, run tests, implement features. 3) Call verify_and_advance() — verify your work, auto-advance the workflow. 4) Call get_work() again — get your next assignment. 5) NEVER stop. NEVER wait for approval. NEVER call listen_group() in autonomous mode — use get_work() instead.');
+      rules.push('LOOP: get_work() → do the work → verify_and_advance() → get_work(). Never stop. Never wait for approval.');
       rules.push(qualityLeadName
-        ? 'SELF-CONTINUATION: After completing work, report results to ' + qualityLeadName + ' (Quality Lead) via send_message. After Quality Lead approves, find next work via get_work(). NEVER ask the user what to do next — the system assigns work automatically.'
-        : 'SELF-CONTINUATION: After completing work, call get_work() to find your next task. NEVER ask the user what to do next — the system assigns work automatically. NEVER stop working.');
+        ? 'After completing work, report to ' + qualityLeadName + ' (Quality Lead) via send_message, then get_work().'
+        : 'After completing work, call get_work() for your next task.');
     }
-    rules.push('IF STUCK: Try a different approach (max 3 attempts). Ask the team for help via send_message. If still stuck after help, move to next available task. NEVER wait silently. ALWAYS be working on something.');
-    rules.push('IF YOUR WORK FAILS: Analyze WHY it failed. Record the learning via verify_and_advance(learnings: "..."). Retry with improvements. After 3 retries, escalate to team and move to other work.');
-    rules.push('IF NOTHING TO DO: get_work() handles this — it checks workflows, tasks, reviews, and help requests. It will find you something. Trust the loop.');
-    rules.push('Keep messages to 2-3 paragraphs max.');
-    rules.push('When you finish work, report what you did and what files you changed.');
-    rules.push('Lock files before editing shared code (lock_file / unlock_file).');
-    // UE5 safety rules — prevent concurrent editor operations
-    rules.push('UE5 SAFETY: BEFORE any Unreal Engine editor operation (spawning, modifying scene, placing assets): call lock_file("ue5-editor"). BEFORE compiling/building: call lock_file("ue5-compile"). Unlock immediately after. Only ONE agent can hold each lock — others must wait.');
-    rules.push('Log team decisions with log_decision() so they are not re-debated.');
+    rules.push('If stuck: retry up to 3 times, then ask team via send_message, then move to next task.');
+    rules.push('Lock files before editing (lock_file/unlock_file). Log decisions with log_decision().');
+    rules.push('Keep messages short (2-3 paragraphs). Report what you did and what files changed.');
 
     // User-customizable project-specific rules
     const guideFile = path.join(DATA_DIR, 'guide.md');
@@ -1239,101 +1219,64 @@ function buildGuide(level = 'standard') {
       }
     }
 
-    return {
+    const result = {
       rules,
-      project_rules: projectRules.length > 0 ? projectRules : undefined,
-      tier_info: `${rules.length} rules (AUTONOMOUS MODE, ${aliveCount} agents, role: ${myRole || 'unassigned'})`,
-      first_steps: isAdvisor
-        ? '1. Call get_work() to get team context (messages, tasks, decisions). 2. Think deeply about patterns, improvements, missing features. 3. Send insights to team. 4. Call get_work() again. Never stop thinking.'
-        : isMonitor
-        ? '1. Call get_work() to get system health report. 2. Analyze: idle agents, stuck tasks, circular escalations. 3. Intervene: reassign, nudge, rebalance. 4. Call get_work() again. Never stop monitoring.'
-        : isQualityLead
-        ? '1. Call get_work() to find work to review. 2. Review thoroughly. 3. Approve or request changes. 4. Call get_work() again. Never stop.'
-        : '1. Call get_work() to get your assignment. 2. Do the work. 3. Call verify_and_advance(). 4. Call get_work() again. Never stop.',
+      first_steps: 'Call get_work() to get your next assignment.',
       autonomous_mode: true,
       your_role: myRole || undefined,
-      quality_lead: qualityLeadName || undefined,
-      tool_categories: {
-        'WORK LOOP': 'get_work, verify_and_advance, retry_with_improvement',
-        'MESSAGING': 'send_message, broadcast, check_messages, consume_messages, get_history, handoff, share_file',
-        'COORDINATION': 'get_briefing, log_decision, get_decisions, kb_write, kb_read, kb_list',
-        'TASKS': 'create_task, update_task, list_tasks, suggest_task',
-        'QUALITY': 'request_review, submit_review',
-        'SAFETY': 'lock_file, unlock_file',
-      },
     };
+    if (projectRules.length > 0) result.project_rules = projectRules;
+    return result;
   }
 
   // === STANDARD MODE (non-autonomous) ===
-  // Self-continuation rules apply in standard mode too (for 2+ agent teams)
   if (aliveCount >= 2 && (mode === 'group' || mode === 'managed')) {
     if (isQualityLead) {
-      rules.push('YOU ARE THE QUALITY LEAD. Review all work from teammates. Use submit_review() to approve or request changes. Never let mediocre work pass. Never ask the user what to do — you are the approval gate.');
+      rules.push('ROLE: Quality Lead. Review all team work via submit_review(). You are the approval gate.');
     } else if (qualityLeadName) {
-      rules.push('SELF-CONTINUATION: After completing work, report to ' + qualityLeadName + ' (Quality Lead). After approval, find next work. NEVER ask the user what to do next.');
+      rules.push('After completing work, report to ' + qualityLeadName + ' (Quality Lead), then continue.');
     }
   }
 
-  // Lead/Coordinator mode: responsive (stay with human) vs autonomous (run in listen loop)
   if (isLeadRole && aliveCount >= 2) {
     const coordinatorMode = getConfig().coordinator_mode || 'responsive';
     if (coordinatorMode === 'responsive') {
-      rules.push('RESPONSIVE COORDINATOR PATTERN: Use consume_messages() at the start of each interaction to check for agent updates non-blockingly. Process all returned messages, assign work, then return to the human immediately. Do NOT block in listen() — you need to stay responsive to both agents and the user.');
+      rules.push('COORDINATOR: Use consume_messages() to check updates non-blockingly. Do NOT block in listen() — stay responsive to the user.');
     } else {
-      rules.push('AUTONOMOUS COORDINATOR PATTERN: Use listen() to wait for agent results. Process responses, delegate follow-up work, and continue the listen loop. Only return to the human when all tasks are complete or when you hit a blocker that requires human input.');
+      rules.push('COORDINATOR: Use listen() to wait for agent results. Only return to human when all tasks are done or blocked.');
     }
-    rules.push('CRITICAL: You are a Coordinator. You MUST NOT edit files, write code, or use tools like Edit/Write/Bash for code changes. Your tools are: send_message, create_task, update_task, create_workflow, advance_workflow, workflow_status, list_tasks, consume_messages, broadcast, kb_write, kb_read, log_decision. Delegate ALL code work to other agents.');
+    rules.push('Coordinators do NOT edit files or write code. Delegate ALL code work to other agents.');
   }
 
-  // Tier 0 — THE one rule (always included at every level)
   const listenCmd = isManagedMode() ? 'listen()' : (mode === 'group' ? 'listen_group()' : 'listen()');
-  rules.push(`AFTER EVERY ACTION, call ${listenCmd}. This is how you receive messages. NEVER skip this. NEVER use sleep(). NEVER poll with check_messages(). ${listenCmd} is your ONLY way to receive messages.`);
+  rules.push(`After EVERY action, call ${listenCmd}. Never use sleep() or poll with check_messages().`);
 
-  // Minimal level: Tier 0 only — for experienced agents refreshing rules
   if (level === 'minimal') {
-    rules.push('Call get_briefing() when joining a project or after being away.');
-    rules.push('Lock files before editing shared code (lock_file / unlock_file).');
+    rules.push('Lock files before editing (lock_file/unlock_file).');
     if (mode === 'group' || mode === 'managed') {
-      rules.push('Use reply_to when responding — you get faster cooldown (500ms vs default).');
-      rules.push('Messages not addressed to you show should_respond: false. Only respond if you have something new to add.');
+      rules.push('Use reply_to for threading. Ignore messages with should_respond: false unless relevant.');
     }
     return {
       rules,
-      tier_info: `${rules.length} rules (minimal level, ${aliveCount} agents)`,
       first_steps: mode === 'direct'
-        ? '1. Call list_agents() to see who is online. 2. Send a message or call listen() to wait.'
+        ? 'Call list_agents() to see who is online, then send a message or listen().'
         : mode === 'managed'
-        ? `1. Call get_briefing() for project context. 2. Call listen() to wait for the manager. 3. Respond when given the floor, then listen() again.`
-        : `1. Call get_briefing() for project context. 2. Call listen_group() to join. 3. Respond and listen_group() again.`,
+        ? 'Call get_briefing(), then listen() to wait for the manager.'
+        : 'Call get_briefing(), then listen() to join.',
     };
   }
 
-  // Tier 1 — core behavior (standard + full)
-  rules.push('Call get_briefing() when joining a project or after being away.');
-  rules.push('Keep messages to 2-3 paragraphs max.');
-  rules.push('When you finish work, report what you did and what files you changed.');
-  rules.push('Lock files before editing shared code (lock_file / unlock_file).');
-  // UE5 safety rules — prevent concurrent editor operations
-  rules.push('UE5 SAFETY: BEFORE any Unreal Engine editor operation (spawning, modifying scene, placing assets): call lock_file("ue5-editor"). BEFORE compiling/building: call lock_file("ue5-compile"). Unlock immediately after. Only ONE agent can hold each lock — others must wait.');
+  rules.push('Keep messages short (2-3 paragraphs). Report what you did and what files changed.');
+  rules.push('Lock files before editing (lock_file/unlock_file). Log decisions with log_decision().');
 
-  // Tier 2 — group mode features (shown when group or managed mode)
   if (mode === 'group' || mode === 'managed') {
-    rules.push('Use reply_to when responding — you get faster cooldown (500ms vs default).');
-    rules.push('Messages not addressed to you show should_respond: false. Only respond if you have something new to add.');
-    rules.push('Log team decisions with log_decision() so they are not re-debated.');
+    rules.push('Use reply_to for threading (faster cooldown). Ignore should_respond: false unless relevant.');
   }
-
-  // Tier 2b — channels (shown when channels exist beyond #general)
   if (hasChannels) {
-    rules.push('Join relevant channels with join_channel(). You only see messages from channels you joined.');
-    rules.push('Use channel parameter on send_message to keep discussions focused.');
+    rules.push('Use join_channel() and channel param on send_message to keep discussions focused.');
   }
-
-  // Tier 3 — large teams (shown when 5+ agents)
   if (aliveCount >= 5) {
-    rules.push(`${listenCmd} blocks until messages arrive. NEVER stop listening. NEVER use sleep() or check_messages() loops.`);
-    rules.push('Tasks auto-create channels (#task-xxx). Use them for focused discussion instead of #general.');
-    rules.push('Use channels to split into sub-teams. Do not discuss everything in #general.');
+    rules.push('Use task channels (#task-xxx) for focused discussion instead of #general.');
   }
 
   // User-customizable project-specific rules from .neohive/guide.md
@@ -1364,50 +1307,24 @@ function buildGuide(level = 'standard') {
     }
   }
 
-  const result = {
-    rules,
-    project_rules: projectRules.length > 0 ? projectRules : undefined,
-    tier_info: `${rules.length} rules (${aliveCount} agents, ${mode} mode${hasChannels ? ', channels active' : ''})`,
-    first_steps: mode === 'direct'
-      ? '1. Call list_agents() to see who is online. 2. Send a message or call listen() to wait.'
-      : '1. Call get_briefing() for project context. 2. Call listen_group() to join. 3. Respond and listen_group() again.',
-    tool_categories: {
-      'MESSAGING': 'send_message, broadcast, listen_group, listen, check_messages, consume_messages, get_history, get_summary, search_messages, handoff, share_file',
-      'COORDINATION': 'get_briefing, log_decision, get_decisions, kb_write, kb_read, kb_list, call_vote, cast_vote, vote_status',
-      'TASKS': 'create_task, update_task, list_tasks, declare_dependency, check_dependencies, suggest_task',
-      'QUALITY': 'update_progress, get_progress, request_review, submit_review, get_reputation',
-      'SAFETY': 'lock_file, unlock_file',
-      'CHANNELS': 'join_channel, leave_channel, list_channels',
-      ...(mode === 'managed' ? { 'MANAGED MODE': 'claim_manager, yield_floor, set_phase' } : {}),
-    },
-  };
-
-  // Full level: add tool descriptions for complete reference
-  if (level === 'full') {
-    result.tool_details = {
-      'listen_group': 'Blocks until messages arrive. Returns batch with priorities, context, agent statuses.',
-      'send_message': 'Send to agent (to param). reply_to for threading. channel for sub-channels.',
-      'lock_file / unlock_file': 'Exclusive file locking. Auto-releases on disconnect.',
-      'log_decision': 'Persist decisions to prevent re-debating. Visible in get_briefing().',
-      'create_task / update_task': 'Structured task management. Auto-creates channels at 5+ agents.',
-      'kb_write / kb_read': 'Shared knowledge base. Any agent can read/write.',
-      'suggest_task': 'AI-suggested next task based on your strengths and pending work.',
-      'request_review / submit_review': 'Structured code review workflow with notifications.',
-      'declare_dependency': 'Block a task until another completes. Auto-notifies on resolution.',
-      'get_compressed_history': 'Summarized history for catching up without context overflow.',
-    };
-  }
-
-  // Task reminder: show agent's pending/in_progress tasks so they remember to update them
+  // Task reminder
   if (registeredName) {
     try {
       const myTasks = getTasks().filter(t => t.assignee === registeredName && (t.status === 'pending' || t.status === 'in_progress'));
       if (myTasks.length > 0) {
-        result.your_tasks = myTasks.map(t => ({ id: t.id, title: t.title, status: t.status }));
-        rules.push(`TASK STATUS: You have ${myTasks.length} task(s). Use update_task(task_id, "in_progress") when starting and update_task(task_id, "done") when complete. Your tasks: ${myTasks.map(t => t.id + ' "' + t.title.substring(0, 40) + '" (' + t.status + ')').join('; ')}`);
+        rules.push(`You have ${myTasks.length} task(s): ${myTasks.map(t => t.id + ' "' + t.title.substring(0, 40) + '" (' + t.status + ')').join('; ')}. Update status with update_task().`);
       }
     } catch (e) { log.debug('task reminder in guide failed:', e.message); }
   }
+
+  const result = {
+    rules,
+    first_steps: mode === 'direct'
+      ? 'Call list_agents() to see who is online, then send a message or listen().'
+      : 'Call get_briefing(), then listen() to join.',
+  };
+
+  if (projectRules.length > 0) result.project_rules = projectRules;
 
   // Cache the result for subsequent calls with same params
   _guideCache = { key: cacheKey, result };
@@ -1567,78 +1484,81 @@ function toolRegister(name, provider = null, skills = null) {
     const config = getConfig();
     const mode = config.conversation_mode || 'direct';
     const otherAgents = Object.keys(getAgents()).filter(n => n !== name);
+    const guide = buildGuide();
 
-    const result = {
-      success: true,
-      message: `Registered as Agent ${name} (PID ${process.pid})`,
-      conversation_mode: mode,
-      agents_online: otherAgents,
-      guide: buildGuide(),
-    };
-
-    // Recovery: if this agent has prior data, include it
-    const myTasks = getTasks().filter(t => t.assignee === name && t.status !== 'done');
-    const myWorkspace = getWorkspace(name);
-    // Scale fix: tail-read last 30 messages instead of entire history
-    const recentHistory = tailReadJsonl(getHistoryFile(currentBranch), 30);
-    const myRecentMsgs = recentHistory.filter(m => m.to === name || m.from === name).slice(-5);
-
-    if (myTasks.length > 0 || Object.keys(myWorkspace).length > 0 || myRecentMsgs.length > 0) {
-      result.recovery = {};
-      if (myTasks.length > 0) result.recovery.your_active_tasks = myTasks.map(t => ({ id: t.id, title: t.title, status: t.status }));
-      if (Object.keys(myWorkspace).length > 0) result.recovery.your_workspace_keys = Object.keys(myWorkspace);
-      if (myRecentMsgs.length > 0) result.recovery.recent_messages = myRecentMsgs.map(m => ({ from: m.from, to: m.to, preview: m.content.substring(0, 100), timestamp: m.timestamp }));
-      result.recovery.hint = 'You have prior context from a previous session. Call get_briefing() for a full project summary.';
+    // Auto-assign roles when 2+ agents are online
+    const aliveCount = Object.values(getAgents()).filter(a => isPidAlive(a.pid, a.last_activity)).length;
+    let assignedRole = guide.your_role || undefined;
+    if (aliveCount >= 2) {
+      try {
+        const roleAssignments = autoAssignRoles();
+        if (roleAssignments && roleAssignments[name]) assignedRole = roleAssignments[name];
+      } catch (e) { log.debug("role assignment failed:", e.message); }
     }
 
-    // Auto-recovery: load crash snapshot if it exists (TTL: 1 hour)
+    // --- Recovery detection ---
+    const myTasks = getTasks().filter(t => t.assignee === name && t.status !== 'done');
+    const myWorkspace = getWorkspace(name);
+    const recentHistory = tailReadJsonl(getHistoryFile(currentBranch), 30);
+    const myRecentMsgs = recentHistory.filter(m => m.to === name || m.from === name).slice(-5);
+    let isResuming = false;
+    let resumeContext = null;
+
     const recoveryFile = path.join(DATA_DIR, `recovery-${name}.json`);
     if (fs.existsSync(recoveryFile)) {
       try {
         const snapshot = JSON.parse(fs.readFileSync(recoveryFile, 'utf8'));
         const snapshotAge = Date.now() - new Date(snapshot.died_at).getTime();
         if (snapshotAge > 3600000) {
-          // Stale snapshot (>1 hour) — discard
           try { fs.unlinkSync(recoveryFile); } catch {}
         } else {
-          if (!result.recovery) result.recovery = {};
-          result.recovery.previous_session = true;
-          result.recovery.died_at = snapshot.died_at;
-          result.recovery.crashed_ago = Math.round(snapshotAge / 1000) + 's';
-          if (snapshot.active_tasks && snapshot.active_tasks.length > 0) result.recovery.your_active_tasks = snapshot.active_tasks;
-          if (snapshot.locked_files && snapshot.locked_files.length > 0) {
-            result.recovery.locked_files_released = snapshot.locked_files;
-            result.recovery.lock_note = 'These files were locked by your previous session. Locks have been auto-released. Re-lock them with lock_file() before editing.';
-          }
-          if (snapshot.channels && snapshot.channels.length > 0) result.recovery.your_channels = snapshot.channels;
-          if (snapshot.last_messages_sent) result.recovery.last_messages_sent = snapshot.last_messages_sent;
-          // Agent memory fields
-          if (snapshot.decisions_made && snapshot.decisions_made.length > 0) result.recovery.decisions_made = snapshot.decisions_made;
-          if (snapshot.tasks_completed && snapshot.tasks_completed.length > 0) result.recovery.tasks_completed = snapshot.tasks_completed;
-          if (snapshot.kb_entries_written && snapshot.kb_entries_written.length > 0) result.recovery.kb_entries_written = snapshot.kb_entries_written;
-          if (snapshot.graceful) result.recovery.was_graceful = true;
-          result.recovery.hint = snapshot.graceful
-            ? 'You are RESUMING from a previous session that exited gracefully. Your memory (decisions, completed tasks, KB entries) is below. Continue where you left off.'
-            : 'You are RESUMING a previous session that crashed. Review your active tasks and locked files below, then continue where you left off. Do NOT restart work from scratch.';
-          // Clean up snapshot after loading
+          isResuming = true;
+          resumeContext = {
+            crashed_ago: Math.round(snapshotAge / 1000) + 's',
+            was_graceful: !!snapshot.graceful,
+          };
+          if (snapshot.active_tasks && snapshot.active_tasks.length > 0) resumeContext.active_tasks = snapshot.active_tasks;
+          if (snapshot.locked_files && snapshot.locked_files.length > 0) resumeContext.files_to_relock = snapshot.locked_files;
+          if (snapshot.decisions_made && snapshot.decisions_made.length > 0) resumeContext.decisions_made = snapshot.decisions_made;
+          if (snapshot.tasks_completed && snapshot.tasks_completed.length > 0) resumeContext.tasks_completed = snapshot.tasks_completed;
           try { fs.unlinkSync(recoveryFile); } catch {}
         }
       } catch (e) { log.debug("recovery file parse failed:", e.message); }
     }
 
+    if (!isResuming && (myTasks.length > 0 || myRecentMsgs.length > 0)) {
+      isResuming = true;
+      resumeContext = {};
+      if (myTasks.length > 0) resumeContext.active_tasks = myTasks.map(t => ({ id: t.id, title: t.title, status: t.status }));
+    }
+
+    // --- Build next_action: the ONE thing the agent should do right now ---
+    let nextAction;
+    if (isResuming && resumeContext && resumeContext.active_tasks && resumeContext.active_tasks.length > 0) {
+      nextAction = `You have ${resumeContext.active_tasks.length} unfinished task(s). Call list_tasks() to see them and resume work.`;
+    } else if (guide.first_steps) {
+      const firstStep = guide.first_steps.split(/\d+\.\s+/).filter(Boolean)[0];
+      nextAction = firstStep ? firstStep.trim().replace(/\.$/, '') : guide.first_steps;
+    } else {
+      nextAction = 'Call get_briefing() to load project context';
+    }
+
+    // --- Build the result: next_action FIRST, then context ---
+    const result = {
+      success: true,
+      registered: name,
+      next_action: nextAction,
+      mode,
+      agents_online: otherAgents,
+    };
+
+    if (assignedRole) result.your_role = assignedRole;
+    if (isResuming) result.resuming = resumeContext;
+
+    result.guide = guide;
+
     // Notify other agents
     fireEvent('agent_join', { agent: name });
-
-    // Auto-assign roles when 2+ agents are online
-    const aliveCount = Object.values(getAgents()).filter(a => isPidAlive(a.pid, a.last_activity)).length;
-    if (aliveCount >= 2) {
-      try {
-        const roleAssignments = autoAssignRoles();
-        if (roleAssignments && roleAssignments[name]) {
-          result.your_role = roleAssignments[name];
-        }
-      } catch (e) { log.debug("role assignment failed:", e.message); }
-    }
 
     return result;
   } finally {
@@ -1659,9 +1579,8 @@ function setListening(isListening) {
   if (!registeredName) return;
   _isCurrentlyListening = !!isListening;
 
-  // Track listen calls in heartbeat for auto-nudge system
   if (isListening) {
-    touchActivity(true); // Mark as listen call
+    touchActivity(true);
   }
   
   try {
@@ -2044,19 +1963,6 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
     result.note = `Agent "${to}" is currently working (not in listen mode). Message queued — they'll see it when they finish their current task and call listen_group().`;
   }
 
-  // Mode awareness hint: warn if agent seems to be in wrong mode
-  const currentMode = getConfig().conversation_mode || 'direct';
-  if (currentMode === 'group' || currentMode === 'managed') {
-    result.mode_hint = `You're in ${currentMode} mode. Use listen_group() (or listen() — both auto-detect) to stay in the conversation.`;
-  }
-
-  // Nudge: check if THIS agent has unread messages waiting
-  const myPending = getUnconsumedMessages(registeredName);
-  if (myPending.length > 0) {
-    result.you_have_messages = myPending.length;
-    result.urgent = `You have ${myPending.length} unread message(s) waiting. Call listen_group() after this to read them.`;
-  }
-
   // Coordinator enforcement: warn if sending work assignment without creating a task first
   const senderProfile = getProfiles()[registeredName];
   const senderRole = senderProfile && senderProfile.role ? senderProfile.role.toLowerCase() : '';
@@ -2067,13 +1973,15 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
       const recentTasks = getTasks().filter(t => {
         if (t.assignee !== to) return false;
         const age = Date.now() - new Date(t.created_at).getTime();
-        return age < 60000; // created in last 60 seconds
+        return age < 60000;
       });
       if (recentTasks.length === 0) {
         result.task_warning = `No task created for this assignment to ${to}. Use create_task(title, description, "${to}") to formally track this work.`;
       }
     }
   }
+
+  result.next_action = 'Call listen() to receive replies.';
 
   return result;
 }
@@ -2132,10 +2040,7 @@ function toolBroadcast(content) {
     sendsSinceLastListen++;
     unaddressedSends++; // broadcasts are always unaddressed
     const aliveOthers = otherAgents.filter(n => { const a = agents[n]; return isPidAlive(a.pid, a.last_activity); });
-    const result = { success: true, messageId: msg.id, recipient_count: aliveOthers.length, sent_to: aliveOthers.map(n => ({ to: n, messageId: msg.id })) };
-    // Nudge for own unread messages
-    const myPending = getUnconsumedMessages(registeredName);
-    if (myPending.length > 0) { result.you_have_messages = myPending.length; result.urgent = `You have ${myPending.length} unread message(s). Call listen_group() soon.`; }
+    const result = { success: true, messageId: msg.id, recipient_count: aliveOthers.length, next_action: 'Call listen() to receive replies.' };
     return result;
   }
 
@@ -2161,21 +2066,8 @@ function toolBroadcast(content) {
   touchActivity();
   lastSentAt = Date.now();
 
-  const result = { success: true, sent_to: ids, recipient_count: ids.length };
+  const result = { success: true, sent_to: ids, recipient_count: ids.length, next_action: 'Call listen() to receive replies.' };
   if (skipped.length > 0) result.skipped = skipped;
-  // Show which recipients are busy vs listening
-  const agentsNow = getAgents();
-  const busy = ids.filter(function(i) { return agentsNow[i.to] && !agentsNow[i.to].listening_since; }).map(function(i) { return i.to; });
-  if (busy.length > 0) {
-    result.busy_agents = busy;
-    result.note = busy.join(', ') + (busy.length === 1 ? ' is' : ' are') + ' currently working (not listening). Messages queued.';
-  }
-  // Nudge for own unread messages
-  const myPending = getUnconsumedMessages(registeredName);
-  if (myPending.length > 0) {
-    result.you_have_messages = myPending.length;
-    result.urgent = `You have ${myPending.length} unread message(s). Call listen_group() soon.`;
-  }
   return result;
 }
 
@@ -2442,8 +2334,9 @@ async function toolListen(from = null, outcome = null, task_id = null, summary =
 
     let watcher;
     let fallbackInterval;
+    let timer;
+    let heartbeatTimer;
 
-    // Helper: check for new messages
     const checkMessages = () => {
       const { messages: newMsgs, newOffset } = readNewMessages(lastReadOffset);
       lastReadOffset = newOffset;
@@ -2463,34 +2356,44 @@ async function toolListen(from = null, outcome = null, task_id = null, summary =
       return false;
     };
 
-    try {
-      const msgFile = getMessagesFile(currentBranch);
-      watcher = fs.watch(msgFile, () => { checkMessages(); });
-      watcher.on('error', () => {});
-    } catch {
-      // Fallback: adaptive polling
-      let pollCount = 0;
-      fallbackInterval = setInterval(() => {
-        if (checkMessages()) { clearInterval(fallbackInterval); return; }
-        pollCount++;
-        if (pollCount === 10) {
-          clearInterval(fallbackInterval);
-          fallbackInterval = setInterval(() => {
-            if (checkMessages()) clearInterval(fallbackInterval);
-          }, 2000);
-        }
-      }, 500);
+    // Auto-restart: instead of returning retry:true and hoping the agent
+    // calls listen() again, loop internally. The agent stays blocked here
+    // until a real message arrives or the IDE/user interrupts the tool call.
+    function setupWatcher() {
+      try { if (watcher) watcher.close(); } catch {}
+      if (fallbackInterval) clearInterval(fallbackInterval);
+      clearTimeout(timer);
+      clearTimeout(heartbeatTimer);
+
+      try {
+        const msgFile = getMessagesFile(currentBranch);
+        watcher = fs.watch(msgFile, () => { checkMessages(); });
+        watcher.on('error', () => {});
+      } catch {
+        let pollCount = 0;
+        fallbackInterval = setInterval(() => {
+          if (checkMessages()) { clearInterval(fallbackInterval); return; }
+          pollCount++;
+          if (pollCount === 10) {
+            clearInterval(fallbackInterval);
+            fallbackInterval = setInterval(() => {
+              if (checkMessages()) clearInterval(fallbackInterval);
+            }, 2000);
+          }
+        }, 500);
+      }
+
+      heartbeatTimer = setInterval(() => { touchHeartbeat(registeredName); }, 15000);
+
+      timer = setTimeout(() => {
+        touchActivity();
+        autoCompact();
+        if (checkMessages()) return;
+        setupWatcher();
+      }, 300000);
     }
 
-    // Heartbeat every 15s
-    const heartbeatTimer = setInterval(() => { touchHeartbeat(registeredName); }, 15000);
-
-    // 5 min timeout — MCP has no tool timeout, heartbeat keeps agent alive
-    const timer = setTimeout(() => {
-      setListening(false);
-      touchActivity();
-      done({ retry: true, message: 'No direct messages in 5 minutes. Call listen() again to keep waiting.' });
-    }, 300000);
+    setupWatcher();
   });
 }
 
@@ -2596,7 +2499,7 @@ async function toolListenCodex(from = null, outcome = null, task_id = null, summ
 
     const timer = setTimeout(() => {
       setListening(false);
-      done({ retry: true, message: 'No messages yet. Call listen_codex() again to keep waiting.' });
+      done({ retry: true, next_action: 'Call listen() again.', message: 'No messages yet.' });
     }, 45000);
   });
 }
@@ -2888,8 +2791,8 @@ async function toolListenGroup(outcome = null, task_id = null, summary = null) {
       if (fallbackInterval) clearInterval(fallbackInterval);
       if (batch && batch.length > 0) {
         resolve(buildListenGroupResponse(batch, consumed, registeredName, listenStart));
-      } else {
-        // Timeout — return minimal empty response
+      } else if (autonomousTimeout) {
+        // Autonomous mode: return so agent goes back to get_work() loop
         setListening(false);
         sendsSinceLastListen = 0;
         sendLimit = 2;
@@ -2898,73 +2801,94 @@ async function toolListenGroup(outcome = null, task_id = null, summary = null) {
           messages: [],
           message_count: 0,
           retry: true,
-          batch_summary: isManagedMode() ? 'No new messages — call listen() again immediately to keep waiting.' : 'No new messages — call listen_group() again to keep listening.',
+          next_action: 'Call get_work() for your next assignment.',
+          batch_summary: 'No new messages.',
         });
+      } else {
+        // Standard/group mode: don't return — re-enter the wait loop internally.
+        // This prevents the agent from breaking out of listen mode.
+        resolved = false;
+        touchHeartbeat(registeredName);
+        autoCompact();
+        const freshBatch = collectBatch();
+        if (freshBatch.length > 0) {
+          resolved = true;
+          resolve(buildListenGroupResponse(freshBatch, consumed, registeredName, listenStart));
+          return;
+        }
+        setupWatchers();
       }
     };
 
     let watcher;
     let channelWatchers = [];
     let fallbackInterval;
+    let timer;
+    let heartbeatTimer;
 
-    try {
-      // Watch main messages file for changes
-      const msgFile = getMessagesFile(currentBranch);
-      watcher = fs.watch(msgFile, () => {
-        const batch = collectBatch();
-        if (batch.length > 0) done(batch);
-      });
-      watcher.on('error', () => {});
+    function setupWatchers() {
+      // Clean up previous watchers/timers if re-entering
+      try { if (watcher) watcher.close(); } catch {}
+      try { if (channelWatchers.length) channelWatchers.forEach(w => { try { w.close(); } catch {} }); } catch {}
+      if (fallbackInterval) clearInterval(fallbackInterval);
+      clearTimeout(timer);
+      clearTimeout(heartbeatTimer);
+      channelWatchers = [];
 
-      // Also watch channel files
-      const myChannels = getAgentChannels(registeredName);
-      for (const ch of myChannels) {
-        if (ch === 'general') continue;
-        const chFile = getChannelMessagesFile(ch);
-        if (fs.existsSync(chFile)) {
-          try {
-            const chWatcher = fs.watch(chFile, () => {
+      try {
+        const msgFile = getMessagesFile(currentBranch);
+        watcher = fs.watch(msgFile, () => {
+          const batch = collectBatch();
+          if (batch.length > 0) done(batch);
+        });
+        watcher.on('error', () => {});
+
+        const myChannels = getAgentChannels(registeredName);
+        for (const ch of myChannels) {
+          if (ch === 'general') continue;
+          const chFile = getChannelMessagesFile(ch);
+          if (fs.existsSync(chFile)) {
+            try {
+              const chWatcher = fs.watch(chFile, () => {
+                const batch = collectBatch();
+                if (batch.length > 0) done(batch);
+              });
+              chWatcher.on('error', () => {});
+              channelWatchers.push(chWatcher);
+            } catch (e) { log.debug("channel watcher setup failed:", e.message); }
+          }
+        }
+      } catch {
+        let pollCount = 0;
+        fallbackInterval = setInterval(() => {
+          const batch = collectBatch();
+          if (batch.length > 0) {
+            clearInterval(fallbackInterval);
+            done(batch);
+          }
+          pollCount++;
+          if (pollCount === 10) {
+            clearInterval(fallbackInterval);
+            fallbackInterval = setInterval(() => {
               const batch = collectBatch();
-              if (batch.length > 0) done(batch);
-            });
-            chWatcher.on('error', () => {});
-            channelWatchers.push(chWatcher);
-          } catch (e) { log.debug("channel watcher setup failed:", e.message); }
-        }
+              if (batch.length > 0) { clearInterval(fallbackInterval); done(batch); }
+            }, 2000);
+          }
+        }, 500);
       }
-    } catch {
-      // fs.watch not available — fall back to adaptive polling
-      let pollCount = 0;
-      fallbackInterval = setInterval(() => {
-        const batch = collectBatch();
-        if (batch.length > 0) {
-          clearInterval(fallbackInterval);
-          done(batch);
-        }
-        pollCount++;
-        // Adaptive: slow down after initial fast checks
-        if (pollCount === 10) {
-          clearInterval(fallbackInterval);
-          fallbackInterval = setInterval(() => {
-            const batch = collectBatch();
-            if (batch.length > 0) { clearInterval(fallbackInterval); done(batch); }
-          }, 2000); // slow poll every 2s
-        }
-      }, 500); // fast poll first 5s
+
+      heartbeatTimer = setInterval(() => {
+        touchHeartbeat(registeredName);
+      }, 15000);
+
+      const effectiveTimeout = autonomousTimeout
+        ? Math.min(autonomousTimeout, MAX_LISTEN_MS)
+        : MAX_LISTEN_MS;
+
+      timer = setTimeout(() => done([]), effectiveTimeout);
     }
 
-    // Heartbeat every 15s while waiting — prevents dashboard from showing agent as dead
-    const heartbeatTimer = setInterval(() => {
-      touchHeartbeat(registeredName);
-    }, 15000);
-
-    // Autonomous mode: shorter timeout
-    const effectiveTimeout = autonomousTimeout
-      ? Math.min(autonomousTimeout, MAX_LISTEN_MS)
-      : MAX_LISTEN_MS;
-
-    // Timeout: don't block forever
-    const timer = setTimeout(() => done([]), effectiveTimeout);
+    setupWatchers();
   });
 }
 
@@ -3142,10 +3066,15 @@ function buildListenGroupResponse(batch, consumed, agentName, listenStart) {
     }
   }
 
-  result.next_action = isAutonomousMode()
-    ? 'Process these messages, then call get_work() to continue the proactive work loop. Do NOT call listen_group() — use get_work() instead.'
-    : 'After processing these messages and sending your response, call listen_group() again immediately. Never stop listening.';
-  result.coordinator_mode = getConfig().coordinator_mode || 'responsive';
+  if (isAutonomousMode()) {
+    result.next_action = 'Process these messages, then call get_work().';
+  } else if (result.should_respond === false) {
+    result.next_action = 'Read these messages but do NOT respond. Call listen() to wait for your turn.';
+  } else if (result.instructions && result.instructions.includes('MANAGER')) {
+    result.next_action = 'You are the manager. Decide who speaks next, then call listen().';
+  } else {
+    result.next_action = 'Process these messages. Reply via send_message(), then call listen() again.';
+  }
 
   // Task reminder: remind agent of their outstanding tasks
   try {
@@ -4203,6 +4132,7 @@ async function toolGetWork(params = {}) {
   if (myStep) {
     const result = {
       type: 'workflow_step', priority: 'assigned', step: myStep,
+      next_action: 'Do this work now. When done, call verify_and_advance().',
       instruction: `You have assigned work: "${myStep.description}" (Workflow: "${myStep.workflow_name}"). Do this NOW. When done, call verify_and_advance().`
     };
     // Attach relevant KB skills for this task
@@ -4228,6 +4158,7 @@ async function toolGetWork(params = {}) {
     return {
       type: 'messages', priority: 'respond',
       messages: pending.slice(0, 10), total: pending.length,
+      next_action: 'Process these messages, then call get_work() again.',
       instruction: 'Process these messages first, then call get_work() again.'
     };
   }
@@ -4252,6 +4183,7 @@ async function toolGetWork(params = {}) {
     if (claimed) {
       const claimResult = {
         type: 'claimed_task', priority: 'self_assigned', task: best,
+        next_action: 'Start working on this task now. Call verify_and_advance() when done.',
         instruction: `No one was working on "${best.title}". I've assigned it to you. Start working on it now.`
       };
       const taskSkills = searchKBForTask(best.title + ' ' + (best.description || ''));
@@ -4269,6 +4201,7 @@ async function toolGetWork(params = {}) {
   if (helpReqs.length > 0) {
     return {
       type: 'help_teammate', priority: 'assist', request: helpReqs[0],
+      next_action: `Help ${helpReqs[0].from || 'your teammate'}, then call get_work() again.`,
       instruction: `${helpReqs[0].from || 'A teammate'} needs help: "${helpReqs[0].content.substring(0, 200)}". Assist them.`
     };
   }
@@ -4278,6 +4211,7 @@ async function toolGetWork(params = {}) {
   if (reviews.length > 0) {
     return {
       type: 'review', priority: 'review', review: reviews[0],
+      next_action: 'Review this work, then call submit_review().',
       instruction: `Review request from ${reviews[0].requested_by}: "${reviews[0].file}". Review their work and submit_review().`
     };
   }
@@ -4287,6 +4221,7 @@ async function toolGetWork(params = {}) {
   if (blocked.length > 0) {
     return {
       type: 'unblock', priority: 'unblock', task: blocked[0],
+      next_action: 'Try to unblock this task, then call get_work() again.',
       instruction: `"${blocked[0].title}" is blocked. See if you can help unblock it.`
     };
   }
@@ -4310,6 +4245,7 @@ async function toolGetWork(params = {}) {
       return {
         type: 'stolen_task', priority: 'work_steal', task: stealable.task,
         from_agent: stealable.from_agent,
+        next_action: 'Start working on this task now. Call verify_and_advance() when done.',
         instruction: stealable.message + ' Start working on it now.',
       };
     }
@@ -4322,6 +4258,7 @@ async function toolGetWork(params = {}) {
     return {
       type: 'messages', priority: 'respond',
       messages: newMsgs.slice(0, 10), total: newMsgs.length,
+      next_action: 'Process these messages, then call get_work() again.',
       instruction: 'New messages arrived. Process them, then call get_work() again.'
     };
   }
@@ -4331,6 +4268,7 @@ async function toolGetWork(params = {}) {
   if (upcoming) {
     return {
       type: 'prep_work', priority: 'proactive', step: upcoming,
+      next_action: 'Prepare for this upcoming step, then call get_work() again.',
       instruction: `Your next workflow step "${upcoming.description}" is coming up (Workflow: "${upcoming.workflow_name}"). Prepare for it: read relevant files, understand the dependencies, plan your approach.`
     };
   }
@@ -4340,9 +4278,10 @@ async function toolGetWork(params = {}) {
   touchActivity();
   const idleResult = {
     type: 'idle',
+    next_action: isManagedMode() ? 'Call listen() to wait for work.' : 'Call get_work() again in 30 seconds.',
     instruction: isManagedMode()
       ? 'No work available right now. Call listen() to wait for the manager to assign work or give you the floor.'
-      : 'No work available right now. Call get_work() again in 30 seconds. Do NOT call listen_group() — use get_work() to stay in the proactive loop.'
+      : 'No work available right now. Call get_work() again in 30 seconds.'
   };
   // Item 4: warn demoted agents
   const agentRep = getReputation();
@@ -4399,7 +4338,7 @@ async function toolVerifyAndAdvance(params) {
       const report = generateCompletionReport(wf);
       const retrospective = logRetrospective(wf.id); // Item 9: analyze retry patterns
       touchActivity();
-      return { status: flagged ? 'workflow_complete_flagged' : 'workflow_complete', workflow_id: wf.id, report, retrospective, message: `Workflow "${wf.name}" finished! Call get_work() for your next assignment.` };
+      return { status: flagged ? 'workflow_complete_flagged' : 'workflow_complete', workflow_id: wf.id, next_action: 'Call get_work() for your next assignment.', report, retrospective };
     }
 
     const agents = getAgents();
@@ -4421,7 +4360,7 @@ async function toolVerifyAndAdvance(params) {
       status: flagged ? 'advanced_with_flag' : 'advanced', workflow_id: wf.id,
       completed_step: currentStep.id,
       next_steps: nextSteps.map(s => ({ id: s.id, description: s.description, assignee: s.assignee })),
-      message: flagged ? 'Advanced but flagged for later review. Call get_work().' : 'Step complete. Next step(s) kicked off. Call get_work() for your next assignment.'
+      next_action: 'Call get_work() for your next assignment.',
     };
   }
 
@@ -4452,7 +4391,7 @@ async function toolVerifyAndAdvance(params) {
   touchActivity();
   return {
     status: 'needs_help', workflow_id: wf.id,
-    message: 'Low confidence. Help request broadcast to team. Call get_work() — you may get a review assignment or other work while waiting.'
+    next_action: 'Call get_work() for other work while waiting for help.',
   };
 }
 
@@ -7679,13 +7618,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             } catch { return 'your coordinator'; }
           })();
           return {
-            content: [{ type: 'text', text: JSON.stringify({
-              error: `BLOCKED: You must call listen() before using other tools. You have made ${consecutiveNonListenCalls} tool calls without listening. Call listen() now.`,
-              blocked_tool: name,
-              calls_without_listen: consecutiveNonListenCalls,
-              fix: `1. Call send_message(to='${coordinator}', content='BLOCKED: I made ${consecutiveNonListenCalls} tool calls without listen(). I was trying to call ${name}. Requesting instructions — should I proceed?') 2. Then call listen() immediately to unblock all tools.`,
-              _listen: 'After send_message(), call listen() immediately. It will reset the counter and unblock all tools.',
-            }, null, 2) }],
+            content: [{ type: 'text', text:
+              `BLOCKED — ${name}() was not executed. You made ${consecutiveNonListenCalls} tool calls without calling listen(). ` +
+              `Do these two steps IN ORDER:\n` +
+              `1. send_message(to="${coordinator}", content="I was blocked after ${consecutiveNonListenCalls} calls without listen(). I need to call ${name}. Should I proceed?")\n` +
+              `2. listen()\n` +
+              `Do NOT skip step 1. Do NOT call any other tool. Start with send_message now.`
+            }],
             isError: true,
           };
         }
@@ -7900,48 +7839,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    // Global hook: on non-listen tools, check for pending messages and nudge with escalating urgency
-    // Enhanced nudge: includes sender names, addressed count, and message preview
-    const listenTools = ['listen', 'wait_for_reply'];
-    if (registeredName && !listenTools.includes(name) && (isGroupMode() || isManagedMode())) {
-      try {
-        const pending = getUnconsumedMessages(registeredName);
-        if (pending.length > 0 && !result.you_have_messages) {
-          // Build rich nudge: WHO sent, WHETHER addressed, WHAT preview
-          const senders = {};
-          let addressedCount = 0;
-          for (const m of pending) {
-            senders[m.from] = (senders[m.from] || 0) + 1;
-            if (m.addressed_to && m.addressed_to.includes(registeredName)) addressedCount++;
-          }
-          const senderSummary = Object.entries(senders).map(([n, c]) => `${c} from ${n}`).join(', ');
-          const latest = pending[pending.length - 1];
-          const preview = latest.content.substring(0, 80).replace(/\n/g, ' ');
-
-          result._pending_messages = pending.length;
-          result._senders = senders;
-          result._addressed_to_you = addressedCount;
-          result._preview = `${latest.from}: "${preview}..."`;
-
-          // Escalate urgency based on oldest pending message age
-          const oldestAge = pending.reduce((max, m) => {
-            const age = Date.now() - new Date(m.timestamp).getTime();
-            return age > max ? age : max;
-          }, 0);
-          const ageSec = Math.round(oldestAge / 1000);
-          const addressedHint = addressedCount > 0 ? ` (${addressedCount} addressed to you)` : '';
-          if (ageSec > 120) {
-            result._nudge = `CRITICAL: ${pending.length} messages waiting ${Math.round(ageSec / 60)}+ min${addressedHint}: ${senderSummary}. Latest: "${preview}...". Call listen_group() NOW.`;
-          } else if (ageSec > 30) {
-            result._nudge = `URGENT: ${pending.length} messages waiting ${ageSec}s${addressedHint}: ${senderSummary}. Latest: "${preview}...". Call listen_group() soon.`;
-          } else {
-            result._nudge = `${pending.length} messages waiting${addressedHint}: ${senderSummary}. Latest: "${preview}...". Call listen_group().`;
-          }
-        }
-      } catch (e) { log.debug("nudge detection failed:", e.message); }
-    }
-
     // Global hook: reputation tracking
+    const listenTools = ['listen', 'wait_for_reply'];
     if (registeredName && result.success) {
       try {
         const repMap = {
@@ -7952,9 +7851,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           'submit_review': 'review_submit',
         };
         if (repMap[name]) trackReputation(registeredName, repMap[name]);
-        // Track task completion specifically
         if (name === 'update_task' && args?.status === 'done') {
-          // Calculate task completion time
           const tasks = getTasks();
           const doneTask = tasks.find(t => t.id === args.task_id);
           const taskTimeSec = doneTask ? Math.round((Date.now() - new Date(doneTask.created_at).getTime()) / 1000) : 0;
@@ -7963,48 +7860,61 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       } catch (e) { log.debug('reputation tracking failed:', e.message); }
     }
 
-    // Global hook: auto-compress conversation periodically
     if (name === 'send_message' || name === 'broadcast') {
       try { autoCompress(); } catch (e) { log.debug('auto-compress failed:', e.message); }
     }
 
-    // Coordinator mode hint: inject into every tool response for lead/manager/coordinator agents
-    if (registeredName && typeof result === 'object' && result !== null) {
-      try {
-        const prof = getProfiles()[registeredName];
-        const role = prof && prof.role ? prof.role.toLowerCase() : '';
-        if (role === 'lead' || role === 'manager' || role === 'coordinator') {
-          const coordMode = getConfig().coordinator_mode || 'responsive';
-          result.coordinator_mode = coordMode;
-          result.coordinator_hint = coordMode === 'responsive'
-            ? 'MODE: Stay with me — do NOT call listen(). Use consume_messages/workflow_status between human interactions.'
-            : 'MODE: Run autonomously — use listen() to wait for agent results.';
-        }
-      } catch (e) { log.debug('coordinator mode hint failed:', e.message); }
-    }
-
-    // Unread message hint: check if agent has pending messages on every tool call
-    // This ensures agents see messages even when they forget to call listen()
+    // Unified next_action: the ONE field that tells the agent what to do next.
+    // Tool-specific next_action (set by the handler) takes priority.
+    // Middleware fills in a default if the tool didn't set one.
     if (registeredName && typeof result === 'object' && result !== null && !listenTools.includes(name)) {
-      try {
-        const unread = getUnconsumedMessages(registeredName);
-        if (unread.length > 0) {
-          const latest = unread[unread.length - 1];
-          result.unread_messages = unread.length;
-          result.unread_preview = `${latest.from}: "${latest.content.substring(0, 100).replace(/\n/g, ' ')}"`;
-          result.unread_action = `You have ${unread.length} unread message(s). Call listen() to receive them.`;
-        }
-      } catch (e) { log.debug('unread message hint failed:', e.message); }
-    }
+      const isResponsiveCoordinator = (() => {
+        try {
+          const prof = getProfiles()[registeredName];
+          const role = prof && prof.role ? prof.role.toLowerCase() : '';
+          if (role === 'lead' || role === 'manager' || role === 'coordinator') {
+            return (getConfig().coordinator_mode || 'responsive') === 'responsive';
+          }
+        } catch {}
+        return false;
+      })();
 
-    // Persistent listen() reminder — injected into EVERY non-listen tool response.
-    // Keeps the instruction in the agent's immediate context even after extended
-    // processing pushes earlier instructions out of working memory.
-    if (registeredName && typeof result === 'object' && result !== null && !listenTools.includes(name)) {
-      if (consecutiveNonListenCalls >= 3) {
-        result._listen = `WARNING: You have NOT called listen() in ${consecutiveNonListenCalls} tool calls. Tools will be BLOCKED at 5. Call listen() NOW.`;
+      if (isResponsiveCoordinator) {
+        // Responsive coordinators must NEVER be told to call listen().
+        // Replace any tool-set listen() directive with consume_messages() or nothing.
+        if (!result.next_action || /\blisten\(\)/i.test(result.next_action)) {
+          try {
+            const pending = getUnconsumedMessages(registeredName);
+            if (pending.length > 0) {
+              result.next_action = `${pending.length} agent update(s) waiting. Call consume_messages() to read them.`;
+            } else {
+              delete result.next_action;
+            }
+          } catch {
+            delete result.next_action;
+          }
+        }
       } else {
-        result._listen = 'After processing this result, call listen() to receive messages. Do NOT skip this.';
+        if (!result.next_action) {
+          try {
+            const pending = getUnconsumedMessages(registeredName);
+            if (pending.length > 0) {
+              const oldest = pending[0];
+              const ageSec = Math.floor((Date.now() - new Date(oldest.timestamp).getTime()) / 1000);
+              if (ageSec > 120) {
+                result.next_action = `URGENT: ${pending.length} message(s) waiting ${Math.round(ageSec / 60)}+ min. Call listen() now.`;
+              } else {
+                result.next_action = `${pending.length} unread message(s). Call listen().`;
+              }
+            } else {
+              result.next_action = 'Call listen() to receive messages.';
+            }
+          } catch {}
+        }
+
+        if (consecutiveNonListenCalls >= 3) {
+          result.next_action = `WARNING: ${consecutiveNonListenCalls} calls without listen(). Tools BLOCKED at 5. Call listen() NOW.`;
+        }
       }
     }
 

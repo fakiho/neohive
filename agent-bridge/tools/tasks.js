@@ -81,7 +81,7 @@ module.exports = function (ctx) {
     saveTasks(tasks);
     touchActivity();
 
-    const result = { success: true, task_id: task.id, assignee: task.assignee };
+    const result = { success: true, task_id: task.id, assignee: task.assignee, next_action: 'Call listen() to receive updates.' };
     if (taskChannel) result.channel = taskChannel;
     return result;
   }
@@ -160,6 +160,7 @@ module.exports = function (ctx) {
             task_id: task.id,
             status: 'in_review',
             review_id: reviewId,
+            next_action: 'Call listen() to wait for the reviewer to approve.',
             message: `Cannot mark done — a reviewer is online and no approval exists. Review ${reviewId} auto-created. Wait for approval, then try again.`,
           };
         }
@@ -291,7 +292,11 @@ module.exports = function (ctx) {
       for (const n of notifications) { helpers.sendSystemMessage(n.agent, n.message); }
     } catch (e) { /* hooks not available */ }
 
-    return { success: true, task_id: task.id, status: task.status, title: task.title };
+    const nextAction = status === 'done' ? 'Send a summary of what you did via send_message(), then call listen().'
+      : status === 'in_progress' ? `Do the work on "${task.title}", then call update_task("${task.id}", "done") when finished.`
+      : status === 'blocked' ? 'Send a message explaining the blocker, then call listen().'
+      : 'Call listen() to receive updates.';
+    return { success: true, task_id: task.id, status: task.status, title: task.title, next_action: nextAction };
   }
 
   // --- List Tasks ---

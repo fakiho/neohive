@@ -56,7 +56,7 @@ module.exports = function (ctx) {
       result.preview = `${latest.from}: "${latest.content.substring(0, 80).replace(/\n/g, ' ')}..."`;
       const oldestAge = Math.round((Date.now() - new Date(unconsumed[0].timestamp).getTime()) / 1000);
       result.urgency = oldestAge > 120 ? 'critical' : oldestAge > 30 ? 'urgent' : 'normal';
-      result.action_required = 'You have unread messages. Call listen() to receive and process them. Do NOT call check_messages() again — it does not consume messages and you will see the same messages repeatedly.';
+      result.next_action = 'Call listen() to receive and process these messages.';
     }
 
     return result;
