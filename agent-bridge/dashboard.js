@@ -3958,11 +3958,21 @@ function startFileWatcher() {
         sseNotifyAll(changeType);
       }, 2000);
     });
-    fsWatcher.on('error', () => {}); // ignore watch errors
+    fsWatcher.on('error', () => {
+      setTimeout(startFileWatcher, 1000);
+    });
   } catch {}
 }
 
 startFileWatcher();
+
+// macOS fs.watch() loses its handle when files are deleted and recreated (e.g. reset --force).
+// Periodically verify the watcher is still alive and restart if needed.
+setInterval(() => {
+  const dataDir = resolveDataDir();
+  if (!fs.existsSync(dataDir)) return;
+  if (!fsWatcher) startFileWatcher();
+}, 5000).unref();
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
@@ -3979,7 +3989,7 @@ server.listen(PORT, LAN_MODE ? '0.0.0.0' : '127.0.0.1', () => {
   const dataDir = resolveDataDir();
   const lanIP = getLanIP();
   console.log('');
-  console.log('  Neohive Dashboard v6.0.0');
+  console.log('  Neohive Dashboard v6.1.0');
   console.log('  ============================================');
   console.log('  Dashboard:  http://localhost:' + PORT);
   if (LAN_MODE && lanIP) {
