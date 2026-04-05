@@ -609,6 +609,14 @@ function init() {
 
   console.log('');
 
+  // Create .neohive/ data directory up front so the dashboard and file
+  // watcher work immediately, even before the first MCP server starts.
+  const neohiveDir = dataDir(cwd);
+  if (!fs.existsSync(neohiveDir)) {
+    fs.mkdirSync(neohiveDir, { recursive: true, mode: 0o700 });
+    console.log('  [ok] Created ' + path.basename(neohiveDir) + '/');
+  }
+
   for (const target of targets) {
     switch (target) {
       case 'claude':      setupClaude(serverPath, cwd);   break;
