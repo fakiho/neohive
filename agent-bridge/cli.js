@@ -123,9 +123,11 @@ function setupClaude(serverPath, cwd) {
     }
   }
 
+  const abDataDir = path.join(path.resolve(cwd), '.neohive').replace(/\\/g, '/');
   mcpConfig.mcpServers['neohive'] = {
     command: mcpNodeCommand(),
     args: [serverPath],
+    env: { NEOHIVE_DATA_DIR: abDataDir },
     timeout: CLI_CONFIG.MCP_TOOL_TIMEOUT_S,
   };
 
@@ -155,9 +157,11 @@ function setupGemini(serverPath, cwd) {
     }
   }
 
+  const abDataDir = path.join(path.resolve(cwd), '.neohive').replace(/\\/g, '/');
   settings.mcpServers['neohive'] = {
     command: mcpNodeCommand(),
     args: [serverPath],
+    env: { NEOHIVE_DATA_DIR: abDataDir },
     timeout: CLI_CONFIG.MCP_TOOL_TIMEOUT_S,
     trust: true,
   };
