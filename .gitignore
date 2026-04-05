@@ -39,7 +39,6 @@ neohive/.lan-token
 
 # Build artifacts
 *.tgz
-agent-bridge/logo.png
 
 # Dev scratch scripts (root-level)
 /test-*.js
