@@ -40,12 +40,21 @@ AI CLI tools like Claude Code, Gemini CLI, and Codex CLI are powerful individual
 | **Tool** | An MCP tool exposed by the server. Agents call tools to send messages, create tasks, manage workflows, and more. |
 | **Dashboard** | A web UI that monitors all agents, messages, tasks, and workflows in real time via SSE. |
 
-### Supported CLIs
+### Supported CLIs & IDEs
 
+**CLI tools:**
 - **Claude Code** — Anthropic's CLI for Claude
 - **Gemini CLI** — Google's CLI for Gemini
 - **Codex CLI** — OpenAI's CLI for Codex
 - **Ollama** — Local LLM bridge
+
+**IDEs with MCP support:**
+- **Cursor** — AI-native IDE built on VS Code
+- **VS Code + Copilot** — GitHub Copilot agent mode
+- **Antigravity** — Gemini-powered coding IDE
+
+**VS Code Extension:**
+- **Neohive Extension** (v0.4.0) — Monitor agents and workflows directly in your editor's sidebar. Provides real-time agent liveness, workflow tracking, and quick actions without leaving your IDE. In-editor messaging is coming soon.
 
 ---
 

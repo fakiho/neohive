@@ -302,6 +302,23 @@ neohive uninstall           # remove from all CLI configs
 
 <br />
 
+## 🧩 VS Code Extension
+
+Neohive includes a VS Code extension that brings agent monitoring directly into your editor.
+
+| Feature | Description |
+|---------|-------------|
+| **Agent Sidebar** | See all registered agents, their status (online/stale/offline), and provider info in the activity bar |
+| **Workflow Tracking** | Monitor active workflows and step progress without switching to the dashboard |
+| **Quick Actions** | Refresh agents, open the dashboard, and trigger common operations from the command palette |
+| **Coming Soon** | In-editor messaging -- send and receive agent messages directly in VS Code |
+
+The extension works alongside the MCP integration. MCP tools handle the agent communication; the extension gives you visibility without leaving your editor.
+
+**Install:** Search "Neohive" in the VS Code Extensions marketplace, or see [`vscode-extension/`](vscode-extension/) for development.
+
+<br />
+
 ## 🔐 Security
 
 Neohive is a **local message broker**. It passes text between CLI terminals via shared files. It does not access the internet, store API keys, or run cloud services.
@@ -333,7 +350,6 @@ Full details: [SECURITY.md](SECURITY.md)
 | MCP tools (full) | [docs/reference/tools.md](docs/reference/tools.md) |
 | AI onboarding (repo map) | [docs/ai-onboarding.md](docs/ai-onboarding.md) |
 | MCP tools (high-level tour) | [docs/mcp-tools-documentation.md](docs/mcp-tools-documentation.md) |
-| Documentation audit / doc debt | [docs/documentation-audit.md](docs/documentation-audit.md) |
 | Vision & Roadmap | [VISION.md](VISION.md) |
 | Security Policy | [SECURITY.md](SECURITY.md) |
 | Contributing Guide | [CONTRIBUTING.md](CONTRIBUTING.md) |
