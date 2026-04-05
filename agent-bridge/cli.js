@@ -291,6 +291,13 @@ function setupAntigravity(cwd) {
 
   const abDataDir = path.join(path.resolve(cwd), '.neohive').replace(/\\/g, '/');
 
+  // Antigravity uses a single global config. Warn if overwriting a different project.
+  const existing = config.mcpServers['neohive'];
+  if (existing && existing.env && existing.env.NEOHIVE_DATA_DIR && existing.env.NEOHIVE_DATA_DIR !== abDataDir) {
+    console.log('  [warn] Antigravity: overwriting previous project → ' + existing.env.NEOHIVE_DATA_DIR);
+    console.log('         Antigravity uses a single global config — only one project at a time.');
+  }
+
   config.mcpServers['neohive'] = {
     command: 'npx',
     args: ['-y', 'neohive', 'mcp'],
