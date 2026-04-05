@@ -170,4 +170,4 @@ npx neohive init --all    # configure every detected CLI/IDE at once
 
 ---
 
-*Neohive v6.2.1 — [Website](https://neohive.alionix.com) · Built by [Alionix](https://github.com/fakiho)*
+*Neohive v6.2.2 — [Website](https://neohive.alionix.com) · Built by [Alionix](https://github.com/fakiho)*
