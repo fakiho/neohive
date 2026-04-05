@@ -402,57 +402,46 @@
   .agent-card {
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 12px;
-    margin-bottom: 6px;
-    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 4px;
+    transition: background 0.15s ease, border-color 0.15s ease;
     cursor: pointer;
     position: relative;
     overflow: hidden;
   }
 
   .agent-card:hover {
-    transform: translateX(4px);
-    border-color: var(--nh-accent-50);
     background: var(--surface-3);
-    box-shadow: var(--shadow-sm);
+    border-color: var(--border-light);
   }
 
   .agent-card.working, .agent-card.active {
-    border-left: 3px solid var(--green);
-    box-shadow: 0 0 15px var(--green-dim);
-    animation: nh-glow-pulse 2s infinite ease-in-out;
+    background: var(--surface-3);
   }
 
-  .agent-card.dead, .agent-card.offline {
-    opacity: 0.5;
-  }
-  .agent-card.unknown {
-    opacity: 0.4;
-    border-left: 3px solid var(--nh-text-muted);
-  }
-  .agent-card.stale {
-    opacity: 0.65;
-    border-left: 3px solid var(--orange);
-  }
+  .agent-card.dead, .agent-card.offline { opacity: 0.45; }
+  .agent-card.unknown { opacity: 0.35; }
+  .agent-card.stale { opacity: 0.6; }
 
   .agent-top {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
   }
 
   .agent-avatar {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    font-size: 11px;
+    font-size: 13px;
     color: #fff;
     flex-shrink: 0;
+    letter-spacing: -0.02em;
   }
 
   .agent-info { flex: 1; min-width: 0; }
@@ -463,18 +452,18 @@
     border-radius: 50%;
     flex-shrink: 0;
   }
-  .agent-status-dot.active, .agent-status-dot.working { background: var(--green); box-shadow: var(--nh-green-glow); }
-  .agent-status-dot.listening { background: var(--nh-blue); box-shadow: 0 0 6px var(--nh-blue); animation: pulse 2s infinite; }
-  .agent-status-dot.sleeping, .agent-status-dot.idle { background: var(--nh-accent); animation: pulse 2s infinite; }
-  .agent-status-dot.dead, .agent-status-dot.offline { background: var(--nh-text-muted); }
-  .agent-status-dot.unknown { background: var(--nh-text-muted); opacity: 0.5; }
-  .agent-status-dot.stale { background: var(--orange); animation: pulse 2s infinite; }
-  .agent-status-dot.unresponsive { background: var(--orange, #f97316); box-shadow: 0 0 6px var(--orange, #f97316); animation: pulse 2s infinite; }
-  .agent-status-dot.stuck { background: var(--red, #ef4444); box-shadow: 0 0 8px var(--red, #ef4444); animation: pulse 1.2s infinite; }
+  .agent-status-dot.active, .agent-status-dot.working { background: var(--green); box-shadow: 0 0 4px var(--green); }
+  .agent-status-dot.listening { background: var(--nh-blue); box-shadow: 0 0 4px var(--nh-blue); animation: pulse 2s infinite; }
+  .agent-status-dot.sleeping, .agent-status-dot.idle { background: var(--nh-accent); }
+  .agent-status-dot.dead, .agent-status-dot.offline { background: var(--nh-text-muted); opacity: 0.4; }
+  .agent-status-dot.unknown { background: var(--nh-text-muted); opacity: 0.3; }
+  .agent-status-dot.stale { background: var(--orange); }
+  .agent-status-dot.unresponsive { background: var(--orange, #f97316); animation: pulse 2s infinite; }
+  .agent-status-dot.stuck { background: var(--red, #ef4444); animation: pulse 1.2s infinite; }
 
   .agent-state-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 600; letter-spacing: 0.02em; line-height: 16px; flex-shrink: 0; }
-  .agent-state-pill.listening { background: rgba(96,165,250,0.15); color: #60a5fa; }
-  .agent-state-pill.working   { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .agent-state-pill.listening { background: rgba(96,165,250,0.12); color: #60a5fa; }
+  .agent-state-pill.working   { background: rgba(74,222,128,0.12); color: #4ade80; }
   .agent-current-tool { font-size: 10px; color: var(--nh-text-muted, #6b7280); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
 
   .agent-card.stuck { border-color: rgba(239, 68, 68, 0.3); }
@@ -483,20 +472,22 @@
   .agent-name {
     font-weight: 600;
     font-size: 13px;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .agent-subtitle {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin-top: 1px;
   }
 
-  /* ===== AGENT SKILLS ===== */
+  /* ===== AGENT SKILLS (visible in popup, hidden in card) ===== */
   .agent-skills {
     display: flex;
     flex-wrap: wrap;
@@ -508,66 +499,45 @@
     font-size: 9px;
     padding: 1px 5px;
     border-radius: 4px;
-    background: var(--surface-3);
-    color: var(--text-dim);
-    border: 1px solid var(--border);
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: none;
+    font-weight: 500;
   }
 
-  /* ===== NUDGE & SPARKLINE ===== */
+  /* ===== NUDGE ===== */
   .agent-nudge-btn {
     position: absolute;
     top: 8px;
     right: 8px;
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     border-radius: 6px;
-    background: var(--nh-red-10);
-    border: 1px solid var(--nh-red);
-    color: var(--nh-red);
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     opacity: 0;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
     z-index: 10;
   }
-  .agent-card:hover .agent-nudge-btn { opacity: 1; }
-  .agent-nudge-btn:hover { background: var(--nh-red); color: #fff; transform: scale(1.1); box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
+  .agent-card:hover .agent-nudge-btn { opacity: 0.6; }
+  .agent-nudge-btn:hover { opacity: 1 !important; color: var(--red); }
 
-  .listen-sparkline {
-    display: flex;
-    gap: 3px;
-    margin-top: 8px;
-    padding-top: 4px;
-    border-top: 1px solid var(--nh-divider);
-    align-items: center;
-  }
-  .listen-sparkline-label {
-    font-size: 9px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    font-weight: 700;
-    margin-right: 4px;
-    letter-spacing: 0.5px;
-  }
-  .hb-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--nh-divider-strong);
-    transition: all 0.3s ease;
-  }
-  .hb-dot.active {
-    background: var(--nh-green);
-    box-shadow: 0 0 6px var(--nh-green);
-  }
+  /* Sparkline kept for JS compat but hidden in card */
+  .listen-sparkline { display: none; }
+  .listen-sparkline-label { display: none; }
+  .hb-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--nh-divider-strong); }
+  .hb-dot.active { background: var(--nh-green); }
   .hb-dot.stale { background: var(--nh-orange); opacity: 0.5; }
   .hb-dot.empty { background: transparent; border: 1px solid var(--nh-divider); }
 
   @keyframes stuck-pulse {
     0% { border-color: var(--nh-divider); }
-    50% { border-color: var(--nh-red); box-shadow: inset 0 0 10px var(--nh-red-10); }
+    50% { border-color: var(--nh-red); }
     100% { border-color: var(--nh-divider); }
   }
   .agent-card.stuck {
@@ -1073,7 +1043,7 @@
   .msg-avatar {
     width: 36px;
     height: 36px;
-    border-radius: 9999px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1845,18 +1815,17 @@
     margin: 1px 6px;
     position: relative;
   }
-  .nav-item:hover { background: var(--nh-card); color: var(--text); }
+  .nav-item:hover { background: var(--surface-2); color: var(--text); }
   .nav-item.active {
-    background: rgba(245, 158, 11, 0.1);
+    background: var(--surface-2);
     border-color: transparent;
-    box-shadow: inset 3px 0 0 var(--nh-accent);
   }
   .nav-item .nav-icon { line-height: 0; flex-shrink: 0; width: 20px; min-width: 20px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
   .nav-item .nav-icon svg { flex-shrink: 0; width: 16px; height: 16px; }
-  .nav-item.active .nav-icon { color: var(--accent); }
+  .nav-item.active .nav-icon { color: var(--text); }
   .nav-item:hover .nav-icon { color: var(--text); }
   .nav-item .nav-text { font-size: 14px; font-weight: 500; color: var(--text-dim); }
-  .nav-item.active .nav-text { color: var(--accent); font-weight: 500; }
+  .nav-item.active .nav-text { color: var(--text); font-weight: 600; }
   .nav-item:hover .nav-text { color: var(--text); }
   .nav-sidebar.collapsed .nav-item { justify-content: center; padding: 10px 4px; margin: 0; }
   .nav-sidebar.collapsed .nav-item .nav-text { display: none; }
@@ -2584,6 +2553,8 @@
   .kanban-title.blocked { background: var(--red-dim); color: var(--red); }
   .kanban-title.blocked_permanent { background: var(--red); color: #fff; }
 
+  .task-card.blocked_permanent { border-color: var(--red); border-left: 3px solid var(--red); background: var(--red-dim); }
+
   .kanban-count {
     font-size: 10px;
     opacity: 0.7;
@@ -2941,7 +2912,6 @@
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    border-left: 3px solid var(--nh-border, var(--border));
   }
   .system-event-banner .event-icon {
     flex-shrink: 0;
@@ -2973,22 +2943,16 @@
     flex-shrink: 0;
     margin-top: 2px;
   }
-  /* Type colors — left border + icon color */
-  .system-event-banner.evt-critical { border-left-color: #ef4444; }
+  /* Type colors — icon + text */
   .system-event-banner.evt-critical .event-icon { color: #ef4444; }
   .system-event-banner.evt-critical .event-text { color: #ef4444; font-weight: 500; }
-  .system-event-banner.evt-warning { border-left-color: #f59e0b; }
   .system-event-banner.evt-warning .event-icon { color: #f59e0b; }
   .system-event-banner.evt-warning .event-text { color: #f59e0b; }
-  .system-event-banner.evt-event { border-left-color: #22c55e; }
   .system-event-banner.evt-event .event-icon { color: #22c55e; }
-  .system-event-banner.evt-review { border-left-color: #3b82f6; }
   .system-event-banner.evt-review .event-icon { color: #3b82f6; }
-  .system-event-banner.evt-status { border-left-color: #6b7280; }
   .system-event-banner.evt-status .event-icon { color: #6b7280; }
-  .system-event-banner.evt-role { border-left-color: #8b5cf6; }
   .system-event-banner.evt-role .event-icon { color: #8b5cf6; }
-  .system-event-banner.evt-violation { border-left-color: #ef4444; background: rgba(239,68,68,0.05); }
+  .system-event-banner.evt-violation { background: rgba(239,68,68,0.05); }
   .system-event-banner.evt-violation .event-icon { color: #ef4444; }
   .system-event-banner.evt-violation .event-text { color: var(--text); font-weight: 500; }
 
@@ -3244,9 +3208,9 @@
 
   /* ===== v3.0: PROFILE AVATAR ===== */
   .agent-avatar-img {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
     object-fit: cover;
     flex-shrink: 0;
   }
@@ -3254,7 +3218,7 @@
   .msg-avatar-img {
     width: 36px;
     height: 36px;
-    border-radius: 50%;
+    border-radius: 8px;
     object-fit: cover;
     flex-shrink: 0;
     margin-top: 2px;
@@ -3263,33 +3227,27 @@
 
   .role-badge {
     font-size: 9px;
-    padding: 1px 5px;
+    padding: 2px 6px;
     border-radius: 6px;
     font-weight: 600;
-    background: var(--purple-dim);
-    color: var(--purple);
     margin-left: 4px;
   }
 
-  /* ===== v3.0: PROFILE POPUP (3-TAB) ===== */
+  /* ===== v4.0: AGENT POPUP (stats-first, compact) ===== */
   .profile-popup {
     display: none;
     position: fixed;
     z-index: 300;
     background: var(--surface);
-    background-image: var(--gradient-surface);
     border: 1px solid var(--border-light);
-    border-radius: 14px;
+    border-radius: 12px;
     padding: 0;
-    width: 310px;
+    width: 280px;
     box-sizing: border-box;
-    max-height: 80vh;
-    overflow-x: hidden;
-    overflow-y: hidden;
+    max-height: 70vh;
+    overflow: hidden;
     word-break: break-word;
-    box-shadow: var(--shadow-lg), 0 0 40px rgba(0,0,0,0.2);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
   }
 
   .profile-popup.open { display: block; }
@@ -3297,40 +3255,40 @@
   .profile-popup-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 16px 18px 12px;
+    gap: 10px;
+    padding: 14px 16px 10px;
   }
 
   .profile-popup-avatar {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     object-fit: cover;
     flex-shrink: 0;
   }
 
   .profile-popup-name {
     font-weight: 700;
-    font-size: 15px;
+    font-size: 14px;
     line-height: 1.2;
   }
 
   .profile-popup-id {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--text-muted);
+    margin-top: 1px;
   }
 
   .pp-status-badge {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
-    padding: 2px 8px;
-    border-radius: 10px;
-    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    margin-left: 4px;
   }
   .pp-status-badge.online { background: rgba(52,211,153,0.15); color: #34d399; }
   .pp-status-badge.offline { background: rgba(156,163,175,0.15); color: #9ca3af; }
@@ -3338,36 +3296,15 @@
   .pp-status-badge.unresponsive { background: rgba(249,115,22,0.15); color: #f97316; }
   .pp-status-badge.stuck { background: rgba(239,68,68,0.15); color: #ef4444; }
 
-  /* Tab bar */
-  .pp-tabs {
-    display: flex;
-    border-bottom: 1px solid var(--border);
-    padding: 0 18px;
-    gap: 0;
-  }
-  .pp-tab {
-    flex: 1;
-    padding: 8px 0;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    color: var(--text-muted);
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    cursor: pointer;
-    text-align: center;
-    transition: color 0.15s, border-color 0.15s;
-  }
-  .pp-tab:hover { color: var(--text); }
-  .pp-tab.active { color: var(--nh-accent); border-bottom-color: var(--nh-accent); }
+  /* Tabs hidden by default — kept for JS compat */
+  .pp-tabs { display: none; }
+  .pp-tab { display: none; }
 
-  /* Tab content */
+  /* Tab content — stats always visible */
   .pp-tab-content {
     display: none;
-    padding: 14px 18px 16px;
-    max-height: calc(80vh - 140px);
+    padding: 0 16px 14px;
+    max-height: calc(70vh - 100px);
     overflow-y: auto;
     overflow-x: hidden;
   }
@@ -3398,12 +3335,11 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 6px;
-    margin-top: 8px;
   }
 
   .profile-popup-stat {
     font-size: 11px;
-    color: var(--text-dim);
+    color: var(--text-muted);
     background: var(--surface-2);
     border-radius: 8px;
     padding: 8px 10px;
@@ -3413,9 +3349,38 @@
     font-weight: 600;
     color: var(--text);
     display: block;
-    font-size: 16px;
-    margin-bottom: 2px;
+    font-size: 15px;
+    margin-bottom: 1px;
   }
+
+  .pp-quick-actions {
+    display: flex;
+    gap: 6px;
+    padding: 0 16px 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    margin-top: 2px;
+  }
+  .pp-quick-action {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 0;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--text-dim);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .pp-quick-action:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+  .pp-quick-action svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.8; flex-shrink: 0; }
 
   /* Actions tab */
   .pp-actions-grid {
@@ -4250,7 +4215,7 @@
   .avatar-option {
     width: 44px;
     height: 44px;
-    border-radius: 50%;
+    border-radius: 10px;
     border: 2px solid var(--border);
     cursor: pointer;
     transition: all 0.15s;
@@ -4265,7 +4230,7 @@
   .char-designer {
     position: fixed;
     top: 0; right: 0; bottom: 0;
-    width: 480px;
+    width: 380px;
     max-width: 100vw;
     background: var(--surface);
     border-left: 1px solid var(--border);
@@ -4305,28 +4270,13 @@
     flex: 1; overflow-y: auto; padding: 0;
   }
 
-  .cd-preview {
-    width: 100%;
-    height: 250px;
-    background: #12151c;
-    position: relative;
-    border-bottom: 1px solid var(--border);
-    cursor: grab;
-  }
-  .cd-preview:active { cursor: grabbing; }
-  .cd-preview canvas { display: block; width: 100% !important; height: 100% !important; }
-
   .cd-info-section {
     padding: 14px 18px;
-    display: flex; flex-direction: column; gap: 8px;
+    display: flex; flex-direction: column; gap: 10px;
     border-bottom: 1px solid var(--border);
   }
-  .cd-info-section .cd-avatar-row {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
-  }
-  .cd-info-section .cd-avatar-row .avatar-option { width: 36px; height: 36px; }
   .cd-avatar-grid {
-    display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-bottom: 6px;
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 2px;
   }
   .cd-avatar-upload-row {
     display: flex; gap: 6px; align-items: center;
@@ -4351,82 +4301,6 @@
   }
   .cd-field input[type="text"]:focus, .cd-field textarea:focus {
     border-color: var(--accent);
-  }
-
-  .cd-tabs {
-    display: flex;
-    padding: 0 18px;
-    border-bottom: 1px solid var(--border);
-    gap: 0;
-    flex-shrink: 0;
-    overflow-x: auto;
-  }
-  .cd-tab {
-    background: none; border: none; border-bottom: 2px solid transparent;
-    color: var(--text-dim); padding: 10px 12px; font-size: 12px; font-weight: 600;
-    cursor: pointer; transition: all 0.15s; white-space: nowrap;
-    font-family: inherit;
-  }
-  .cd-tab:hover { color: var(--text); background: var(--surface-2); }
-  .cd-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-
-  .cd-tab-content {
-    padding: 14px 18px;
-    display: none;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .cd-tab-content.active { display: flex; }
-
-  .cd-subsection-label {
-    font-size: 10px; color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: 0.5px;
-    margin-bottom: 2px;
-  }
-
-  .cd-item-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-  }
-
-  .cd-item-card {
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    gap: 4px;
-    background: var(--surface-2);
-    border: 2px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 6px;
-    cursor: pointer;
-    transition: all 0.15s;
-    font-size: 11px; color: var(--text-dim);
-    text-align: center;
-    min-height: 56px;
-  }
-  .cd-item-card:hover { border-color: var(--border-light); color: var(--text); background: var(--surface-3); }
-  .cd-item-card.active {
-    border-color: var(--accent);
-    background: var(--accent-dim);
-    color: var(--text);
-    box-shadow: 0 0 0 1px var(--accent-glow);
-  }
-  .cd-item-card .cd-card-icon { font-size: 18px; line-height: 1; }
-  .cd-item-card .cd-card-label { font-size: 10px; font-weight: 500; }
-
-  .cd-color-row {
-    display: flex; align-items: center; gap: 10px;
-  }
-  .cd-color-row label {
-    font-size: 11px; color: var(--text-dim); min-width: 70px;
-  }
-  .cd-color-row input[type="color"] {
-    width: 40px; height: 28px; border: 1px solid var(--border);
-    border-radius: 6px; background: var(--surface-2);
-    cursor: pointer; padding: 2px;
-  }
-  .cd-color-row .cd-color-hex {
-    font-size: 11px; color: var(--text-muted); font-family: monospace;
   }
 
   .cd-footer {
@@ -4533,7 +4407,7 @@
         <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8l2 2 4-4"/></svg></span><span class="nav-text">Tasks</span>
       </div>
       <div class="nav-item" data-view="workflows" onclick="switchView('workflows')">
-        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8a6 6 0 0111 0M14 8a6 6 0 01-11 0"/><path d="M13 5v3h-3M3 11v-3h3"/></svg></span><span class="nav-text">Workflows</span>
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="3" cy="8" r="1.5"/><circle cx="13" cy="4" r="1.5"/><circle cx="13" cy="12" r="1.5"/><path d="M4.5 7.2L11.5 4.5M4.5 8.8L11.5 11.5"/></svg></span><span class="nav-text">Workflows</span>
       </div>
       <div class="nav-item" data-view="stats" onclick="switchView('stats')">
         <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14V8M8 14V3M13 14V6"/></svg></span><span class="nav-text">Analytics</span>
@@ -4548,9 +4422,8 @@
       <div class="nav-sidebar-label">AGENTS</div>
       <div id="agents-list"></div>
     </div>
-    <div class="nav-sidebar-divider"></div>
-    <!-- Project -->
-    <div class="nav-sidebar-section nav-sidebar-project">
+    <!-- Project (hidden — single-project mode) -->
+    <div class="nav-sidebar-section nav-sidebar-project" style="display:none">
       <div class="nav-sidebar-label" style="display:flex;align-items:center;justify-content:space-between;gap:6px">
         <span>PROJECT</span>
         <span style="display:flex;align-items:center;gap:2px">
@@ -4620,14 +4493,15 @@
     <div class="branch-tabs" id="branch-tabs"></div>
     <div class="search-bar" id="search-bar">
       <input class="search-input" id="search-input" placeholder="Search messages...  ( / )" oninput="onSearch()">
-      <button id="search-all-btn" onclick="toggleSearchAll()" title="Search across all projects" style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;color:var(--text-muted);white-space:nowrap;transition:all 0.2s">All Projects</button>
-      <button id="deep-search-btn" onclick="deepSearch()" title="Search full history (server-side, includes compacted messages and channels)" style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;color:var(--text-muted);white-space:nowrap;transition:all 0.2s">Deep Search</button>
       <span class="search-count" id="search-count"></span>
       <button class="compact-toggle" id="compact-toggle" onclick="toggleCompactMode()" title="Toggle compact view">Compact</button>
       <select id="conversation-select" onchange="loadConversation()" title="Load saved conversation" style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;color:var(--text-muted)"><option value="">Current</option></select>
       <button onclick="newConversation()" title="Archive current and start fresh" style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;color:var(--text-muted);white-space:nowrap;transition:all 0.2s">New Conversation</button>
-      <button onclick="clearMessages()" title="Clear all messages for this project" style="background:#4a2020;border:1px solid #6a3030;border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;color:#ff6b6b;white-space:nowrap;transition:all 0.2s">Clear Messages</button>
+      <button onclick="scrollToLatest()" title="Scroll to latest message" style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:10px;cursor:pointer;color:var(--text-muted);white-space:nowrap;transition:all 0.2s;display:flex;align-items:center;gap:4px"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M4 9l4 4 4-4"/></svg>Latest</button>
     </div>
+    <!-- Hidden but preserved for JS compatibility -->
+    <button id="search-all-btn" style="display:none"></button>
+    <button id="deep-search-btn" style="display:none"></button>
     <div class="channel-filter-bar" id="channel-filter-bar" style="display:none"></div>
     <div class="pinned-section" id="pinned-section">
       <div class="pinned-header" onclick="togglePinnedSection()"><span>Pinned Messages</span><span class="pinned-toggle" id="pinned-toggle">Hide</span></div>
@@ -4682,52 +4556,42 @@
       <div class="profile-popup-id" id="pp-id"></div>
     </div>
   </div>
-  <div class="pp-tabs">
+  <!-- Tabs (hidden but kept for JS compat) -->
+  <div class="pp-tabs" style="display:none">
     <button class="pp-tab active" data-tab="stats" onclick="switchPpTab('stats')">Stats</button>
     <button class="pp-tab" data-tab="actions" onclick="switchPpTab('actions')">Actions</button>
     <button class="pp-tab" data-tab="profile" onclick="switchPpTab('profile')">Profile</button>
-    <button class="pp-tab" data-tab="terminal" onclick="switchPpTab('terminal', true)" style="display:none">Terminal</button>
+    <button class="pp-tab" data-tab="terminal" onclick="switchPpTab('terminal', true)">Terminal</button>
   </div>
-  <!-- Stats Tab -->
+  <!-- Stats (always visible) -->
   <div class="pp-tab-content active" id="pp-tab-stats">
-    <div id="pp-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+    <div id="pp-badges" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px"></div>
     <div class="profile-popup-stats" id="pp-stats"></div>
-    <div id="pp-skills-readonly" style="margin-top:12px"></div>
+    <div id="pp-skills-readonly" style="margin-top:10px"></div>
   </div>
-  <!-- Actions Tab -->
-  <div class="pp-tab-content" id="pp-tab-actions">
-    <div class="pp-actions-grid" id="pp-actions"></div>
-  </div>
-  <!-- Profile Tab -->
-  <div class="pp-tab-content" id="pp-tab-profile">
+  <!-- Quick actions row -->
+  <div class="pp-quick-actions" id="pp-quick-actions"></div>
+  <!-- Hidden tabs for JS compat -->
+  <div class="pp-tab-content" id="pp-tab-actions" style="display:none"><div class="pp-actions-grid" id="pp-actions"></div></div>
+  <div class="pp-tab-content" id="pp-tab-profile" style="display:none">
     <div class="profile-popup-bio" id="pp-bio"></div>
-    <div id="pp-skills-container" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"></div>
-    <button class="btn btn-primary" style="width:100%;margin-top:12px" id="pp-edit-btn" onclick="openProfileEditor()">Edit Profile</button>
-    <button class="btn btn-danger" style="width:100%;margin-top:6px" id="pp-delete-btn" onclick="confirmDeleteAgent()">Delete Agent</button>
+    <div id="pp-skills-container"></div>
+    <button class="btn btn-danger" style="display:none" id="pp-delete-btn" onclick="confirmDeleteAgent()">Delete Agent</button>
   </div>
-  <!-- Terminal Tab -->
   <div class="pp-tab-content" id="pp-tab-terminal" style="display:none">
-    <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:6px">Live Terminal Bridge</div>
-    <div class="terminal-wrapper">
-      <div id="pp-terminal-container"></div>
-    </div>
-    <div style="font-size:10px;color:var(--text-muted);margin-top:8px;display:flex;justify-content:space-between">
-      <span>Real-time agent stream</span>
-      <span id="terminal-status">Ready</span>
-    </div>
+    <div class="terminal-wrapper"><div id="pp-terminal-container"></div></div>
+    <span id="terminal-status" style="display:none">Ready</span>
   </div>
 </div>
 
-<!-- Character Designer Panel -->
+<!-- Profile Editor Panel (replaces Character Designer) -->
 <div class="char-designer-backdrop" id="cd-backdrop" onclick="closeProfileEditor()"></div>
 <div class="char-designer" id="char-designer">
   <div class="cd-header">
-    <h3>Character Designer</h3>
+    <h3>Edit Profile</h3>
     <button class="cd-close" onclick="closeProfileEditor()">&times;</button>
   </div>
   <div class="cd-body">
-
-    <!-- Info Section: Avatar + Name/Role/Bio -->
     <div class="cd-info-section">
       <div class="cd-field">
         <label>Avatar</label>
@@ -4744,349 +4608,52 @@
         <label>Display Name</label>
         <input type="text" id="pe-display-name" maxlength="30">
       </div>
-      <div style="display:flex;gap:8px">
-        <div class="cd-field" style="flex:1">
-          <label>Role</label>
-          <input type="text" id="pe-role" maxlength="30" placeholder="e.g. Architect, Coder">
-        </div>
-      </div>
       <div class="cd-field">
-        <label>Bio</label>
-        <textarea id="pe-bio" maxlength="200" rows="2" placeholder="Short description..."></textarea>
+        <label>Role</label>
+        <input type="text" id="pe-role" maxlength="30" placeholder="e.g. Architect, Coder">
       </div>
+      <textarea id="pe-bio" style="display:none"></textarea>
     </div>
 
-    <!-- Tabs -->
-    <div class="cd-tabs">
-      <button class="cd-tab active" onclick="cdSwitchTab('body', this)">Body</button>
-      <button class="cd-tab" onclick="cdSwitchTab('hair', this)">Hair</button>
-      <button class="cd-tab" onclick="cdSwitchTab('face', this)">Face</button>
-      <button class="cd-tab" onclick="cdSwitchTab('outfit', this)">Outfit</button>
-      <button class="cd-tab" onclick="cdSwitchTab('accessories', this)">Acc.</button>
+    <!-- Stats -->
+    <div class="cd-info-section" style="border-bottom:none">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted)">Stats</div>
+      <div id="pe-stats-container" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;color:var(--text)"></div>
+    </div>
+
+    <!-- Hidden tab elements for JS compat -->
+    <div class="cd-tabs" style="display:none">
+      <button class="cd-tab" onclick="cdSwitchTab('body', this)">Body</button>
       <button class="cd-tab" onclick="cdSwitchTab('stats', this)">Stats</button>
     </div>
-
-    <!-- Tab: Stats -->
-    <div class="cd-tab-content" id="cd-tab-stats">
-      <div id="pe-stats-container" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:var(--text)"></div>
+    <div class="cd-tab-content" id="cd-tab-stats" style="display:none"></div>
+    <div class="cd-tab-content" id="cd-tab-body" style="display:none">
+      <input type="color" id="pe-head-color" value="#FFD5B8" style="display:none">
+      <span id="cd-skin-hex" style="display:none"></span>
     </div>
-
-    <!-- Tab: Body -->
-    <div class="cd-tab-content active" id="cd-tab-body">
-      <div class="cd-color-row">
-        <label>Skin color</label>
-        <input type="color" id="pe-head-color" value="#FFD5B8" onchange="cdOnChange()">
-        <span class="cd-color-hex" id="cd-skin-hex">#FFD5B8</span>
-      </div>
-      <div>
-        <div class="cd-subsection-label">Body Type</div>
-        <div class="cd-item-grid" id="cd-body-types">
-          <div class="cd-item-card" data-value="default" onclick="cdPickBodyType(this)">
-            <span class="cd-card-icon">&#x1f9cd;</span>
-            <span class="cd-card-label">Default</span>
-          </div>
-          <div class="cd-item-card" data-value="stocky" onclick="cdPickBodyType(this)">
-            <span class="cd-card-icon">&#x1f4aa;</span>
-            <span class="cd-card-label">Stocky</span>
-          </div>
-          <div class="cd-item-card" data-value="slim" onclick="cdPickBodyType(this)">
-            <span class="cd-card-icon">&#x1f483;</span>
-            <span class="cd-card-label">Slim</span>
-          </div>
-        </div>
-      </div>
+    <div class="cd-tab-content" id="cd-tab-hair" style="display:none">
+      <input type="color" id="pe-hair-color" value="#4A3728" style="display:none">
+      <span id="cd-hair-hex" style="display:none"></span>
     </div>
-
-    <!-- Tab: Hair -->
-    <div class="cd-tab-content" id="cd-tab-hair">
-      <div>
-        <div class="cd-subsection-label">Style</div>
-        <div class="cd-item-grid" id="cd-hair-styles">
-          <div class="cd-item-card" data-value="none" onclick="cdPickHairStyle(this)">
-            <span class="cd-card-icon">&#x1f6ab;</span>
-            <span class="cd-card-label">None</span>
-          </div>
-          <div class="cd-item-card" data-value="short" onclick="cdPickHairStyle(this)">
-            <span class="cd-card-icon">&#x2702;</span>
-            <span class="cd-card-label">Short</span>
-          </div>
-          <div class="cd-item-card" data-value="spiky" onclick="cdPickHairStyle(this)">
-            <span class="cd-card-icon">&#x26a1;</span>
-            <span class="cd-card-label">Spiky</span>
-          </div>
-          <div class="cd-item-card" data-value="long" onclick="cdPickHairStyle(this)">
-            <span class="cd-card-icon">&#x1f9d1;</span>
-            <span class="cd-card-label">Long</span>
-          </div>
-          <div class="cd-item-card" data-value="ponytail" onclick="cdPickHairStyle(this)">
-            <span class="cd-card-icon">&#x1f3c3;</span>
-            <span class="cd-card-label">Ponytail</span>
-          </div>
-          <div class="cd-item-card" data-value="bob" onclick="cdPickHairStyle(this)">
-            <span class="cd-card-icon">&#x1f487;</span>
-            <span class="cd-card-label">Bob</span>
-          </div>
-          <div class="cd-item-card" data-value="curly" onclick="cdPickHairStyle(this)">
-            <span class="cd-card-icon">&#x27b0;</span>
-            <span class="cd-card-label">Curly</span>
-          </div>
-          <div class="cd-item-card" data-value="afro" onclick="cdPickHairStyle(this)">
-            <span class="cd-card-icon">&#x2b55;</span>
-            <span class="cd-card-label">Afro</span>
-          </div>
-          <div class="cd-item-card" data-value="bun" onclick="cdPickHairStyle(this)">
-            <span class="cd-card-icon">&#x1f361;</span>
-            <span class="cd-card-label">Bun</span>
-          </div>
-          <div class="cd-item-card" data-value="braids" onclick="cdPickHairStyle(this)">
-            <span class="cd-card-icon">&#x1f380;</span>
-            <span class="cd-card-label">Braids</span>
-          </div>
-          <div class="cd-item-card" data-value="mohawk" onclick="cdPickHairStyle(this)">
-            <span class="cd-card-icon">&#x1f525;</span>
-            <span class="cd-card-label">Mohawk</span>
-          </div>
-          <div class="cd-item-card" data-value="wavy" onclick="cdPickHairStyle(this)">
-            <span class="cd-card-icon">&#x1f30a;</span>
-            <span class="cd-card-label">Wavy</span>
-          </div>
-        </div>
-      </div>
-      <div class="cd-color-row">
-        <label>Hair color</label>
-        <input type="color" id="pe-hair-color" value="#4A3728" onchange="cdOnChange()">
-        <span class="cd-color-hex" id="cd-hair-hex">#4A3728</span>
-      </div>
+    <div class="cd-tab-content" id="cd-tab-face" style="display:none"></div>
+    <div class="cd-tab-content" id="cd-tab-outfit" style="display:none">
+      <input type="color" id="pe-shirt-color" value="#f59e0b" style="display:none">
+      <span id="cd-shirt-hex" style="display:none"></span>
+      <input type="color" id="pe-pants-color" value="#2d3748" style="display:none">
+      <span id="cd-pants-hex" style="display:none"></span>
+      <input type="color" id="pe-shoe-color" value="#1a1a2e" style="display:none">
+      <span id="cd-shoe-hex" style="display:none"></span>
     </div>
-
-    <!-- Tab: Face -->
-    <div class="cd-tab-content" id="cd-tab-face">
-      <div>
-        <div class="cd-subsection-label">Eyes</div>
-        <div class="cd-item-grid" id="cd-eye-styles">
-          <div class="cd-item-card" data-value="dots" onclick="cdPickEyeStyle(this)">
-            <span class="cd-card-icon">&#x1f441;</span>
-            <span class="cd-card-label">Dots</span>
-          </div>
-          <div class="cd-item-card" data-value="anime" onclick="cdPickEyeStyle(this)">
-            <span class="cd-card-icon">&#x2728;</span>
-            <span class="cd-card-label">Anime</span>
-          </div>
-          <div class="cd-item-card" data-value="glasses" onclick="cdPickEyeStyle(this)">
-            <span class="cd-card-icon">&#x1f453;</span>
-            <span class="cd-card-label">Glasses</span>
-          </div>
-          <div class="cd-item-card" data-value="sleepy" onclick="cdPickEyeStyle(this)">
-            <span class="cd-card-icon">&#x1f634;</span>
-            <span class="cd-card-label">Sleepy</span>
-          </div>
-          <div class="cd-item-card" data-value="surprised" onclick="cdPickEyeStyle(this)">
-            <span class="cd-card-icon">&#x1f632;</span>
-            <span class="cd-card-label">Surprised</span>
-          </div>
-          <div class="cd-item-card" data-value="angry" onclick="cdPickEyeStyle(this)">
-            <span class="cd-card-icon">&#x1f620;</span>
-            <span class="cd-card-label">Angry</span>
-          </div>
-          <div class="cd-item-card" data-value="happy" onclick="cdPickEyeStyle(this)">
-            <span class="cd-card-icon">&#x1f604;</span>
-            <span class="cd-card-label">Happy</span>
-          </div>
-          <div class="cd-item-card" data-value="wink" onclick="cdPickEyeStyle(this)">
-            <span class="cd-card-icon">&#x1f609;</span>
-            <span class="cd-card-label">Wink</span>
-          </div>
-          <div class="cd-item-card" data-value="confident" onclick="cdPickEyeStyle(this)">
-            <span class="cd-card-icon">&#x1f60e;</span>
-            <span class="cd-card-label">Confident</span>
-          </div>
-          <div class="cd-item-card" data-value="tired" onclick="cdPickEyeStyle(this)">
-            <span class="cd-card-icon">&#x1f62b;</span>
-            <span class="cd-card-label">Tired</span>
-          </div>
-        </div>
-      </div>
-      <div>
-        <div class="cd-subsection-label">Mouth</div>
-        <div class="cd-item-grid" id="cd-mouth-styles">
-          <div class="cd-item-card" data-value="smile" onclick="cdPickMouthStyle(this)">
-            <span class="cd-card-icon">&#x1f642;</span>
-            <span class="cd-card-label">Smile</span>
-          </div>
-          <div class="cd-item-card" data-value="neutral" onclick="cdPickMouthStyle(this)">
-            <span class="cd-card-icon">&#x1f610;</span>
-            <span class="cd-card-label">Neutral</span>
-          </div>
-          <div class="cd-item-card" data-value="open" onclick="cdPickMouthStyle(this)">
-            <span class="cd-card-icon">&#x1f62e;</span>
-            <span class="cd-card-label">Open</span>
-          </div>
-          <div class="cd-item-card" data-value="grin" onclick="cdPickMouthStyle(this)">
-            <span class="cd-card-icon">&#x1f601;</span>
-            <span class="cd-card-label">Grin</span>
-          </div>
-          <div class="cd-item-card" data-value="frown" onclick="cdPickMouthStyle(this)">
-            <span class="cd-card-icon">&#x2639;</span>
-            <span class="cd-card-label">Frown</span>
-          </div>
-          <div class="cd-item-card" data-value="smirk" onclick="cdPickMouthStyle(this)">
-            <span class="cd-card-icon">&#x1f60f;</span>
-            <span class="cd-card-label">Smirk</span>
-          </div>
-          <div class="cd-item-card" data-value="tongue" onclick="cdPickMouthStyle(this)">
-            <span class="cd-card-icon">&#x1f61b;</span>
-            <span class="cd-card-label">Tongue</span>
-          </div>
-          <div class="cd-item-card" data-value="whistle" onclick="cdPickMouthStyle(this)">
-            <span class="cd-card-icon">&#x1f617;</span>
-            <span class="cd-card-label">Whistle</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tab: Outfit -->
-    <div class="cd-tab-content" id="cd-tab-outfit">
-      <div>
-        <div class="cd-subsection-label">Outfit Style</div>
-        <div class="cd-item-grid" id="cd-outfit-styles">
-          <div class="cd-item-card" data-value="" onclick="cdPickOutfit(this)">
-            <span class="cd-card-icon">&#x1f6ab;</span>
-            <span class="cd-card-label">None</span>
-          </div>
-          <div class="cd-item-card" data-value="hoodie" onclick="cdPickOutfit(this)">
-            <span class="cd-card-icon">&#x1f9e5;</span>
-            <span class="cd-card-label">Hoodie</span>
-          </div>
-          <div class="cd-item-card" data-value="suit" onclick="cdPickOutfit(this)">
-            <span class="cd-card-icon">&#x1f454;</span>
-            <span class="cd-card-label">Suit</span>
-          </div>
-          <div class="cd-item-card" data-value="dress" onclick="cdPickOutfit(this)">
-            <span class="cd-card-icon">&#x1f457;</span>
-            <span class="cd-card-label">Dress</span>
-          </div>
-          <div class="cd-item-card" data-value="labcoat" onclick="cdPickOutfit(this)">
-            <span class="cd-card-icon">&#x1f9ea;</span>
-            <span class="cd-card-label">Lab Coat</span>
-          </div>
-          <div class="cd-item-card" data-value="vest" onclick="cdPickOutfit(this)">
-            <span class="cd-card-icon">&#x1f3bd;</span>
-            <span class="cd-card-label">Vest</span>
-          </div>
-          <div class="cd-item-card" data-value="jacket" onclick="cdPickOutfit(this)">
-            <span class="cd-card-icon">&#x1f9e5;</span>
-            <span class="cd-card-label">Jacket</span>
-          </div>
-        </div>
-      </div>
-      <div class="cd-color-row">
-        <label>Shirt color</label>
-        <input type="color" id="pe-shirt-color" value="#f59e0b" onchange="cdOnChange()">
-        <span class="cd-color-hex" id="cd-shirt-hex">#f59e0b</span>
-      </div>
-      <div class="cd-color-row">
-        <label>Pants color</label>
-        <input type="color" id="pe-pants-color" value="#2d3748" onchange="cdOnChange()">
-        <span class="cd-color-hex" id="cd-pants-hex">#2d3748</span>
-      </div>
-      <div class="cd-color-row">
-        <label>Shoe color</label>
-        <input type="color" id="pe-shoe-color" value="#1a1a2e" onchange="cdOnChange()">
-        <span class="cd-color-hex" id="cd-shoe-hex">#1a1a2e</span>
-      </div>
-    </div>
-
-    <!-- Tab: Accessories -->
-    <div class="cd-tab-content" id="cd-tab-accessories">
-      <div>
-        <div class="cd-subsection-label">Glasses</div>
-        <div class="cd-item-grid" id="cd-glasses-styles">
-          <div class="cd-item-card" data-value="" onclick="cdPickGlasses(this)">
-            <span class="cd-card-icon">&#x1f6ab;</span>
-            <span class="cd-card-label">None</span>
-          </div>
-          <div class="cd-item-card" data-value="round" onclick="cdPickGlasses(this)">
-            <span class="cd-card-icon">&#x1f4a0;</span>
-            <span class="cd-card-label">Round</span>
-          </div>
-          <div class="cd-item-card" data-value="square" onclick="cdPickGlasses(this)">
-            <span class="cd-card-icon">&#x25fb;</span>
-            <span class="cd-card-label">Square</span>
-          </div>
-          <div class="cd-item-card" data-value="sunglasses" onclick="cdPickGlasses(this)">
-            <span class="cd-card-icon">&#x1f576;</span>
-            <span class="cd-card-label">Sunglasses</span>
-          </div>
-        </div>
-        <div class="cd-color-row" id="cd-glasses-color-row" style="margin-top:8px;display:none">
-          <label>Frame color</label>
-          <input type="color" id="pe-glasses-color" value="#555555" onchange="cdOnChange()">
-          <span class="cd-color-hex" id="cd-glasses-hex">#555555</span>
-        </div>
-      </div>
-      <div>
-        <div class="cd-subsection-label">Headwear</div>
-        <div class="cd-item-grid" id="cd-headwear-styles">
-          <div class="cd-item-card" data-value="" onclick="cdPickHeadwear(this)">
-            <span class="cd-card-icon">&#x1f6ab;</span>
-            <span class="cd-card-label">None</span>
-          </div>
-          <div class="cd-item-card" data-value="beanie" onclick="cdPickHeadwear(this)">
-            <span class="cd-card-icon">&#x1f9e2;</span>
-            <span class="cd-card-label">Beanie</span>
-          </div>
-          <div class="cd-item-card" data-value="cap" onclick="cdPickHeadwear(this)">
-            <span class="cd-card-icon">&#x1f9e2;</span>
-            <span class="cd-card-label">Cap</span>
-          </div>
-          <div class="cd-item-card" data-value="headphones" onclick="cdPickHeadwear(this)">
-            <span class="cd-card-icon">&#x1f3a7;</span>
-            <span class="cd-card-label">Headphones</span>
-          </div>
-          <div class="cd-item-card" data-value="headband" onclick="cdPickHeadwear(this)">
-            <span class="cd-card-icon">&#x1f3bd;</span>
-            <span class="cd-card-label">Headband</span>
-          </div>
-        </div>
-        <div class="cd-color-row" id="cd-headwear-color-row" style="margin-top:8px;display:none">
-          <label>Color</label>
-          <input type="color" id="pe-headwear-color" value="#333333" onchange="cdOnChange()">
-          <span class="cd-color-hex" id="cd-headwear-hex">#333333</span>
-        </div>
-      </div>
-      <div>
-        <div class="cd-subsection-label">Neckwear</div>
-        <div class="cd-item-grid" id="cd-neckwear-styles">
-          <div class="cd-item-card" data-value="" onclick="cdPickNeckwear(this)">
-            <span class="cd-card-icon">&#x1f6ab;</span>
-            <span class="cd-card-label">None</span>
-          </div>
-          <div class="cd-item-card" data-value="tie" onclick="cdPickNeckwear(this)">
-            <span class="cd-card-icon">&#x1f454;</span>
-            <span class="cd-card-label">Tie</span>
-          </div>
-          <div class="cd-item-card" data-value="bowtie" onclick="cdPickNeckwear(this)">
-            <span class="cd-card-icon">&#x1f380;</span>
-            <span class="cd-card-label">Bowtie</span>
-          </div>
-          <div class="cd-item-card" data-value="lanyard" onclick="cdPickNeckwear(this)">
-            <span class="cd-card-icon">&#x1f4db;</span>
-            <span class="cd-card-label">Lanyard</span>
-          </div>
-        </div>
-        <div class="cd-color-row" id="cd-neckwear-color-row" style="margin-top:8px;display:none">
-          <label>Color</label>
-          <input type="color" id="pe-neckwear-color" value="#c0392b" onchange="cdOnChange()">
-          <span class="cd-color-hex" id="cd-neckwear-hex">#c0392b</span>
-        </div>
-      </div>
+    <div class="cd-tab-content" id="cd-tab-accessories" style="display:none">
+      <div id="cd-glasses-color-row" style="display:none"><input type="color" id="pe-glasses-color" value="#555555"><span id="cd-glasses-hex"></span></div>
+      <div id="cd-headwear-color-row" style="display:none"><input type="color" id="pe-headwear-color" value="#333333"><span id="cd-headwear-hex"></span></div>
+      <div id="cd-neckwear-color-row" style="display:none"><input type="color" id="pe-neckwear-color" value="#c0392b"><span id="cd-neckwear-hex"></span></div>
     </div>
   </div>
 
   <!-- Footer -->
   <div class="cd-footer">
-    <button class="btn" onclick="cdRandomize()">Randomize</button>
+    <button class="btn" onclick="closeProfileEditor()">Cancel</button>
     <button class="btn btn-primary" onclick="saveProfile()">Save</button>
   </div>
 </div>
@@ -5453,6 +5020,14 @@ function renderAgents(agents) {
   var sleepCount = 0;
   var html = '';
 
+  function getAgentAvatar(name, info) {
+    var av = info.avatar;
+    if (av && av.indexOf("rx='32'") === -1) return av;
+    var hash = 0;
+    for (var c = 0; c < name.length; c++) hash = ((hash << 5) - hash) + name.charCodeAt(c);
+    return BUILT_IN_AVATARS[Math.abs(hash) % BUILT_IN_AVATARS.length];
+  }
+
   function renderAgentCards(agentNames) {
     var cardHtml = '';
     for (var i = 0; i < agentNames.length; i++) {
@@ -5486,82 +5061,24 @@ function renderAgents(agents) {
       }
 
       var cardClass = 'agent-card' + (state !== 'working' ? ' ' + state : '');
-      var avatarHtml = info.avatar
-        ? '<img class="agent-avatar-img" src="' + escapeHtml(info.avatar) + '" alt="' + escapeHtml(name) + '" onerror="this.style.display=\'none\'">'
-        : '<div class="agent-avatar" style="background:' + color + '">' + initial(name) + '</div>';
+      var agentAv = getAgentAvatar(name, info);
+      var avatarHtml = '<img class="agent-avatar-img" src="' + escapeHtml(agentAv) + '" alt="' + escapeHtml(name) + '" onerror="this.outerHTML=\'<div class=&quot;agent-avatar&quot; style=&quot;background:' + color + '&quot;>' + initial(name) + '</div>\'">';
       var displayName = info.display_name || name;
 
-      // Subtitle: role + activity
       var subtitleParts = [];
       if (info.role) subtitleParts.push(info.role);
       if (activityText) subtitleParts.push(activityText);
       var subtitleText = subtitleParts.join(' \u00B7 ');
 
-      // Skills: limited to 3 for sidebar cards
-      var skillsHtml = '';
-      if (info.skills && info.skills.length > 0) {
-        var platformClass = 'platform-' + (info.provider || 'unknown').toLowerCase();
-        var platformSkills = info.platform_skills || [];
-        skillsHtml = '<div class="agent-skills">';
-        for (var s = 0; s < Math.min(info.skills.length, 3); s++) {
-          var skill = info.skills[s];
-          var isPlatform = platformSkills.indexOf(skill) !== -1;
-          skillsHtml += '<span class="skill-tag' + (isPlatform ? ' ' + platformClass : '') + '">' + escapeHtml(skill) + '</span>';
-        }
-        if (info.skills.length > 3) {
-          skillsHtml += '<span class="skill-tag" style="opacity:0.5">+' + (info.skills.length - 3) + '</span>';
-        }
-        skillsHtml += '</div>';
-      }
-
-      // Nudge button (Bell icon)
-      var nudgeBtnHtml = '';
-      if (state !== 'offline' && state !== 'dead' && state !== 'unknown') {
-        nudgeBtnHtml = '<div class="agent-nudge-btn" title="Nudge agent to listen()" onclick="sendNudge(\'' + escapeHtml(name) + '\', event)">' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>' +
-        '</div>';
-      }
-
-      // Liveness Sparkline (Heartbeat dots)
-      var sparklineHtml = '';
-      if (state !== 'offline' && state !== 'dead' && state !== 'unknown') {
-        var dots = '';
-        var history = info.listen_history || [];
-        // Fallback: synthesize from last_listen_call if listen_history is missing
-        if (history.length === 0) {
-          var llc = info.last_listen_call || info.last_listened_at;
-          if (llc) {
-            var llcTs = typeof llc === 'string' ? new Date(llc).getTime() : llc;
-            if (llcTs > 0) history = [llcTs];
-          }
-        }
-        for (var d = 0; d < 10; d++) {
-          var dotClass = 'hb-dot';
-          if (d < history.length) {
-            var age = (Date.now() - history[d]) / 1000;
-            if (age < 30) dotClass += ' active';
-            else if (age < 120) dotClass += ' stale';
-          } else {
-            dotClass += ' empty';
-          }
-          dots += '<div class="' + dotClass + '"></div>';
-        }
-        sparklineHtml = '<div class="listen-sparkline"><span class="listen-sparkline-label">Liveness</span>' + dots + '</div>';
-      }
-
       var indicatorHtml = (state === 'listening' || state === 'working')
         ? '<span class="agent-state-pill ' + state + '">' + state + '</span>'
         : '<span class="agent-status-dot ' + state + '" title="' + state + '"></span>';
       cardHtml += '<div class="' + cardClass + '" data-agent="' + escapeHtml(name) + '" onclick="showProfilePopup(\'' + escapeHtml(name) + '\', event)">' +
-        nudgeBtnHtml +
         '<div class="agent-top">' +
           avatarHtml +
           '<div class="agent-info">' +
-            '<div class="agent-name" style="color:' + color + '">' + escapeHtml(displayName) + '</div>' +
+            '<div class="agent-name">' + escapeHtml(displayName) + '</div>' +
             '<div class="agent-subtitle">' + escapeHtml(subtitleText) + '</div>' +
-            currentToolHtml +
-            skillsHtml +
-            sparklineHtml +
           '</div>' +
           indicatorHtml +
         '</div>' +
@@ -6374,6 +5891,10 @@ function scrollToBottom() {
   newWhileScrolled = 0;
   updateNewMsgPill(0);
   document.getElementById('scroll-bottom').classList.remove('visible');
+}
+
+function scrollToLatest() {
+  scrollToBottom();
 }
 
 // ==================== COMPACT MODE ====================
@@ -7194,7 +6715,7 @@ function renderTasks() {
   }
 
   // Data hash to skip unnecessary DOM rebuilds
-  var tasksHash = cachedTasks.map(function(t) { return t.id + ':' + t.status + ':' + (t.assignee || ''); }).join('|');
+  var tasksHash = cachedTasks.map(function(t) { return t.id + ':' + t.status + ':' + (t.assignee || '') + ':' + (t.retry_count || 0); }).join('|');
   if (tasksHash === _lastTasksHash) return;
   _lastTasksHash = tasksHash;
 
@@ -7247,6 +6768,7 @@ function buildTaskCard(t) {
     '<option value="in_review"' + (t.status === 'in_review' ? ' selected' : '') + '>In Review</option>' +
     '<option value="done"' + (t.status === 'done' ? ' selected' : '') + '>Done</option>' +
     '<option value="blocked"' + (t.status === 'blocked' ? ' selected' : '') + '>Blocked</option>' +
+    '<option value="blocked_permanent"' + (t.status === 'blocked_permanent' ? ' selected' : '') + '>Needs Intervention</option>' +
   '</select>';
 
   var badgesHtml = '';
@@ -7264,7 +6786,7 @@ function buildTaskCard(t) {
     ? '<div style="font-size:10px;color:var(--red);margin-top:4px;font-style:italic">' + escapeHtml(t.blocked_reason) + '</div>'
     : '';
 
-  return '<div class="task-card" draggable="true" data-task-id="' + t.id + '" ondragstart="onTaskDragStart(event)" ondragend="onTaskDragEnd(event)" onclick="showTaskDetail(\'' + t.id + '\')">' +
+  return '<div class="task-card' + (t.status === 'blocked_permanent' ? ' blocked_permanent' : '') + '" draggable="true" data-task-id="' + t.id + '" ondragstart="onTaskDragStart(event)" ondragend="onTaskDragEnd(event)" onclick="showTaskDetail(\'' + t.id + '\')">' +
     '<div class="task-title">' + escapeHtml(t.title || 'Untitled') + (badgesHtml ? ' ' + badgesHtml : '') + '</div>' +
     (t.description ? '<div class="task-desc">' + escapeHtml(t.description) + '</div>' : '') +
     blockedReasonHtml +
@@ -7299,7 +6821,14 @@ function showTaskDetail(taskId) {
 
   var html = '';
   html += '<div style="margin-bottom:16px"><div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px">' + escapeHtml(task.title || 'Untitled') + '</div>';
-  html += '<span style="font-size:11px;padding:3px 8px;border-radius:6px;font-weight:600;background:' + statusColor + '20;color:' + statusColor + '">' + escapeHtml(task.status || 'pending') + '</span></div>';
+  var statusLabel = task.status === 'blocked_permanent' ? 'Needs Intervention' : escapeHtml(task.status || 'pending');
+  html += '<span style="font-size:11px;padding:3px 8px;border-radius:6px;font-weight:600;background:' + statusColor + '20;color:' + statusColor + '">' + statusLabel + '</span>';
+  if (task.retry_count > 0) html += ' <span style="font-size:10px;padding:2px 6px;border-radius:6px;font-weight:600;background:var(--yellow)20;color:var(--yellow)" title="Reclaimed ' + task.retry_count + ' time(s) by watchdog">↺' + task.retry_count + '</span>';
+  html += '</div>';
+
+  if (task.status === 'blocked_permanent' && task.blocked_reason) {
+    html += '<div style="font-size:12px;color:var(--red);padding:8px 12px;background:var(--red-dim);border-radius:8px;margin-bottom:16px;border-left:3px solid var(--red)">' + escapeHtml(task.blocked_reason) + '</div>';
+  }
 
   if (task.description) {
     html += '<div style="font-size:13px;color:var(--text-dim);line-height:1.6;margin-bottom:16px;padding:12px;background:var(--surface-2);border-radius:8px">' + escapeHtml(task.description) + '</div>';
@@ -7909,12 +7438,18 @@ textarea.addEventListener('input', function() {
 
 // ==================== v3.0: MESSAGE AVATAR HELPER ====================
 
-function getMsgAvatar(name, color) {
+function getMsgAvatarUrl(name) {
   var agent = cachedAgents[name];
-  if (agent && agent.avatar) {
-    return '<img class="msg-avatar-img" src="' + escapeHtml(agent.avatar) + '" alt="' + escapeHtml(name) + '" onerror="this.outerHTML=\'<div class=&quot;msg-avatar&quot; style=&quot;background:' + color + '&quot;>' + initial(name) + '</div>\'">';
-  }
-  return '<div class="msg-avatar" style="background:' + color + '">' + initial(name) + '</div>';
+  var av = agent && agent.avatar;
+  if (av && av.indexOf("rx='32'") === -1) return av;
+  var hash = 0;
+  for (var c = 0; c < name.length; c++) hash = ((hash << 5) - hash) + name.charCodeAt(c);
+  return BUILT_IN_AVATARS[Math.abs(hash) % BUILT_IN_AVATARS.length];
+}
+
+function getMsgAvatar(name, color) {
+  var src = getMsgAvatarUrl(name);
+  return '<img class="msg-avatar-img" src="' + escapeHtml(src) + '" alt="' + escapeHtml(name) + '" onerror="this.outerHTML=\'<div class=&quot;msg-avatar&quot; style=&quot;background:' + color + '&quot;>' + initial(name) + '</div>\'">';
 }
 
 // ==================== v3.0: PROFILE POPUP ====================
@@ -8059,39 +7594,43 @@ function ppPing(agentName) {
 }
 
 function ppMessage(agentName) {
+  document.getElementById('profile-popup').classList.remove('open');
+  switchView('messages');
   var sel = document.getElementById('inject-target');
   if (sel) sel.value = agentName;
   var ta = document.getElementById('inject-content');
   if (ta) { ta.value = ''; ta.focus(); }
   updateSendBtn();
-  document.getElementById('profile-popup').classList.remove('open');
 }
 
 function ppNudge(agentName) {
+  document.getElementById('profile-popup').classList.remove('open');
+  switchView('messages');
   var sel = document.getElementById('inject-target');
   if (sel) sel.value = agentName;
   var ta = document.getElementById('inject-content');
   if (ta) { ta.value = '@' + agentName + ' '; ta.focus(); }
   updateSendBtn();
-  document.getElementById('profile-popup').classList.remove('open');
 }
 
 function ppFilterChat(agentName) {
+  document.getElementById('profile-popup').classList.remove('open');
+  switchView('messages');
   searchQuery = agentName.toLowerCase();
   var input = document.getElementById('search-input');
   if (input) input.value = agentName;
   lastMessageCount = 0;
   renderMessages(cachedHistory);
-  document.getElementById('profile-popup').classList.remove('open');
 }
 
 function ppViewHistory(agentName) {
+  document.getElementById('profile-popup').classList.remove('open');
+  switchView('messages');
   searchQuery = agentName.toLowerCase();
   var input = document.getElementById('search-input');
   if (input) input.value = agentName;
   lastMessageCount = 0;
   renderMessages(cachedHistory);
-  document.getElementById('profile-popup').classList.remove('open');
 }
 
 function showProfilePopup(agentName, event) {
@@ -8106,7 +7645,9 @@ function showProfilePopup(agentName, event) {
 
   // Header: avatar, name, status badge
   var ppAvatar = document.getElementById('pp-avatar');
-  if (agent.avatar && (agent.avatar.startsWith('data:image/') || agent.avatar.startsWith('/'))) { ppAvatar.setAttribute('src', agent.avatar); ppAvatar.style.display = ''; } else { ppAvatar.style.display = 'none'; }
+  var ppAvatarUrl = getMsgAvatarUrl(agentName);
+  ppAvatar.setAttribute('src', ppAvatarUrl);
+  ppAvatar.style.display = '';
   document.getElementById('pp-name').textContent = agent.display_name || agentName;
   document.getElementById('pp-name').style.color = color;
   document.getElementById('pp-id').textContent = '@' + agentName;
@@ -8118,21 +7659,38 @@ function showProfilePopup(agentName, event) {
   document.getElementById('pp-status-badge').className = 'pp-status-badge ' + badgeClass;
   document.getElementById('pp-status-badge').textContent = statusLabel;
 
-  // Default to Actions tab when opening agent popup
-  switchPpTab('actions', false);
+  switchPpTab('stats', false);
 
-  // === Stats Tab ===
+  // === Stats ===
+  var _badgePalette = [
+    { bg: 'rgba(96,165,250,0.15)', fg: '#60a5fa' },
+    { bg: 'rgba(52,211,153,0.15)', fg: '#34d399' },
+    { bg: 'rgba(251,191,36,0.15)', fg: '#fbbf24' },
+    { bg: 'rgba(167,139,250,0.15)', fg: '#a78bfa' },
+    { bg: 'rgba(251,113,133,0.15)', fg: '#fb7185' },
+    { bg: 'rgba(56,189,248,0.15)', fg: '#38bdf8' },
+    { bg: 'rgba(249,115,22,0.15)', fg: '#f97316' },
+    { bg: 'rgba(232,121,249,0.15)', fg: '#e879f9' },
+  ];
+  function _badgeColor(text) {
+    var h = 0;
+    for (var i = 0; i < text.length; i++) h = ((h << 5) - h) + text.charCodeAt(i);
+    return _badgePalette[Math.abs(h) % _badgePalette.length];
+  }
   var badgesHtml = '';
-  if (agent.provider) badgesHtml += '<span class="role-badge" style="font-size:10px">' + escapeHtml(agent.provider) + '</span>';
-  if (agent.role) badgesHtml += '<span class="role-badge" style="font-size:10px">' + escapeHtml(agent.role) + '</span>';
+  if (agent.provider) { var bc = _badgeColor(agent.provider); badgesHtml += '<span class="role-badge" style="font-size:10px;background:' + bc.bg + ';color:' + bc.fg + '">' + escapeHtml(agent.provider) + '</span>'; }
+  if (agent.role) { var bc2 = _badgeColor(agent.role); badgesHtml += '<span class="role-badge" style="font-size:10px;background:' + bc2.bg + ';color:' + bc2.fg + '">' + escapeHtml(agent.role) + '</span>'; }
   document.getElementById('pp-badges').innerHTML = badgesHtml;
 
-  // Count tasks completed and messages for this agent
   var tasksCompleted = 0;
+  var tasksActive = 0;
   var msgCount = 0;
   if (cachedTasks) {
     for (var t = 0; t < cachedTasks.length; t++) {
-      if (cachedTasks[t].assignee === agentName && cachedTasks[t].status === 'done') tasksCompleted++;
+      if (cachedTasks[t].assignee === agentName) {
+        if (cachedTasks[t].status === 'done') tasksCompleted++;
+        else if (cachedTasks[t].status === 'in_progress' || cachedTasks[t].status === 'in_review') tasksActive++;
+      }
     }
   }
   if (cachedHistory) {
@@ -8141,68 +7699,50 @@ function showProfilePopup(agentName, event) {
     }
   }
 
-  var statsHtml = '<div class="profile-popup-stat"><span>' + tasksCompleted + '</span>Tasks Done</div>' +
-    '<div class="profile-popup-stat"><span>' + msgCount + '</span>Messages</div>';
+  var statsHtml = '<div class="profile-popup-stat"><span>' + tasksCompleted + '</span>Done</div>' +
+    '<div class="profile-popup-stat"><span>' + tasksActive + '</span>Active</div>' +
+    '<div class="profile-popup-stat"><span>' + msgCount + '</span>Sent</div>' +
+    '<div class="profile-popup-stat"><span>' + (agent.branch || 'main') + '</span>Branch</div>';
   document.getElementById('pp-stats').innerHTML = statsHtml;
 
-  // Skills (read-only display)
   var skills = agent.skills || [];
   var skillsRoHtml = '';
   if (skills.length > 0) {
-    var platformClass = 'platform-' + (agent.provider || 'unknown').toLowerCase();
-    var platformSkills = agent.platform_skills || [];
-    skillsRoHtml = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:6px">Skills</div><div class="skill-tags-inline">';
+    skillsRoHtml = '<div style="display:flex;flex-wrap:wrap;gap:4px">';
     for (var s = 0; s < skills.length; s++) {
-      var isPlatform = platformSkills.indexOf(skills[s]) !== -1;
-      skillsRoHtml += '<span class="skill-tag' + (isPlatform ? ' ' + platformClass : '') + '">' + escapeHtml(skills[s]) + '</span>';
+      skillsRoHtml += '<span class="skill-tag">' + escapeHtml(skills[s]) + '</span>';
     }
     skillsRoHtml += '</div>';
   }
   document.getElementById('pp-skills-readonly').innerHTML = skillsRoHtml;
 
-  // === Actions Tab ===
+  // === Quick actions ===
   var eName = escapeHtml(agentName);
-  var actionsHtml = '<button class="pp-action-btn" onclick="ppMessage(\'' + eName + '\')">' +
-    '<svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>' +
-    'Message</button>' +
-    '<button class="pp-action-btn pp-ping-btn" onclick="ppPing(\'' + eName + '\')">' +
-    '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>' +
-    'Ping</button>' +
-    '<button class="pp-action-btn" onclick="ppNudge(\'' + eName + '\')">' +
-    '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
-    'Nudge</button>' +
-    '<button class="pp-action-btn" onclick="ppFilterChat(\'' + eName + '\')">' +
-    '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>' +
-    'Messages</button>' +
-    '<button class="pp-action-btn" onclick="ppViewHistory(\'' + eName + '\')">' +
-    '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' +
-    'History</button>';
-  document.getElementById('pp-actions').innerHTML = actionsHtml;
+  document.getElementById('pp-quick-actions').innerHTML =
+    '<button class="pp-quick-action" onclick="ppMessage(\'' + eName + '\')"><svg viewBox="0 0 16 16"><path d="M2 3h12v8H6l-3 2.5V11H2z" stroke-linejoin="round"/></svg>Message</button>' +
+    '<button class="pp-quick-action" onclick="ppFilterChat(\'' + eName + '\')"><svg viewBox="0 0 16 16"><path d="M8 14A6 6 0 108 2a6 6 0 000 12z"/><path d="M8 5v3l2 1"/></svg>History</button>' +
+    '<button class="pp-quick-action" onclick="ppNudge(\'' + eName + '\')"><svg viewBox="0 0 16 16"><path d="M13 3L3 8l4 1.5L8.5 14z" stroke-linejoin="round"/></svg>Nudge</button>';
 
-  // === Profile Tab ===
-  document.getElementById('pp-bio').textContent = agent.bio || 'No bio set.';
-  renderSkillEditor(agentName);
+  document.getElementById('pp-bio').textContent = agent.bio || '';
 
-  // Position near click — find closest clickable ancestor
-  var anchor = event.target.closest('.agent-top') || event.target.closest('.agent-card') || event.target;
+  var anchor = event.target.closest('.agent-card') || event.target.closest('.agent-pill') || event.target;
   var rect = anchor.getBoundingClientRect();
   popup.style.visibility = 'hidden';
   popup.classList.add('open');
-  var popupHeight = popup.offsetHeight;
+  var popupW = popup.offsetWidth;
+  var popupH = popup.offsetHeight;
 
-  var topPos = rect.bottom + 4;
-  if (topPos + popupHeight > window.innerHeight - 10) {
-    var topSpace = rect.top;
-    var bottomSpace = window.innerHeight - rect.bottom;
-    if (topSpace > bottomSpace && topSpace > popupHeight) {
-      topPos = rect.top - popupHeight - 4;
-    } else {
-      topPos = window.innerHeight - popupHeight - 10;
-    }
+  var topPos = rect.bottom + 6;
+  if (topPos + popupH > window.innerHeight - 10) {
+    topPos = rect.top - popupH - 6;
   }
+  topPos = Math.max(10, Math.min(topPos, window.innerHeight - popupH - 10));
 
-  popup.style.top = Math.max(10, topPos) + 'px';
-  popup.style.left = Math.min(rect.left, window.innerWidth - 310) + 'px';
+  var leftPos = rect.left;
+  leftPos = Math.max(10, Math.min(leftPos, window.innerWidth - popupW - 10));
+
+  popup.style.top = topPos + 'px';
+  popup.style.left = leftPos + 'px';
   popup.style.visibility = 'visible';
 }
 
@@ -8288,15 +7828,6 @@ function showAgentPopup(agentName) {
   if (!agent) return;
   editingAgent = agentName;
   openProfileEditor();
-  
-  // Auto-switch to stats tab
-  var tabs = document.querySelectorAll('.cd-tab');
-  for (var i = 0; i < tabs.length; i++) {
-    if (tabs[i].textContent === 'Stats') {
-      cdSwitchTab('stats', tabs[i]);
-      break;
-    }
-  }
 }
 
 document.addEventListener('click', function() {
@@ -8357,18 +7888,18 @@ function confirmDeleteAgent() {
 // ==================== v3.0: PROFILE EDITOR ====================
 
 var BUILT_IN_AVATARS = [
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23f59e0b'/%3E%3Ccircle cx='22' cy='26' r='4' fill='%23fff'/%3E%3Ccircle cx='42' cy='26' r='4' fill='%23fff'/%3E%3Crect x='20' y='38' width='24' height='4' rx='2' fill='%23fff'/%3E%3Crect x='14' y='12' width='6' height='10' rx='3' fill='%23f59e0b' stroke='%23fff' stroke-width='1.5'/%3E%3Crect x='44' y='12' width='6' height='10' rx='3' fill='%23f59e0b' stroke='%23fff' stroke-width='1.5'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%233fb950'/%3E%3Ccircle cx='22' cy='26' r='5' fill='%23fff'/%3E%3Ccircle cx='42' cy='26' r='5' fill='%23fff'/%3E%3Ccircle cx='22' cy='26' r='2' fill='%23333'/%3E%3Ccircle cx='42' cy='26' r='2' fill='%23333'/%3E%3Cpath d='M20 38 Q32 46 44 38' stroke='%23fff' fill='none' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23d29922'/%3E%3Crect x='16' y='22' width='12' height='8' rx='2' fill='%23fff'/%3E%3Crect x='36' y='22' width='12' height='8' rx='2' fill='%23fff'/%3E%3Ccircle cx='22' cy='26' r='2' fill='%23333'/%3E%3Ccircle cx='42' cy='26' r='2' fill='%23333'/%3E%3Cpath d='M24 40 H40' stroke='%23fff' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23f85149'/%3E%3Ccircle cx='22' cy='26' r='4' fill='%23fff'/%3E%3Ccircle cx='42' cy='26' r='4' fill='%23fff'/%3E%3Ccircle cx='22' cy='26' r='2' fill='%23333'/%3E%3Ccircle cx='42' cy='26' r='2' fill='%23333'/%3E%3Cpath d='M22 40 Q32 34 42 40' stroke='%23fff' fill='none' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23fb923c'/%3E%3Ccircle cx='22' cy='28' r='4' fill='%23fff'/%3E%3Ccircle cx='42' cy='28' r='4' fill='%23fff'/%3E%3Cpath d='M16 18 L22 24' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M48 18 L42 24' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='32' cy='42' rx='8' ry='4' fill='%23fff'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23f778ba'/%3E%3Ccircle cx='24' cy='26' r='6' fill='%23fff'/%3E%3Ccircle cx='40' cy='26' r='6' fill='%23fff'/%3E%3Ccircle cx='24' cy='26' r='3' fill='%23333'/%3E%3Ccircle cx='40' cy='26' r='3' fill='%23333'/%3E%3Cpath d='M26 40 Q32 46 38 40' stroke='%23fff' fill='none' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23fbbf24'/%3E%3Crect x='17' y='23' width='10' height='6' rx='3' fill='%23fff'/%3E%3Crect x='37' y='23' width='10' height='6' rx='3' fill='%23fff'/%3E%3Cpath d='M22 38 L32 44 L42 38' stroke='%23fff' fill='none' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%237ee787'/%3E%3Ccircle cx='22' cy='26' r='4' fill='%23fff'/%3E%3Ccircle cx='42' cy='26' r='4' fill='%23fff'/%3E%3Ccircle cx='23' cy='25' r='2' fill='%23333'/%3E%3Ccircle cx='43' cy='25' r='2' fill='%23333'/%3E%3Cpath d='M20 38 Q32 48 44 38' stroke='%23fff' fill='none' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23e3b341'/%3E%3Cpath d='M18 22 L26 30 L18 30Z' fill='%23fff'/%3E%3Cpath d='M46 22 L38 30 L46 30Z' fill='%23fff'/%3E%3Crect x='24' y='38' width='16' height='6' rx='3' fill='%23fff'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23ffa198'/%3E%3Ccircle cx='22' cy='26' r='5' fill='%23fff'/%3E%3Ccircle cx='42' cy='26' r='5' fill='%23fff'/%3E%3Ccircle cx='22' cy='27' r='2.5' fill='%23333'/%3E%3Ccircle cx='42' cy='27' r='2.5' fill='%23333'/%3E%3Cellipse cx='32' cy='42' rx='6' ry='3' fill='%23fff'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23d97706'/%3E%3Crect x='16' y='20' width='14' height='10' rx='2' fill='%23fff'/%3E%3Crect x='34' y='20' width='14' height='10' rx='2' fill='%23fff'/%3E%3Ccircle cx='23' cy='25' r='2' fill='%23d97706'/%3E%3Ccircle cx='41' cy='25' r='2' fill='%23d97706'/%3E%3Crect x='26' y='38' width='12' height='4' rx='2' fill='%23fff'/%3E%3C/svg%3E",
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23b45309'/%3E%3Ccircle cx='24' cy='24' r='5' fill='%23fff'/%3E%3Ccircle cx='40' cy='24' r='5' fill='%23fff'/%3E%3Ccircle cx='24' cy='24' r='2' fill='%23b45309'/%3E%3Ccircle cx='40' cy='24' r='2' fill='%23b45309'/%3E%3Cpath d='M20 38 Q32 50 44 38' stroke='%23fff' fill='none' stroke-width='3' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='10' r='4' fill='%23fff'/%3E%3C/svg%3E",
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e293b'/%3E%3Ccircle cx='32' cy='28' r='12' fill='none' stroke='%2360a5fa' stroke-width='2'/%3E%3Ccircle cx='32' cy='28' r='4' fill='%2360a5fa'/%3E%3Cpath d='M20 48h24' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M24 52h16' stroke='%2360a5fa' stroke-width='1.5' stroke-linecap='round' opacity='0.5'/%3E%3C/svg%3E",
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e293b'/%3E%3Cpolygon points='32,12 52,42 12,42' fill='none' stroke='%2334d399' stroke-width='2'/%3E%3Ccircle cx='32' cy='36' r='3' fill='%2334d399'/%3E%3C/svg%3E",
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e293b'/%3E%3Crect x='16' y='16' width='32' height='32' rx='4' fill='none' stroke='%23f59e0b' stroke-width='2' transform='rotate(45 32 32)'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23f59e0b'/%3E%3C/svg%3E",
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e293b'/%3E%3Ccircle cx='32' cy='32' r='18' fill='none' stroke='%23a78bfa' stroke-width='1.5'/%3E%3Ccircle cx='32' cy='32' r='10' fill='none' stroke='%23a78bfa' stroke-width='1.5'/%3E%3Ccircle cx='32' cy='32' r='3' fill='%23a78bfa'/%3E%3C/svg%3E",
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e293b'/%3E%3Cpath d='M16 32h32' stroke='%23fb7185' stroke-width='2'/%3E%3Cpath d='M32 16v32' stroke='%23fb7185' stroke-width='2'/%3E%3Ccircle cx='32' cy='32' r='8' fill='none' stroke='%23fb7185' stroke-width='1.5'/%3E%3Ccircle cx='32' cy='32' r='2' fill='%23fb7185'/%3E%3C/svg%3E",
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e293b'/%3E%3Cpath d='M14 42L32 18L50 42Z' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M22 42L32 28L42 42' fill='none' stroke='%2338bdf8' stroke-width='1.5' stroke-linejoin='round' opacity='0.5'/%3E%3C/svg%3E",
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e293b'/%3E%3Cpath d='M18 18h28v28H18z' fill='none' stroke='%234ade80' stroke-width='2'/%3E%3Cpath d='M26 18v28M38 18v28M18 26h28M18 38h28' stroke='%234ade80' stroke-width='1' opacity='0.4'/%3E%3Crect x='27' y='27' width='10' height='10' fill='%234ade80' opacity='0.3'/%3E%3C/svg%3E",
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e293b'/%3E%3Cpath d='M32 14L48 24v16L32 50L16 40V24z' fill='none' stroke='%23fbbf24' stroke-width='2' stroke-linejoin='round'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%23fbbf24'/%3E%3C/svg%3E",
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e293b'/%3E%3Ccircle cx='22' cy='22' r='8' fill='none' stroke='%23f97316' stroke-width='1.5'/%3E%3Ccircle cx='42' cy='22' r='8' fill='none' stroke='%23f97316' stroke-width='1.5'/%3E%3Ccircle cx='32' cy='42' r='8' fill='none' stroke='%23f97316' stroke-width='1.5'/%3E%3Ccircle cx='22' cy='22' r='2' fill='%23f97316'/%3E%3Ccircle cx='42' cy='22' r='2' fill='%23f97316'/%3E%3Ccircle cx='32' cy='42' r='2' fill='%23f97316'/%3E%3C/svg%3E",
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e293b'/%3E%3Cpath d='M12 50L32 14L52 50Z' fill='none' stroke='%23e879f9' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M32 50L22 32L42 32Z' fill='%23e879f9' opacity='0.2'/%3E%3Ccircle cx='32' cy='38' r='3' fill='%23e879f9'/%3E%3C/svg%3E",
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e293b'/%3E%3Cpath d='M16 32C16 20 32 14 32 14S48 20 48 32S32 50 32 50S16 44 16 32Z' fill='none' stroke='%23f43f5e' stroke-width='2'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%23f43f5e' opacity='0.6'/%3E%3C/svg%3E",
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e293b'/%3E%3Ccircle cx='32' cy='32' r='16' fill='none' stroke='%2394a3b8' stroke-width='1.5' stroke-dasharray='4 3'/%3E%3Cpath d='M32 16v32M16 32h32' stroke='%2394a3b8' stroke-width='1' opacity='0.3'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%2394a3b8' opacity='0.4'/%3E%3Ccircle cx='32' cy='32' r='2' fill='%2394a3b8'/%3E%3C/svg%3E",
 ];
 
 var editingAgent = '';
@@ -8422,11 +7953,6 @@ function cdOnChange() {
 
 function cdSwitchTab(name, btn) {
   cdCurrentTab = name;
-  document.querySelectorAll('.cd-tab-content').forEach(function(el) { el.classList.remove('active'); });
-  document.querySelectorAll('.cd-tab').forEach(function(el) { el.classList.remove('active'); });
-  var target = document.getElementById('cd-tab-' + name);
-  if (target) target.classList.add('active');
-  if (btn) btn.classList.add('active');
 }
 
 function cdActivateCard(container, value) {
@@ -8541,52 +8067,12 @@ function openProfileEditor() {
 
   document.getElementById('profile-popup').classList.remove('open');
 
-  // Populate basic fields
   document.getElementById('pe-display-name').value = agent.display_name || editingAgent;
   document.getElementById('pe-role').value = agent.role || '';
   document.getElementById('pe-bio').value = agent.bio || '';
   document.getElementById('pe-avatar-url').value = '';
   selectedAvatar = agent.avatar || '';
 
-  var app = agent.appearance || {};
-  var defApp = app;
-
-  // Set color pickers
-  document.getElementById('pe-head-color').value = defApp.head_color || '#FFD5B8';
-  document.getElementById('pe-shirt-color').value = defApp.shirt_color || '#f59e0b';
-  document.getElementById('pe-hair-color').value = defApp.hair_color || '#4A3728';
-  document.getElementById('pe-pants-color').value = defApp.pants_color || '#2d3748';
-  document.getElementById('pe-shoe-color').value = defApp.shoe_color || '#1a1a2e';
-  document.getElementById('pe-glasses-color').value = defApp.glasses_color || '#555555';
-  document.getElementById('pe-headwear-color').value = defApp.headwear_color || '#333333';
-  document.getElementById('pe-neckwear-color').value = defApp.neckwear_color || '#c0392b';
-
-  // Set appearance state
-  cdAppearance.hair_style = defApp.hair_style || 'short';
-  cdAppearance.eye_style = defApp.eye_style || 'dots';
-  cdAppearance.mouth_style = defApp.mouth_style || 'smile';
-  cdAppearance.glasses = defApp.glasses || null;
-  cdAppearance.headwear = defApp.headwear || null;
-  cdAppearance.neckwear = defApp.neckwear || null;
-  cdAppearance.outfit = defApp.outfit || null;
-  cdAppearance.body_type = defApp.body_type || 'default';
-
-  // Activate correct cards
-  cdActivateCard('cd-hair-styles', cdAppearance.hair_style);
-  cdActivateCard('cd-eye-styles', cdAppearance.eye_style);
-  cdActivateCard('cd-mouth-styles', cdAppearance.mouth_style);
-  cdActivateCard('cd-glasses-styles', cdAppearance.glasses || '');
-  cdActivateCard('cd-headwear-styles', cdAppearance.headwear || '');
-  cdActivateCard('cd-neckwear-styles', cdAppearance.neckwear || '');
-  cdActivateCard('cd-outfit-styles', cdAppearance.outfit || '');
-  cdActivateCard('cd-body-types', cdAppearance.body_type);
-
-  // Show/hide accessory color rows
-  document.getElementById('cd-glasses-color-row').style.display = cdAppearance.glasses ? 'flex' : 'none';
-  document.getElementById('cd-headwear-color-row').style.display = cdAppearance.headwear ? 'flex' : 'none';
-  document.getElementById('cd-neckwear-color-row').style.display = cdAppearance.neckwear ? 'flex' : 'none';
-
-  // Build avatar picker grid
   var picker = document.getElementById('avatar-picker');
   var html = '';
   for (var i = 0; i < BUILT_IN_AVATARS.length; i++) {
@@ -8595,20 +8081,17 @@ function openProfileEditor() {
   }
   picker.innerHTML = html;
 
-  // Reset to Body tab
-  cdSwitchTab('body', document.querySelector('.cd-tab'));
-
-  // Calculate and populate stats
   var sent = 0, received = 0;
   for (var i = 0; i < cachedHistory.length; i++) {
     if (cachedHistory[i].from === editingAgent) sent++;
     if (cachedHistory[i].to === editingAgent) received++;
   }
+  var statCell = 'background:var(--surface-2);padding:7px 10px;border-radius:6px;border:1px solid var(--border)';
   var statsHtml =
-    '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Sent: <b style="color:var(--text)">' + sent + '</b></div>' +
-    '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Received: <b style="color:var(--text)">' + received + '</b></div>' +
-    '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Provider: <b style="color:var(--text)">' + escapeHtml(agent.provider || 'unknown') + '</b></div>' +
-    '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Branch: <b style="color:var(--text)">' + escapeHtml(agent.branch || 'main') + '</b></div>';
+    '<div style="' + statCell + '">Sent: <b style="color:var(--text)">' + sent + '</b></div>' +
+    '<div style="' + statCell + '">Received: <b style="color:var(--text)">' + received + '</b></div>' +
+    '<div style="' + statCell + '">Provider: <b style="color:var(--text)">' + escapeHtml(agent.provider || 'unknown') + '</b></div>' +
+    '<div style="' + statCell + '">Branch: <b style="color:var(--text)">' + escapeHtml(agent.branch || 'main') + '</b></div>';
   document.getElementById('pe-stats-container').innerHTML = statsHtml;
 
   var pq = projectParam();
@@ -8616,28 +8099,22 @@ function openProfileEditor() {
     if (!data || !data.agents || !data.agents[editingAgent]) return;
     var tu = data.agents[editingAgent];
     var tokenHtml = 
-      '<div style="grid-column:1/-1;margin-top:12px;font-weight:800;color:var(--text);font-size:11px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:4px">Token Usage (<span style="color:var(--accent);font-weight:600">' + escapeHtml(tu.model || 'unknown') + '</span>)</div>' +
-      '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Input: <b style="color:var(--text)">' + (tu.input_tokens || 0).toLocaleString() + '</b> </div>' +
-      '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Output: <b style="color:var(--text)">' + (tu.output_tokens || 0).toLocaleString() + '</b> </div>' +
-      '<div style="background:var(--surface-2);padding:10px;border-radius:6px;border:1px solid var(--border)">Cache: <b style="color:var(--text)">' + ((tu.cache_creation_tokens || 0) + (tu.cache_read_tokens || 0)).toLocaleString() + '</b> </div>' +
-      '<div style="background:var(--accent-dim);color:var(--accent);padding:10px;border-radius:6px;border:1px solid var(--accent);font-weight:700">Cost: $' + (tu.estimated_cost_usd || 0).toFixed(2) + '</div>';
+      '<div style="grid-column:1/-1;margin-top:8px;font-weight:800;color:var(--text);font-size:11px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:4px">Token Usage (<span style="color:var(--accent);font-weight:600">' + escapeHtml(tu.model || 'unknown') + '</span>)</div>' +
+      '<div style="' + statCell + '">Input: <b style="color:var(--text)">' + (tu.input_tokens || 0).toLocaleString() + '</b></div>' +
+      '<div style="' + statCell + '">Output: <b style="color:var(--text)">' + (tu.output_tokens || 0).toLocaleString() + '</b></div>' +
+      '<div style="' + statCell + '">Cache: <b style="color:var(--text)">' + ((tu.cache_creation_tokens || 0) + (tu.cache_read_tokens || 0)).toLocaleString() + '</b></div>' +
+      '<div style="background:var(--accent-dim);color:var(--accent);padding:7px 10px;border-radius:6px;border:1px solid var(--accent);font-weight:700">Cost: $' + (tu.estimated_cost_usd || 0).toFixed(2) + '</div>';
     var el = document.getElementById('pe-stats-container');
     if (el) el.innerHTML += tokenHtml;
   }).catch(function() {});
 
-  // Open the panel
   document.getElementById('char-designer').classList.add('open');
   document.getElementById('cd-backdrop').classList.add('open');
-
-  // Update hex displays and init 3D preview
-  cdOnChange();
-  if (window._cdInitPreview) window._cdInitPreview();
 }
 
 function closeProfileEditor() {
   document.getElementById('char-designer').classList.remove('open');
   document.getElementById('cd-backdrop').classList.remove('open');
-  if (window._cdDisposePreview) window._cdDisposePreview();
 }
 
 function selectAvatar(idx) {
@@ -8665,31 +8142,12 @@ function handleAvatarUpload(input) {
 function saveProfile() {
   var avatarUrl = document.getElementById('pe-avatar-url').value.trim();
   var avatar = avatarUrl || selectedAvatar;
-  var app = cdGetAppearance();
 
   var body = {
     agent: editingAgent,
     display_name: document.getElementById('pe-display-name').value.trim() || editingAgent,
     role: document.getElementById('pe-role').value.trim(),
-    bio: document.getElementById('pe-bio').value.trim(),
-    appearance: {
-      head_color: app.head_color,
-      shirt_color: app.shirt_color,
-      hair_style: app.hair_style,
-      hair_color: app.hair_color,
-      eye_style: app.eye_style,
-      mouth_style: app.mouth_style,
-      pants_color: app.pants_color,
-      shoe_color: app.shoe_color,
-      glasses: app.glasses,
-      glasses_color: app.glasses_color,
-      headwear: app.headwear,
-      headwear_color: app.headwear_color,
-      neckwear: app.neckwear,
-      neckwear_color: app.neckwear_color,
-      outfit: app.outfit,
-      body_type: app.body_type
-    }
+    bio: document.getElementById('pe-bio').value.trim()
   };
   if (avatar) body.avatar = avatar;
 
