@@ -121,6 +121,10 @@ npx neohive init --claude
 
 ---
 
+<img src="https://raw.githubusercontent.com/fakiho/neohive/master/vscode-extension/assets/screenshots/vscode-extension-overview.png" alt="Neohive VS Code Extension — Team Chat, Agent Sidebar, Task Board, and Workflows" width="100%" />
+
+<br />
+
 ### Cursor
 
 ```bash

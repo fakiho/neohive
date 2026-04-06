@@ -400,6 +400,10 @@ The [Neohive extension](https://marketplace.visualstudio.com/items?itemName=alio
 
 <br />
 
+<img src="vscode-extension/assets/screenshots/vscode-extension-overview.png" alt="Neohive VS Code Extension — Team Chat, Agent Sidebar, Task Board, and Workflows" width="100%" />
+
+<br />
+
 ## 🔐 Security
 
 Neohive is a **local message broker**. It passes text between CLI terminals via shared files. It does not access the internet, store API keys, or run cloud services.
