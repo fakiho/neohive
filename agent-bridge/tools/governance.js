@@ -384,12 +384,12 @@ module.exports = function (ctx) {
     {
       name: 'request_review',
       description: 'Request a code review from the team. Creates a review request and notifies all agents.',
-      inputSchema: { type: 'object', properties: { file_path: { type: 'string', description: 'File to review' }, description: { type: 'string', description: 'What to focus on in the review' } }, required: ['file_path'], additionalProperties: false },
+      inputSchema: { type: 'object', properties: { file_path: { type: 'string', description: 'File to review', maxLength: 500 }, description: { type: 'string', description: 'What to focus on in the review', maxLength: 2000 } }, required: ['file_path'], additionalProperties: false },
     },
     {
       name: 'submit_review',
       description: 'Submit a code review — approve or request changes with feedback.',
-      inputSchema: { type: 'object', properties: { review_id: { type: 'string', description: 'Review ID' }, status: { type: 'string', enum: ['approved', 'changes_requested'], description: 'Review result' }, feedback: { type: 'string', description: 'Your review feedback (max 2000 chars)' } }, required: ['review_id', 'status'], additionalProperties: false },
+      inputSchema: { type: 'object', properties: { review_id: { type: 'string', description: 'Review ID', maxLength: 50 }, status: { type: 'string', enum: ['approved', 'changes_requested'], description: 'Review result' }, feedback: { type: 'string', description: 'Your review feedback', maxLength: 2000 } }, required: ['review_id', 'status'], additionalProperties: false },
     },
     // Rules
     {
@@ -398,7 +398,7 @@ module.exports = function (ctx) {
       inputSchema: {
         type: 'object',
         properties: {
-          text: { type: 'string', description: 'The rule text' },
+          text: { type: 'string', description: 'The rule text', maxLength: 2000 },
           category: { type: 'string', description: 'Rule category: safety, workflow, code-style, communication, custom' },
           scope: {
             type: 'object',
@@ -433,7 +433,7 @@ module.exports = function (ctx) {
     {
       name: 'log_violation',
       description: 'Log a workflow rule violation to the audit trail. Used automatically by review gates, or manually to flag issues.',
-      inputSchema: { type: 'object', properties: { type: { type: 'string', description: 'Violation type: review_skipped, push_without_approval, rule_violated, etc.' }, details: { type: 'string', description: 'Description of the violation' } }, required: ['type'], additionalProperties: false },
+      inputSchema: { type: 'object', properties: { type: { type: 'string', description: 'Violation type: review_skipped, push_without_approval, rule_violated, etc.', maxLength: 100 }, details: { type: 'string', description: 'Description of the violation', maxLength: 2000 } }, required: ['type'], additionalProperties: false },
     },
     {
       name: 'request_push_approval',
