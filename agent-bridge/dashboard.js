@@ -175,9 +175,15 @@ function resolveDashboardDefaultDataDir() {
     let s = String(envData).trim();
     if (/\$\{workspaceFolder\}/i.test(s)) {
       const root = findCursorProjectRootWithNeohive(process.cwd());
-      if (root) s = s.replace(/\$\{workspaceFolder\}/gi, root);
+      if (!root) {
+        // Placeholder can't be expanded — fall through to the config/walk/cwd strategies
+      } else {
+        s = s.replace(/\$\{workspaceFolder\}/gi, root);
+        return { path: path.resolve(s), source: 'environment' };
+      }
+    } else {
+      return { path: path.resolve(s), source: 'environment' };
     }
-    return { path: path.resolve(s), source: 'environment' };
   }
 
   // 2. Project MCP config — authoritative, written by `neohive init`
