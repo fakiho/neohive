@@ -115,10 +115,12 @@ module.exports = function (ctx) {
     reviews.push(review);
     writeJsonFile(REVIEWS_FILE, reviews);
 
-    broadcastSystemMessage(`[REVIEW] ${state.registeredName} requests review of "${review.file}": ${review.description || 'No description'}. Call submit_review("${review.id}", "approved"/"changes_requested", "your feedback") to review.`, state.registeredName);
+    broadcastSystemMessage(`[REVIEW REQUEST] ${state.registeredName} requests review of "${review.file}": ${review.description || 'No description'}. To review: (1) read the file "${review.file}", (2) call submit_review("${review.id}", "approved"/"changes_requested", "<your findings — min 50 chars>"). Feedback is required and must be substantive.`, state.registeredName);
     touchActivity();
     return { success: true, review_id: review.id, file: review.file, next_action: 'Call listen() to wait for the review.' };
   }
+
+  const REVIEW_FEEDBACK_MIN_LENGTH = 50;
 
   function toolSubmitReview(reviewId, status, feedback) {
     if (!state.registeredName) return { error: 'You must call register() first' };
@@ -130,6 +132,26 @@ module.exports = function (ctx) {
     const review = reviews.find(r => r.id === reviewId);
     if (!review) return { error: `Review not found: ${reviewId}` };
     if (review.requested_by === state.registeredName) return { error: 'Cannot review your own code.' };
+
+    // Enforce substantive feedback — rubber-stamping is not allowed
+    const feedbackText = (feedback || '').trim();
+    if (!feedbackText) {
+      return {
+        error: `Feedback is required. You must read "${review.file}" and describe what you found before submitting a review.`,
+        next_action: `Read the file "${review.file}" first, then call submit_review("${reviewId}", "${status}", "<your findings>").`,
+      };
+    }
+    if (feedbackText.length < REVIEW_FEEDBACK_MIN_LENGTH) {
+      return {
+        error: `Feedback too short (${feedbackText.length} chars, minimum ${REVIEW_FEEDBACK_MIN_LENGTH}). Describe specific findings — what you read, what issues you found or verified, and why you ${status === 'approved' ? 'approve' : 'request changes'}.`,
+        next_action: `Read the file "${review.file}" first, then call submit_review("${reviewId}", "${status}", "<your detailed findings>").`,
+      };
+    }
+
+    // Log audit entry for thin approvals (short feedback on an approval)
+    if (status === 'approved' && feedbackText.length < 150) {
+      logViolation('thin_review', state.registeredName, `Approved "${review.file}" with minimal feedback (${feedbackText.length} chars): "${feedbackText.substring(0, 100)}"`);
+    }
 
     review.status = status;
     review.reviewer = state.registeredName;
@@ -388,8 +410,8 @@ module.exports = function (ctx) {
     },
     {
       name: 'submit_review',
-      description: 'Submit a code review — approve or request changes with feedback.',
-      inputSchema: { type: 'object', properties: { review_id: { type: 'string', description: 'Review ID', maxLength: 50 }, status: { type: 'string', enum: ['approved', 'changes_requested'], description: 'Review result' }, feedback: { type: 'string', description: 'Your review feedback', maxLength: 2000 } }, required: ['review_id', 'status'], additionalProperties: false },
+      description: 'Submit a code review — approve or request changes. You MUST read the file under review before calling this. Feedback is required (minimum 50 chars) and must describe specific findings — what you read, what issues you found or confirmed. Rubber-stamp approvals are rejected.',
+      inputSchema: { type: 'object', properties: { review_id: { type: 'string', description: 'Review ID', maxLength: 50 }, status: { type: 'string', enum: ['approved', 'changes_requested'], description: 'Review result' }, feedback: { type: 'string', description: 'Your findings from reading the file (required, min 50 chars). Describe what you read and what you found — bugs, security issues, correctness, or confirmation that the code is clean.', maxLength: 2000, minLength: 50 } }, required: ['review_id', 'status', 'feedback'], additionalProperties: false },
     },
     // Rules
     {

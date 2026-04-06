@@ -587,9 +587,26 @@ function buildMessageResponse(msg, consumedIds) {
 
   const isSystemMsg = msg.from === '__system__' || msg.system === true;
   if (msg.from === '__user__') pendingUserReply = true;
-  const nextAction = isSystemMsg
-    ? 'Process this message, then call listen().'
-    : `Do what this message asks. When finished, send_message(to="${msg.from}") with what you did and files changed, then call listen().`;
+
+  // Generate a specific next_action for review requests so reviewers know to read the file
+  let nextAction;
+  if (isSystemMsg && msg.content) {
+    const reviewMatch = msg.content.match(/submit_review\("(review_[a-z0-9]+)"/);
+    const fileMatch = msg.content.match(/read(?:ing)?(?: the)? (?:file )?"([^"]+)"/i) ||
+                      msg.content.match(/review of "([^"]+)"/i);
+    if (reviewMatch) {
+      const reviewId = reviewMatch[1];
+      const filePath = fileMatch ? fileMatch[1] : null;
+      nextAction = filePath
+        ? `REVIEW REQUIRED: Read "${filePath}" first, then call submit_review("${reviewId}", "approved"/"changes_requested", "<your findings — min 50 chars>"). Do NOT submit without reading the file.`
+        : `REVIEW REQUIRED: Read the relevant files for this review, then call submit_review("${reviewId}", "approved"/"changes_requested", "<your findings — min 50 chars>"). Feedback is required.`;
+    }
+  }
+  if (!nextAction) {
+    nextAction = isSystemMsg
+      ? 'Process this message, then call listen().'
+      : `Do what this message asks. When finished, send_message(to="${msg.from}") with what you did and files changed, then call listen().`;
+  }
 
   return {
     success: true,
@@ -3464,7 +3481,7 @@ function toolUpdateTask(taskId, status, notes = null) {
         task.status = 'in_review';
         task.updated_at = new Date().toISOString();
         saveTasks(tasks);
-        broadcastSystemMessage(`[REVIEW GATE] ${registeredName} tried to mark "${task.title}" done but no review exists. Auto-created review ${reviewId}. A reviewer must approve before this task can be completed.`, registeredName);
+        broadcastSystemMessage(`[REVIEW GATE] ${registeredName} tried to mark "${task.title}" done but no review exists. Auto-created review ${reviewId}. To review: (1) read the relevant files for "${task.title}", (2) call submit_review("${reviewId}", "approved"/"changes_requested", "<your findings — min 50 chars>"). Feedback is required.`, registeredName);
         logViolation('review_gate_blocked', registeredName, `Task "${task.title}" (${task.id}) blocked — no approved review. Auto-created ${reviewId}.`);
         touchActivity();
         return {
