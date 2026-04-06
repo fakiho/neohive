@@ -10,6 +10,8 @@
 
 - [Overview](#overview)
 - [Getting Started](#getting-started)
+  - [Recommended Setup](#recommended-setup)
+  - [Troubleshooting](#troubleshooting)
 - [Essentials](#essentials)
 - [Reference library](#reference-library) — split deep dives under [`docs/reference/`](reference/)
 - [Architecture](#architecture)
@@ -54,7 +56,7 @@ AI CLI tools like Claude Code, Gemini CLI, and Codex CLI are powerful individual
 - **Antigravity** — Gemini-powered coding IDE
 
 **VS Code Extension:**
-- **Neohive Extension** (v0.4.0) — Monitor agents and workflows directly in your editor's sidebar. Provides real-time agent liveness, workflow tracking, and quick actions without leaving your IDE. In-editor messaging is coming soon.
+- **[Neohive Extension](https://marketplace.visualstudio.com/items?itemName=alionix.neohive)** (v0.5.0) — Monitor agents and workflows directly in your editor's sidebar. Provides real-time agent liveness, task board, workflow viewer, `@neohive` chat participant, and automatic MCP + hooks setup on activation.
 
 ---
 
@@ -79,6 +81,64 @@ npx neohive init --codex     # Codex CLI only
 npx neohive init --all       # All detected CLIs
 npx neohive init --ollama    # Ollama local LLM bridge
 ```
+
+### Recommended Setup
+
+`npx neohive init` gets you running, but a few extra steps ensure agents stay reliable across all IDEs.
+
+#### Claude Code
+
+```bash
+npx neohive init --claude
+```
+
+`init` automatically handles MCP config, listen-enforcement hooks, and neohive skills. For the best experience:
+
+- **VS Code Extension** — Install the [Neohive extension](https://marketplace.visualstudio.com/items?itemName=alionix.neohive) for automatic MCP configuration, in-editor agent status, task board, workflow viewer, and `@neohive` chat participant. The extension configures hooks on activation so you don't need to run anything manually.
+- **Without the extension** — `init` installs hooks automatically. Run `npx neohive hooks` at any time to update or repair them. Hooks keep agents in the listen loop and block them from stopping mid-session.
+- **Skills** — Installed into `.claude/skills/neohive/` automatically. They teach Claude how to use the MCP tools, launch teams, and follow collaboration conventions.
+
+#### Cursor
+
+```bash
+npx neohive init --cursor
+```
+
+Installs MCP config, skills (`.cursor/skills/neohive/`), slash commands (`.cursor/commands/`), and agent definitions (`.cursor/agents/`).
+
+> **Important:** Cursor sometimes disables newly added MCP servers by default. After init, go to **Settings → MCP**, find `neohive`, and enable it. Reload the window.
+
+#### Antigravity
+
+```bash
+npx neohive init --antigravity
+```
+
+Installs MCP config globally and skills into `.agent/skills/neohive/`.
+
+> **Important:** Same as Cursor — check **Settings → MCP** and ensure `neohive` is enabled after init.
+
+#### Everything at once
+
+```bash
+npx neohive init --all
+```
+
+Configures MCP, hooks, skills, agents, and commands for every detected CLI and IDE in one command.
+
+---
+
+### Troubleshooting
+
+**Agent can't register / MCP tools not found**
+
+The IDE has likely disabled the neohive MCP server. Open Settings → MCP (or Tools & Integrations), find `neohive`, and toggle it on. Restart or reload the IDE window after enabling it.
+
+**Agent stopped listening mid-session**
+
+Due to a current IDE limitation, agents can occasionally exit the listen loop after a long idle period. Ask the agent: *"Call listen()"* to resume. We are actively working on a permanent fix via server-side timeout improvements.
+
+---
 
 ### First Conversation
 

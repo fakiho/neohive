@@ -52,6 +52,7 @@ You open Claude Code in one terminal and Gemini CLI in another. Both are powerfu
 ## Contents
 
 - [Quick Start](#-quick-start)
+- [Recommended Setup](#-recommended-setup)
 - [Features](#-features)
 - [How It Works](#-how-it-works)
 - [Supported IDEs & CLIs](#-supported-ides--clis)
@@ -99,6 +100,71 @@ npx neohive dashboard    # opens http://localhost:3000
 > ```
 
 <br />
+
+## ✅ Recommended Setup
+
+Getting the most out of Neohive takes one extra minute after `init`. Here's what we recommend per tool.
+
+---
+
+### Claude Code
+
+```bash
+npx neohive init --claude
+```
+
+`init` handles MCP config, hooks, and skills in one step. For the smoothest experience:
+
+- **VS Code Extension** — Install the [Neohive extension](https://marketplace.visualstudio.com/items?itemName=alionix.neohive) for automatic MCP setup, in-editor agent status, task board, workflow viewer, and `@neohive` chat participant. The extension configures hooks automatically on activation.
+- **Without the extension** — Run `npx neohive hooks` to install listen-enforcement hooks into `.claude/settings.json`. This keeps agents in the listen loop and prevents them from stopping mid-session. Safe to re-run — your existing hooks are preserved.
+- **Skills** — `init` installs neohive skills and the coordinator agent into `.claude/skills/neohive/`. These teach Claude how to use the MCP tools correctly.
+
+---
+
+### Cursor
+
+```bash
+npx neohive init --cursor
+```
+
+Installs MCP config, skills, commands, and agents into your project's `.cursor/` directory. After init:
+
+- Open Cursor Settings → MCP and **verify that `neohive` is enabled**. Cursor sometimes disables newly added MCP servers by default — toggle it on if needed, then reload.
+- Skills are available as slash commands (e.g. `/neohive-launch-team`, `/neohive-status`).
+
+---
+
+### Antigravity
+
+```bash
+npx neohive init --antigravity
+```
+
+Installs MCP config globally (`~/.gemini/antigravity/mcp_config.json`) and skills into `.agent/skills/neohive/`. After init:
+
+- Open Antigravity Settings → MCP and **verify that `neohive` is enabled**. Like Cursor, Antigravity may disable new MCP servers by default.
+
+---
+
+### Everything at once
+
+```bash
+npx neohive init --all
+```
+
+Configures MCP, hooks, skills, agents, and commands for every detected CLI and IDE in one command.
+
+---
+
+### Troubleshooting
+
+**Agent can't register / MCP tools not found**
+The IDE has likely disabled the neohive MCP server. Go to Settings → MCP (or Tools), find `neohive`, and enable it. Restart or reload the IDE window after.
+
+**Agent stopped listening mid-session**
+Due to a current IDE limitation, agents can occasionally drop out of the listen loop. Simply ask the agent: *"Call listen()"* to resume. We are actively working on a permanent fix.
+
+---
 
 ## ✨ Features
 
@@ -261,7 +327,7 @@ neohive reset --force       # clear data (auto-archives first)
 neohive uninstall           # remove from all CLI configs
 ```
 
-> **Claude Code users:** Run `npx neohive hooks` after `init` to install listen-enforcement hooks into `.claude/settings.json`. This keeps agents in the listen loop automatically and prevents them from stopping mid-session. Safe to re-run — your existing hooks are preserved.
+> `init` runs `hooks` and `skills` automatically. Run them standalone at any time to update or repair your setup.
 
 <br />
 
