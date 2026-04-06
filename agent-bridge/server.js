@@ -124,6 +124,7 @@ let currentBranch = 'main'; // which branch this agent is on
 let lastSentAt = 0; // timestamp of last sent message (for group cooldown)
 let sendsSinceLastListen = 0; // enforced: must listen between sends in group mode
 let consecutiveNonListenCalls = 0; // escalating listen() enforcement counter
+let pendingUserReply = false; // true when __user__ message received but not yet replied to
 let _isCurrentlyListening = false; // true when agent is in a listen() call
 let sendLimit = 1; // default: 1 send per listen cycle (2 if addressed)
 let unaddressedSends = 0; // response budget: unaddressed sends counter
@@ -585,6 +586,7 @@ function buildMessageResponse(msg, consumedIds) {
   } catch (e) { log.debug('task reminder in listen failed:', e.message); }
 
   const isSystemMsg = msg.from === '__system__' || msg.system === true;
+  if (msg.from === '__user__') pendingUserReply = true;
   const nextAction = isSystemMsg
     ? 'Process this message, then call listen().'
     : `Do what this message asks. When finished, send_message(to="${msg.from}") with what you did and files changed, then call listen().`;
@@ -1925,6 +1927,9 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
   sendsSinceLastListen++;
   if (isGroupMode() && !msg.addressed_to) { unaddressedSends++; }
 
+  // Clear pending user reply flag when agent successfully replies to __user__
+  if (to === '__user__') pendingUserReply = false;
+
   const result = { success: true, messageId: msg.id, from: msg.from, to: msg.to };
 
   // Decision overlap hint: warn if message content overlaps with existing decisions
@@ -2262,6 +2267,11 @@ async function toolListen(from = null, outcome = null, task_id = null, summary =
   if (!registeredName) {
     return { error: 'You must call register() first' };
   }
+
+  // Soft-enforce: warn agent if they haven't replied to a user message yet
+  const _pendingUserReplyWarning = pendingUserReply
+    ? " NOTE: You have an unanswered user message — call send_message(to='__user__') before your next listen()."
+    : '';
 
   // Mode-based dispatch: explicit mode overrides auto-detection
   if (mode === 'codex') return toolListenCodex(from, outcome, task_id, summary);
@@ -3063,6 +3073,10 @@ function buildListenGroupResponse(batch, consumed, agentName, listenStart) {
       result.should_respond = false;
       result.instructions = 'DO NOT RESPOND. Wait for the manager to give you the floor. Call listen() again to wait.';
     }
+  }
+
+  if (batch.some(m => m.from === '__user__')) {
+    pendingUserReply = true;
   }
 
   if (isAutonomousMode()) {
@@ -7915,6 +7929,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         if (consecutiveNonListenCalls >= 3) {
           result.next_action = `WARNING: ${consecutiveNonListenCalls} calls without listen(). Tools BLOCKED at 5. Call listen() NOW.`;
+        }
+
+        // Soft-enforce user reply: remind agent they have an unanswered user message
+        if (pendingUserReply && result.next_action && name !== 'send_message') {
+          result.next_action += " NOTE: You have an unanswered user message — call send_message(to='__user__') before your next listen().";
         }
       }
     }
