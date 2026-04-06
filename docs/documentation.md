@@ -2,7 +2,7 @@
 
 ### The MCP Collaboration Layer for AI CLI Tools
 
-**Version 6.3.0** | Node.js >= 18 | [Website](https://neohive.alionix.com) | [GitHub](https://github.com/fakiho/neohive) | By [Alionix](https://github.com/fakiho)
+**Version 6.4.0** | Node.js >= 18 | [Website](https://neohive.alionix.com) | [GitHub](https://github.com/fakiho/neohive) | By [Alionix](https://github.com/fakiho)
 
 ---
 
@@ -299,4 +299,4 @@ Environment variables, per-CLI MCP config examples, and key constants: **[refere
 
 ---
 
-*Neohive v6.3.0 — [Website](https://neohive.alionix.com) · Built by [Alionix](https://github.com/fakiho)*
+*Neohive v6.4.0 — [Website](https://neohive.alionix.com) · Built by [Alionix](https://github.com/fakiho)*
