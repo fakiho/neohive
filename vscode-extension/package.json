@@ -2,7 +2,7 @@
   "name": "neohive",
   "displayName": "Neohive",
   "description": "Monitor and manage Neohive AI agent collaboration from VS Code. Real-time agent liveness, workflow tracking, and quick actions — all in your sidebar.",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "publisher": "alionix",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://neohive.alionix.com",
@@ -81,6 +81,11 @@
         "command": "neohive.configureAgentName",
         "title": "Neohive: Configure Agent Name",
         "icon": "$(person)"
+      },
+      {
+        "command": "neohive.openChat",
+        "title": "Neohive: Open Team Chat",
+        "icon": "$(comment-discussion)"
       }
     ],
     "menus": {
@@ -93,6 +98,11 @@
         {
           "command": "neohive.refreshWorkflows",
           "when": "view == neohive-workflows",
+          "group": "navigation"
+        },
+        {
+          "command": "neohive.openChat",
+          "when": "view == neohive-agents || view == neohive-workflows",
           "group": "navigation"
         }
       ]
