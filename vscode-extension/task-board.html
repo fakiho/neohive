@@ -206,7 +206,6 @@
 
   <script>
     const vscode = acquireVsCodeApi();
-    let lastUpdate = null;
 
     window.addEventListener('message', event => {
       const message = event.data;
@@ -215,6 +214,10 @@
       }
     });
 
+    function esc(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
     function renderBoard(tasks, agents, profiles) {
       const container = document.getElementById('board');
       if (!tasks || tasks.length === 0) {
@@ -222,58 +225,61 @@
         return;
       }
 
-      const columns = {
-        'in_progress': { name: 'In Progress', icon: '⚡' },
-        'in_review': { name: 'Review', icon: '👁️' },
-        'pending': { name: 'Pending', icon: '⏳' },
-        'done': { name: 'Done', icon: '✔️' }
-      };
+      const columns = [
+        { status: 'in_progress', name: 'In Progress' },
+        { status: 'in_review',   name: 'Review' },
+        { status: 'pending',     name: 'Pending' },
+        { status: 'blocked',     name: 'Blocked' },
+        { status: 'blocked_permanent', name: 'Needs Intervention' },
+        { status: 'done',        name: 'Done' },
+      ];
 
       let html = '';
-      for (const [status, cfg] of Object.entries(columns)) {
-        const filtered = tasks.filter(t => t.status === status);
-        if (filtered.length === 0 && (status === 'done' || status === 'in_review')) continue;
+      for (const col of columns) {
+        const filtered = tasks.filter(function(t) { return t.status === col.status; });
+        if (filtered.length === 0 && (col.status === 'done' || col.status === 'in_review')) continue;
 
-        html += `
-          <div class="column status-${status}">
-            <div class="column-header">
-              <span class="status-dot"></span>
-              ${cfg.name} <span style="margin-left: auto; opacity: 0.5;">${filtered.length}</span>
-            </div>
-            \${filtered.map((t, idx) => {
-              const assignee = t.assignee;
-              const profile = profiles[assignee] || {};
-              const agent = agents[assignee] || {};
-              const heat = agent.consecutiveNonListenCalls || 0;
-              const heatPct = Math.min((heat / 15) * 100, 100);
-              const heatClass = heat > 10 ? 'heat-high' : heat > 5 ? 'heat-med' : 'heat-low';
+        const cards = filtered.map(function(t, idx) {
+          const assignee = t.assignee || '';
+          const profile = profiles[assignee] || {};
+          const agent = agents[assignee] || {};
+          const heat = agent.consecutiveNonListenCalls || 0;
+          const heatPct = Math.min((heat / 15) * 100, 100);
+          const heatClass = heat > 10 ? 'heat-high' : heat > 5 ? 'heat-med' : 'heat-low';
 
-              return \`
-                <div class="task-card" style="animation-delay: \${idx * 0.05}s" onclick="openTask('\${t.id}')">
-                  <div class="task-title">\${t.title}</div>
-                  
-                  \${assignee ? \`
-                    <div class="heat-meter" title="Protocol Health: \${heat}/15 calls without listen()">
-                      <div class="heat-fill \${heatClass}" style="width: \${heatPct}%"></div>
-                    </div>
-                  \` : ''}
+          const avatarContent = profile.avatar
+            ? '<img src="' + esc(profile.avatar) + '" />'
+            : (assignee ? esc(assignee[0].toUpperCase()) : '?');
 
-                  <div class="task-footer">
-                    <div class="assignee-box">
-                      <div class="avatar">
-                        \${profile.avatar ? \`<img src="\${profile.avatar}" />\` : (assignee ? assignee[0].toUpperCase() : '?')}
-                      </div>
-                      <div class="task-assignee">\${profile.display_name || assignee || 'Unassigned'}</div>
-                    </div>
-                    <div class="task-metrics">
-                      \${t.retry_count ? \`<span class="retry-badge" title="Retries">↺\${t.retry_count}</span>\` : ''}
-                    </div>
-                  </div>
-                </div>
-              \`;
-            }).join('')}
-          </div>
-        `;
+          const heatMeter = assignee
+            ? '<div class="heat-meter" title="Protocol Health: ' + heat + '/15 calls without listen()">'
+              + '<div class="heat-fill ' + heatClass + '" style="width:' + heatPct + '%"></div></div>'
+            : '';
+
+          const retryBadge = t.retry_count
+            ? '<span class="retry-badge" title="Retries">&#8635;' + t.retry_count + '</span>'
+            : '';
+
+          return '<div class="task-card" style="animation-delay:' + (idx * 0.05) + 's" onclick="openTask(\'' + esc(t.id) + '\')">'
+            + '<div class="task-title">' + esc(t.title) + '</div>'
+            + heatMeter
+            + '<div class="task-footer">'
+            + '<div class="assignee-box">'
+            + '<div class="avatar">' + avatarContent + '</div>'
+            + '<div class="task-assignee">' + esc(profile.display_name || assignee || 'Unassigned') + '</div>'
+            + '</div>'
+            + '<div class="task-metrics">' + retryBadge + '</div>'
+            + '</div>'
+            + '</div>';
+        }).join('');
+
+        html += '<div class="column status-' + col.status + '">'
+          + '<div class="column-header"><span class="status-dot"></span>'
+          + esc(col.name)
+          + ' <span style="margin-left:auto;opacity:0.5;">' + filtered.length + '</span>'
+          + '</div>'
+          + (filtered.length === 0 ? '<div class="empty-state" style="padding:12px 0;font-size:0.75rem;">None</div>' : cards)
+          + '</div>';
       }
       container.innerHTML = html;
     }
