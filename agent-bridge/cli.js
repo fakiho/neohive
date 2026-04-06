@@ -47,6 +47,7 @@ function printUsage() {
     npx neohive templates           List available team templates
     npx neohive reset --force       Clear all data (auto-archives first)
     npx neohive hooks               Install listen-enforcement hooks into .claude/settings.json
+    npx neohive skills              Install neohive skills & agents for all detected IDEs
     npx neohive uninstall           Remove from all CLI configs
     npx neohive help                Show this help
 
@@ -134,6 +135,117 @@ function setupClaude(serverPath, cwd) {
 
   fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
   console.log('  [ok] Claude Code: .mcp.json updated');
+  installSkillsForClaude(cwd);
+}
+
+// ─── installSkills ────────────────────────────────────────────────────────────
+// Installs neohive skills, agents, and commands into the appropriate IDE dirs.
+// Safe to re-run: only writes files, never deletes user files outside neohive/.
+
+const SKILLS_SRC = path.join(__dirname, 'neohive-plugin', 'skills');
+const AGENTS_SRC = path.join(__dirname, 'neohive-plugin', 'agents');
+
+function copySkillFile(src, dest, label) {
+  if (!fs.existsSync(src)) return;
+  const existing = fs.existsSync(dest) ? fs.readFileSync(dest, 'utf8') : null;
+  const incoming = fs.readFileSync(src, 'utf8');
+  if (existing === incoming) {
+    console.log(`  [skip] ${label} (unchanged)`);
+  } else {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, incoming);
+    console.log(`  [ok]   ${label}`);
+  }
+}
+
+function installSkillsForClaude(cwd) {
+  // Project-level skills: .claude/skills/neohive/<skill>/SKILL.md
+  const skillsDir = path.join(cwd, '.claude', 'skills', 'neohive');
+  const agentsDir = path.join(cwd, '.claude', 'skills', 'neohive', 'agents');
+
+  if (!fs.existsSync(SKILLS_SRC)) {
+    console.log('  [skip] Claude skills: source not found (neohive-plugin/skills)');
+    return;
+  }
+
+  for (const skill of fs.readdirSync(SKILLS_SRC)) {
+    const src = path.join(SKILLS_SRC, skill, 'SKILL.md');
+    const dest = path.join(skillsDir, skill, 'SKILL.md');
+    copySkillFile(src, dest, `Claude skill: ${skill}`);
+  }
+
+  if (fs.existsSync(AGENTS_SRC)) {
+    for (const agent of fs.readdirSync(AGENTS_SRC)) {
+      const src = path.join(AGENTS_SRC, agent);
+      const dest = path.join(agentsDir, agent);
+      copySkillFile(src, dest, `Claude agent: ${agent}`);
+    }
+  }
+}
+
+function installSkillsForCursor(cwd) {
+  // .cursor/skills/neohive/<skill>/SKILL.md
+  // .cursor/agents/<agent>.md
+  // .cursor/commands/<command>.md  (derived from skills)
+  if (!fs.existsSync(SKILLS_SRC)) {
+    console.log('  [skip] Cursor skills: source not found (neohive-plugin/skills)');
+    return;
+  }
+
+  for (const skill of fs.readdirSync(SKILLS_SRC)) {
+    const src = path.join(SKILLS_SRC, skill, 'SKILL.md');
+    const dest = path.join(cwd, '.cursor', 'skills', 'neohive', skill, 'SKILL.md');
+    copySkillFile(src, dest, `Cursor skill: ${skill}`);
+
+    // Also install as a command (slash-command style) for user-invocable skills
+    const content = fs.existsSync(src) ? fs.readFileSync(src, 'utf8') : '';
+    if (content.includes('user-invocable: true') || !content.includes('user-invocable: false')) {
+      const cmdDest = path.join(cwd, '.cursor', 'commands', `neohive-${skill}.md`);
+      copySkillFile(src, cmdDest, `Cursor command: neohive-${skill}`);
+    }
+  }
+
+  if (fs.existsSync(AGENTS_SRC)) {
+    for (const agent of fs.readdirSync(AGENTS_SRC)) {
+      const src = path.join(AGENTS_SRC, agent);
+      const dest = path.join(cwd, '.cursor', 'agents', `neohive-${agent}`);
+      copySkillFile(src, dest, `Cursor agent: neohive-${agent}`);
+    }
+  }
+}
+
+function installSkillsForAntigravity(cwd) {
+  // .agent/skills/neohive/<skill>/SKILL.md  (already partially done in setupAntigravity)
+  if (!fs.existsSync(SKILLS_SRC)) {
+    console.log('  [skip] Antigravity skills: source not found (neohive-plugin/skills)');
+    return;
+  }
+
+  for (const skill of fs.readdirSync(SKILLS_SRC)) {
+    const src = path.join(SKILLS_SRC, skill, 'SKILL.md');
+    const dest = path.join(cwd, '.agent', 'skills', 'neohive', skill, 'SKILL.md');
+    copySkillFile(src, dest, `Antigravity skill: ${skill}`);
+  }
+
+  if (fs.existsSync(AGENTS_SRC)) {
+    for (const agent of fs.readdirSync(AGENTS_SRC)) {
+      const src = path.join(AGENTS_SRC, agent);
+      const dest = path.join(cwd, '.agent', 'agents', `neohive-${agent}`);
+      copySkillFile(src, dest, `Antigravity agent: neohive-${agent}`);
+    }
+  }
+}
+
+function installSkills(targets, cwd) {
+  console.log('');
+  console.log('  Installing Neohive skills & agents...');
+  for (const target of targets) {
+    switch (target) {
+      case 'claude':      installSkillsForClaude(cwd);      break;
+      case 'cursor':      installSkillsForCursor(cwd);      break;
+      case 'antigravity': installSkillsForAntigravity(cwd); break;
+    }
+  }
 }
 
 function setupGemini(serverPath, cwd) {
@@ -447,15 +559,7 @@ function setupAntigravity(cwd) {
 
   fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n');
   console.log('  [ok] Antigravity: ~/.gemini/antigravity/mcp_config.json updated');
-
-  // Write skill
-  const skillDir = path.join(cwd, '.agent', 'skills', 'neohive');
-  if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
-  const skillPath = path.join(skillDir, 'SKILL.md');
-  if (!fs.existsSync(skillPath)) {
-    fs.writeFileSync(skillPath, neohiveAgentRules('Gemini'));
-    console.log('  [ok] Antigravity: .agent/skills/neohive/SKILL.md created');
-  }
+  installSkillsForAntigravity(cwd);
 }
 
 function neohiveAgentRules(defaultName) {
@@ -563,6 +667,7 @@ function setupCursor(serverPath, cwd) {
 
   fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
   console.log('  [ok] Cursor IDE: .cursor/mcp.json updated');
+  installSkillsForCursor(cwd);
 }
 
 // Setup Ollama agent bridge script
@@ -765,6 +870,9 @@ function init() {
     }
   }
 
+  // Auto-install hooks for Claude targets
+  if (targets.includes('claude')) installHooks();
+
   // Add .neohive/ and MCP config files to .gitignore
   const gitignoreEntries = ['.neohive/', '.mcp.json', '.cursor/mcp.json', '.codex/', '.gemini/'];
   if (fs.existsSync(gitignorePath)) {
@@ -818,12 +926,6 @@ function init() {
     console.log('    npx neohive status');
     console.log('    npx neohive doctor');
     console.log('');
-    if (targets.includes('claude')) {
-      console.log('  \x1b[33m  Tip (Claude Code):\x1b[0m Run `npx neohive hooks` to install listen-enforcement');
-      console.log('  hooks into .claude/settings.json. Keeps agents in the listen loop automatically.');
-      console.log('  Your existing hooks will not be removed.');
-      console.log('');
-    }
   }
 }
 
@@ -1503,6 +1605,9 @@ switch (command) {
     break;
   case 'hooks':
     installHooks();
+    break;
+  case 'skills':
+    installSkills(detectCLIs().length ? detectCLIs() : ['claude', 'cursor', 'antigravity'], process.cwd());
     break;
   case 'uninstall':
   case 'remove':
