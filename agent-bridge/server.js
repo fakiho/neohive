@@ -2167,104 +2167,11 @@ async function toolWaitForReply(timeoutSeconds = 300, from = null) {
   };
 }
 
-function toolCheckMessages(from = null) {
-  if (!registeredName) {
-    return { error: 'You must call register() first' };
-  }
+// toolCheckMessages and toolConsumeMessages removed — dead code.
+// Routing goes through: case 'messages' → messaging.handlers['check_messages' | 'consume_messages']
+// Source of truth: agent-bridge/tools/messaging.js
 
-  const unconsumed = getUnconsumedMessages(registeredName, from);
-
-  // Rich summary: senders, addressed count, urgency — same as enhanced nudge
-  const senders = {};
-  let addressedCount = 0;
-  for (const m of unconsumed) {
-    senders[m.from] = (senders[m.from] || 0) + 1;
-    if (m.addressed_to && m.addressed_to.includes(registeredName)) addressedCount++;
-  }
-
-  // Include pending notification count
-  const allNotifs = getNotifications();
-  const unreadNotifs = allNotifs.filter(n => !n.read_by.includes(registeredName));
-
-  const result = {
-    count: unconsumed.length,
-    pending_notifications: unreadNotifs.length,
-    // Scale fix: return previews not full content — agent gets full content via listen_group()
-    messages: unconsumed.map(m => ({
-      id: m.id,
-      from: m.from,
-      preview: m.content.substring(0, 120),
-      timestamp: m.timestamp,
-      ...(m.addressed_to && { addressed_to: m.addressed_to }),
-    })),
-  };
-
-  if (unconsumed.length > 0) {
-    result.senders = senders;
-    result.addressed_to_you = addressedCount;
-    const latest = unconsumed[unconsumed.length - 1];
-    result.preview = `${latest.from}: "${latest.content.substring(0, 80).replace(/\n/g, ' ')}..."`;
-    const oldestAge = Math.round((Date.now() - new Date(unconsumed[0].timestamp).getTime()) / 1000);
-    result.urgency = oldestAge > 120 ? 'critical' : oldestAge > 30 ? 'urgent' : 'normal';
-    result.next_action = 'Call listen() to receive and process these messages. Do NOT call check_messages() again — it does not consume messages.';
-  }
-
-  return result;
-}
-
-function toolConsumeMessages(from = null, limit = null) {
-  if (!registeredName) {
-    return { error: 'You must call register() first' };
-  }
-
-  let unconsumed = getUnconsumedMessages(registeredName, from);
-  if (limit && limit > 0 && unconsumed.length > limit) {
-    unconsumed = unconsumed.slice(0, limit);
-  }
-
-  if (unconsumed.length === 0) {
-    return { success: true, count: 0, messages: [] };
-  }
-
-  // Mark all as consumed
-  const consumed = getConsumedIds(registeredName);
-  for (const msg of unconsumed) {
-    consumed.add(msg.id);
-    markAsRead(registeredName, msg.id);
-  }
-  saveConsumedIds(registeredName, consumed);
-
-  // Update read offset
-  const msgFile = getMessagesFile(currentBranch);
-  if (fs.existsSync(msgFile)) {
-    lastReadOffset = fs.statSync(msgFile).size;
-  }
-
-  touchActivity();
-
-  // Count remaining unconsumed after this batch
-  const remaining = getUnconsumedMessages(registeredName, null);
-
-  const agents = getAgents();
-  const agentsOnline = Object.entries(agents).filter(([, info]) => isPidAlive(info.pid, info.last_activity)).length;
-
-  return {
-    success: true,
-    count: unconsumed.length,
-    messages: unconsumed.map(m => ({
-      id: m.id,
-      from: m.from,
-      content: m.content,
-      timestamp: m.timestamp,
-      ...(m.reply_to && { reply_to: m.reply_to }),
-      ...(m.thread_id && { thread_id: m.thread_id }),
-      ...(m.addressed_to && { addressed_to: m.addressed_to }),
-    })),
-    remaining: remaining.length,
-    agents_online: agentsOnline,
-    coordinator_mode: getConfig().coordinator_mode || 'responsive',
-  };
-}
+// toolConsumeMessages removed — dead code. See agent-bridge/tools/messaging.js
 
 function toolAckMessage(messageId) {
   if (!registeredName) {
@@ -7930,6 +7837,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (last3.length >= 3 && last3.every(c => c.tool === name && c.argsHash === argsHash)) {
         result._stuck_hint = `You have called ${name} 3 times with the same error. Consider: broadcasting for help, trying a different approach, or calling suggest_task() to find other work.`;
       }
+      result.next_action = 'Fix the error above, then call listen() to continue.';
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         isError: true,
@@ -7978,18 +7886,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       if (isResponsiveCoordinator) {
         // Responsive coordinators must NEVER be told to call listen().
-        // Replace any tool-set listen() directive with consume_messages() or nothing.
-        if (!result.next_action || /\blisten\(\)/i.test(result.next_action)) {
-          try {
-            const pending = getUnconsumedMessages(registeredName);
-            if (pending.length > 0) {
-              result.next_action = `${pending.length} agent update(s) waiting. Call consume_messages() to read them.`;
-            } else {
-              delete result.next_action;
-            }
-          } catch {
-            delete result.next_action;
+        // Three cases:
+        //   1. No next_action set by tool       → inject consume_messages hint if pending, else nothing
+        //   2. Bare listen() directive           → replace entirely with coordinator hint
+        //   3. Compound "Do X, then listen()."  → strip the listen() tail, keep the lead instruction
+        const na = result.next_action || '';
+        const bareListenRe = /^call listen\(\)/i;
+        const tailListenRe = /,?\s*then call listen\(\)[^.]*\./i;
+        try {
+          const pending = getUnconsumedMessages(registeredName);
+          const pendingHint = pending.length > 0
+            ? `${pending.length} agent update(s) waiting. Call consume_messages() to read them.`
+            : null;
+          if (!na || bareListenRe.test(na)) {
+            // No guidance or bare listen() — replace with coordinator hint or nothing
+            if (pendingHint) result.next_action = pendingHint;
+            else delete result.next_action;
+          } else if (tailListenRe.test(na)) {
+            // Compound instruction ending in "then call listen()" — strip just the listen() tail
+            const stripped = na.replace(tailListenRe, '.').replace(/\.\.$/, '.').trim();
+            result.next_action = pendingHint ? `${stripped} Then: ${pendingHint}` : stripped;
           }
+          // else: next_action has no listen() reference — preserve as-is
+        } catch {
+          if (bareListenRe.test(na)) delete result.next_action;
         }
       } else {
         if (!result.next_action) {

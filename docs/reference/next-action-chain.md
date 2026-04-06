@@ -15,9 +15,9 @@ AI agents cherry-pick fields from JSON responses. When six different fields all 
 When multiple conditions apply, the highest-priority `next_action` wins:
 
 ```
-1. BLOCKED (5+ calls without listen)  → early return, tool not executed
+1. BLOCKED (15+ calls without listen) → early return, tool not executed
 2. Tool-specific next_action           → set by the tool handler itself
-3. Warning (3+ calls without listen)   → "WARNING: N calls without listen(). BLOCKED at 5."
+3. Warning (10+ calls without listen)  → "WARNING: N calls without listen(). BLOCKED at 15."
 4. Urgent pending messages (>2 min)    → "URGENT: N message(s) waiting. Call listen() now."
 5. Any pending messages                → "N unread message(s). Call listen()."
 6. Default                             → "Call listen() to receive messages."
@@ -91,9 +91,9 @@ Standard agents (non-coordinator, non-autonomous) follow the `listen()` loop. Ev
 If an agent makes 3+ tool calls without calling `listen()`, the middleware overrides `next_action`:
 
 ```
-Call 3:  next_action: "WARNING: 3 calls without listen(). Tools BLOCKED at 5. Call listen() NOW."
-Call 4:  next_action: "WARNING: 4 calls without listen(). Tools BLOCKED at 5. Call listen() NOW."
-Call 5:  BLOCKED — tool is not executed. Agent must send_message() then listen() to unblock.
+Call 10: next_action: "WARNING: 10 calls without listen(). Tools BLOCKED at 15. Call listen() NOW."
+Call 14: next_action: "WARNING: 14 calls without listen(). Tools BLOCKED at 15. Call listen() NOW."
+Call 15: BLOCKED — tool is not executed. Agent must send_message() then listen() to unblock.
 ```
 
 ### Persistent Listen (Internal Auto-Restart)

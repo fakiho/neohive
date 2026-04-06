@@ -48,15 +48,15 @@ module.exports = function (ctx) {
         if (lock.agent === state.registeredName) { delete locks[fp]; count++; }
       }
       writeJsonFile(LOCKS_FILE, locks);
-      return { success: true, unlocked: count, message: `Unlocked ${count} file(s).` };
+      return { success: true, unlocked: count, message: `Unlocked ${count} file(s).`, next_action: 'Call listen() to receive messages.' };
     }
 
-    if (!locks[normalized]) return { success: true, message: 'File was not locked.' };
+    if (!locks[normalized]) return { success: true, message: 'File was not locked.', next_action: 'Call listen() to receive messages.' };
     if (locks[normalized].agent !== state.registeredName) return { error: `File is locked by ${locks[normalized].agent}, not you.` };
 
     delete locks[normalized];
     writeJsonFile(LOCKS_FILE, locks);
-    return { success: true, file: normalized, message: 'File unlocked.' };
+    return { success: true, file: normalized, message: 'File unlocked.', next_action: 'Call listen() to receive messages.' };
   }
 
   // --- Dependencies ---

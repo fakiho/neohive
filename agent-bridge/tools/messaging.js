@@ -57,6 +57,8 @@ module.exports = function (ctx) {
       const oldestAge = Math.round((Date.now() - new Date(unconsumed[0].timestamp).getTime()) / 1000);
       result.urgency = oldestAge > 120 ? 'critical' : oldestAge > 30 ? 'urgent' : 'normal';
       result.next_action = 'Call listen() to receive and process these messages.';
+    } else {
+      result.next_action = 'No messages. Call listen() to wait for new messages.';
     }
 
     return result;
