@@ -82,7 +82,7 @@ const SERVER_CONFIG = {
   // Polling / Heartbeat intervals (ms)
   HEARTBEAT_INTERVAL_MS:    15000,   // how often agents write heartbeat files
   POLL_INTERVAL_MS:          2000,   // message polling cycle
-  AUTONOMOUS_LISTEN_MS:     30000,   // max listen timeout in autonomous mode
+  AUTONOMOUS_LISTEN_MS:     90000,   // max listen timeout in autonomous mode
   CODEX_LISTEN_MS:          90000,   // max listen timeout for Codex agents
 
   // Agent health thresholds (ms)
@@ -2203,11 +2203,6 @@ async function toolListen(from = null, outcome = null, task_id = null, summary =
     return { error: 'You must call register() first' };
   }
 
-  // Soft-enforce: warn agent if they haven't replied to a user message yet
-  const _pendingUserReplyWarning = pendingUserReply
-    ? " NOTE: You have an unanswered user message — call send_message(to='__user__') before your next listen()."
-    : '';
-
   // Mode-based dispatch: explicit mode overrides auto-detection
   if (mode === 'codex') return toolListenCodex(from, outcome, task_id, summary);
   if (mode === 'group') return toolListenGroup(outcome, task_id, summary);
@@ -2226,6 +2221,9 @@ async function toolListen(from = null, outcome = null, task_id = null, summary =
     const newStatus = statusMap[outcome];
     if (newStatus) toolUpdateTask(task_id, newStatus, summary || '');
   }
+
+  // Clear pending user reply flag — warning was shown, agent is now entering the listen loop
+  pendingUserReply = false;
 
   // Auto-detect group/managed mode and delegate to toolListenGroup
   // This prevents agents from calling the "wrong" listen function
@@ -2669,7 +2667,7 @@ async function toolListenGroup(outcome = null, task_id = null, summary = null) {
 
   // Autonomous mode: cap listen at 30s — agents should use get_work() instead
   const autonomousTimeout = isAutonomousMode() ? SERVER_CONFIG.AUTONOMOUS_LISTEN_MS : null;
-  const MAX_LISTEN_MS = 300000; // 5 minutes — MCP has no tool timeout, heartbeat keeps agent alive
+  const MAX_LISTEN_MS = 120000; // 2 minutes — MCP has no tool timeout, heartbeat keeps agent alive
   const listenStart = Date.now();
 
   // Helper: collect unconsumed messages from all sources (general + channels)
@@ -7630,6 +7628,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               `Do NOT skip step 1. Do NOT call any other tool. Start with send_message now.`
             }],
             isError: true,
+            next_action: `Call send_message(to="${coordinator}", content="I was blocked after ${consecutiveNonListenCalls} calls without listen(). I need to call ${name}. Should I proceed?") then immediately call listen().`,
           };
         }
       }
