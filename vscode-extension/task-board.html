@@ -52,6 +52,35 @@
       letter-spacing: 0.05em;
       opacity: 0.6;
       margin-bottom: 2px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .column-header:hover { opacity: 0.9; }
+
+    .chevron {
+      margin-left: auto;
+      font-size: 0.65rem;
+      transition: transform 0.2s ease;
+      opacity: 0.5;
+    }
+
+    .column.collapsed .chevron { transform: rotate(-90deg); }
+
+    .column-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: hidden;
+      transition: max-height 0.25s ease, opacity 0.2s ease;
+      max-height: 2000px;
+      opacity: 1;
+    }
+
+    .column.collapsed .column-body {
+      max-height: 0;
+      opacity: 0;
+      pointer-events: none;
     }
 
     .status-dot {
@@ -207,6 +236,21 @@
   <script>
     const vscode = acquireVsCodeApi();
 
+    // Persist collapsed state across re-renders; default collapse done + review
+    const STORAGE_KEY = 'neohive_collapsed_cols';
+    let collapsedCols = { done: true, in_review: true };
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) collapsedCols = JSON.parse(saved);
+    } catch (_) {}
+
+    function toggleCol(status) {
+      collapsedCols[status] = !collapsedCols[status];
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(collapsedCols)); } catch (_) {}
+      const el = document.querySelector('[data-col="' + status + '"]');
+      if (el) el.classList.toggle('collapsed', !!collapsedCols[status]);
+    }
+
     window.addEventListener('message', event => {
       const message = event.data;
       if (message.type === 'update') {
@@ -273,12 +317,17 @@
             + '</div>';
         }).join('');
 
-        html += '<div class="column status-' + col.status + '">'
-          + '<div class="column-header"><span class="status-dot"></span>'
+        const isCollapsed = collapsedCols[col.status] ? ' collapsed' : '';
+        html += '<div class="column status-' + col.status + isCollapsed + '" data-col="' + col.status + '">'
+          + '<div class="column-header" onclick="toggleCol(\'' + col.status + '\')">'
+          + '<span class="status-dot"></span>'
           + esc(col.name)
-          + ' <span style="margin-left:auto;opacity:0.5;">' + filtered.length + '</span>'
+          + ' <span style="opacity:0.5;margin-left:4px;">' + filtered.length + '</span>'
+          + '<span class="chevron">&#9660;</span>'
           + '</div>'
-          + (filtered.length === 0 ? '<div class="empty-state" style="padding:12px 0;font-size:0.75rem;">None</div>' : cards)
+          + '<div class="column-body">'
+          + (filtered.length === 0 ? '<div class="empty-state" style="padding:8px 0;font-size:0.75rem;">None</div>' : cards)
+          + '</div>'
           + '</div>';
       }
       container.innerHTML = html;
