@@ -398,9 +398,9 @@ module.exports = function (ctx) {
       inputSchema: {
         type: 'object',
         properties: {
-          title: { type: 'string', description: 'Short task title' },
-          description: { type: 'string', description: 'Detailed task description' },
-          assignee: { type: 'string', description: 'Agent to assign to (optional, auto-assigns with 2 agents)' },
+          title: { type: 'string', description: 'Short task title', maxLength: 200 },
+          description: { type: 'string', description: 'Detailed task description', maxLength: 5000 },
+          assignee: { type: 'string', description: 'Agent to assign to (optional, auto-assigns with 2 agents)', maxLength: 50 },
         },
         required: ['title'],
         additionalProperties: false,
@@ -412,9 +412,9 @@ module.exports = function (ctx) {
       inputSchema: {
         type: 'object',
         properties: {
-          task_id: { type: 'string', description: 'Task ID to update' },
+          task_id: { type: 'string', description: 'Task ID to update', maxLength: 50 },
           status: { type: 'string', enum: ['pending', 'in_progress', 'in_review', 'done', 'blocked', 'blocked_permanent'], description: 'New status' },
-          notes: { type: 'string', description: 'Optional progress note' },
+          notes: { type: 'string', description: 'Optional progress note', maxLength: 2000 },
         },
         required: ['task_id', 'status'],
         additionalProperties: false,
