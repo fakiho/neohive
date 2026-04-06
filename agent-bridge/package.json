@@ -24,6 +24,7 @@
     "design-system.css",
     "design-system.html",
     "cli.js",
+    "neohive-plugin/",
     "lib/",
     "tools/",
     "templates/",
