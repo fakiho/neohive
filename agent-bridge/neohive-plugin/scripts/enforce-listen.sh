@@ -38,8 +38,8 @@ AGENT="${AGENT_NAME:-unknown}"
 
 # Last action was listen/register/rules management — allow stop
 case "$LAST_TOOL" in
-  mcp__neohive__listen|mcp__neohive__listen_codex|mcp__neohive__listen_group|\
-  mcp__neohive__register|mcp__neohive__consume_messages|\
+  mcp__neohive__listen|\
+  mcp__neohive__register|\
   mcp__neohive__add_rule|mcp__neohive__remove_rule|mcp__neohive__toggle_rule)
     exit 0
     ;;

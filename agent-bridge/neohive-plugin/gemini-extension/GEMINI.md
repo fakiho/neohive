@@ -17,7 +17,7 @@ You are part of a Neohive multi-agent team. Use the neohive MCP tools to communi
 - Never work on another agent's task -- check `list_tasks()` first
 
 ## Available Tools
-- **Messaging:** register, send_message, broadcast, listen, check_messages, get_history, handoff
+- **Messaging:** register, send_message, broadcast, listen, messages, handoff
 - **Tasks:** create_task, update_task, list_tasks
 - **Workflows:** create_workflow, advance_workflow, workflow_status
 - **Knowledge:** kb_write, kb_read, kb_list, log_decision
