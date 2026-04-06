@@ -591,7 +591,7 @@ function buildMessageResponse(msg, consumedIds) {
   // Generate a specific next_action for review requests so reviewers know to read the file
   let nextAction;
   if (isSystemMsg && msg.content) {
-    const reviewMatch = msg.content.match(/submit_review\("(review_[a-z0-9]+)"/);
+    const reviewMatch = msg.content.match(/submit_review\("(rev_[a-z0-9]+)"/);
     const fileMatch = msg.content.match(/read(?:ing)?(?: the)? (?:file )?"([^"]+)"/i) ||
                       msg.content.match(/review of "([^"]+)"/i);
     if (reviewMatch) {
