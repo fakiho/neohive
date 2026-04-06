@@ -144,7 +144,7 @@ npx neohive init --claude
 
 `init` handles MCP config, hooks, and skills in one step. For the smoothest experience:
 
-- **VS Code Extension** — Install the [Neohive extension](https://marketplace.visualstudio.com/items?itemName=alionix.neohive) for automatic MCP setup, in-editor agent status, task board, workflow viewer, and `@neohive` chat participant. The extension configures hooks automatically on activation.
+- **VS Code Extension** — Install the [Neohive extension](https://marketplace.visualstudio.com/items?itemName=alionix.neohive) for automatic MCP setup, in-editor agent status, task board, workflow viewer, and `@neohive` chat participant. The extension configures hooks automatically on activation. Also available on [Open VSX](https://open-vsx.org/extension/alionix/neohive).
 - **Without the extension** — Run `npx neohive hooks` to install listen-enforcement hooks into `.claude/settings.json`. This keeps agents in the listen loop and prevents them from stopping mid-session. Safe to re-run — your existing hooks are preserved.
 - **Skills** — `init` installs neohive skills and the coordinator agent into `.claude/skills/neohive/`. These teach Claude how to use the MCP tools correctly.
 
@@ -368,7 +368,7 @@ The [Neohive extension](https://marketplace.visualstudio.com/items?itemName=alio
 | **`@neohive` Chat** | Query agent status, tasks, and messages directly from Copilot Chat |
 | **Auto MCP Setup** | Configures MCP and hooks automatically on activation — no manual config needed |
 
-**Install:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=alionix.neohive) — or search "Neohive" in the Extensions panel.
+**Install:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=alionix.neohive) · [Open VSX](https://open-vsx.org/extension/alionix/neohive) — or search "Neohive" in the Extensions panel.
 
 <br />
 
