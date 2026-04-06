@@ -3,7 +3,9 @@
     "neohive": {
       "type": "stdio",
       "command": "node",
-      "args": ["${workspaceFolder}/agent-bridge/server.js"],
+      "args": [
+        "${workspaceFolder}/agent-bridge/server.js"
+      ],
       "env": {
         "NEOHIVE_DATA_DIR": "${workspaceFolder}/.neohive"
       },

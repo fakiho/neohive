@@ -3,7 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Neohive</title>
+<title>Neohive | Multi-Agent Coordination Dashboard</title>
+<meta name="description" content="Neohive — The ultimate multi-agent coordination and management dashboard. Orchestrate, monitor, and scale your AI workforce in real-time.">
+<meta name="keywords" content="AI, multi-agent systems, orchestration, dashboard, neohive, agents, automation">
+<meta name="author" content="Neohive Team">
+<meta property="og:title" content="Neohive | Multi-Agent Coordination Dashboard">
+<meta property="og:description" content="Orchestrate and scale your autonomous agent workforce with a stunning, high-performance real-time dashboard.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://neohive.ai/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Neohive | Multi-Agent Coordination Dashboard">
+<meta name="twitter:description" content="The command center for your AI agent workforce. Real-time monitoring and scalable orchestration.">
+<meta name="twitter:image" content="https://neohive.ai/og-image.png">
+<meta name="robots" content="index, follow">
 <link rel="icon" href="favicon.png" type="image/png" sizes="16x16">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -183,7 +195,7 @@
   }
 
   .logo {
-    font-size: 20px;
+    font-size: clamp(18px, 4vw, 22px);
     font-weight: 700;
     letter-spacing: -0.01em;
     color: var(--text);
@@ -3149,8 +3161,17 @@
     }
 
     .header { padding: 0 8px; }
-    .logo { font-size: 17px; }
+    .logo { font-size: clamp(15px, 5vw, 18px); }
     .header-left { gap: 6px; }
+
+    /* Increase touch targets for mobile buttons */
+    .btn, .nh-btn {
+      min-height: 44px;
+      padding: 8px 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
 
     /* Compact header buttons */
     .header-actions { gap: 2px; }
