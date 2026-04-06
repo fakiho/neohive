@@ -1035,7 +1035,273 @@ async function handleNeohiveChatRequest(request, _context, stream, _token) {
   return {};
 }
 
+// --- Neohive Webview Chat Panel ---
+
+/**
+ * Manages the Neohive Chat Webview panel.
+ * Uses a FileSystemWatcher on messages.jsonl for real-time updates.
+ */
+class NeohiveChatPanel {
+  static currentPanel = undefined;
+  static viewType = 'neohive-chat';
+
+  constructor(panel, extensionUri) {
+    this._panel = panel;
+    this._extensionUri = extensionUri;
+    this._disposables = [];
+    this._lastReadOffset = 0;
+
+    // Set the webview's initial html content
+    this._update();
+
+    // Listen for when the panel is disposed
+    // This happens when the user closes the panel or when the panel is closed programmatically
+    this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+
+    // Handle messages from the webview
+    this._panel.webview.onDidReceiveMessage(
+      async (message) => {
+        switch (message.command) {
+          case 'send':
+            await this._injectMessage(message.text);
+            return;
+        }
+      },
+      null,
+      this._disposables
+    );
+
+    // Watch for message file changes
+    this._setupFileWatcher();
+
+    // Initial load
+    this._postNewMessages();
+  }
+
+  static createOrShow(extensionUri) {
+    const column = vscode.window.activeTextEditor
+      ? vscode.window.activeTextEditor.viewColumn
+      : undefined;
+
+    // If we already have a panel, show it.
+    if (NeohiveChatPanel.currentPanel) {
+      NeohiveChatPanel.currentPanel._panel.reveal(column);
+      return;
+    }
+
+    // Otherwise, create a new panel.
+    const panel = vscode.window.createWebviewPanel(
+      NeohiveChatPanel.viewType,
+      'Neohive Team Chat',
+      column || vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+      }
+    );
+
+    NeohiveChatPanel.currentPanel = new NeohiveChatPanel(panel, extensionUri);
+  }
+
+  async _injectMessage(text) {
+    if (!text || !text.trim()) return;
+    const serverUrl = getServerUrl();
+    const payload = JSON.stringify({ from: '__user__', to: '__group__', content: text.trim() });
+
+    try {
+      const url = new URL('/api/inject', serverUrl);
+      const isHttps = url.protocol === 'https:';
+      const mod = isHttps ? require('https') : require('http');
+      const req = mod.request({
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+          'X-LTT-Request': '1',
+        },
+      }, (res) => {
+        res.resume();
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          vscode.window.showErrorMessage(`Neohive: Failed to send message (HTTP ${res.statusCode})`);
+        }
+      });
+      req.on('error', (e) => vscode.window.showErrorMessage(`Neohive: Server unreachable (${e.message})`));
+      req.write(payload);
+      req.end();
+    } catch (e) {
+      vscode.window.showErrorMessage(`Neohive: Error sending message (${e.message})`);
+    }
+  }
+
+  _setupFileWatcher() {
+    const dataDir = getNeohiveDataDir();
+    const msgFile = dataDir && path.join(dataDir, 'messages.jsonl');
+    if (!msgFile) return;
+
+    // Use a relative pattern for stability across OS/environments
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(path.dirname(msgFile), path.basename(msgFile))
+    );
+
+    watcher.onDidChange(() => this._postNewMessages(), null, this._disposables);
+    watcher.onDidCreate(() => {
+      this._lastReadOffset = 0;
+      this._postNewMessages();
+    }, null, this._disposables);
+    
+    this._disposables.push(watcher);
+  }
+
+  _postNewMessages() {
+    const dataDir = getNeohiveDataDir();
+    const msgFile = dataDir && path.join(dataDir, 'messages.jsonl');
+    if (!msgFile || !fs.existsSync(msgFile)) return;
+
+    try {
+      const stats = fs.statSync(msgFile);
+      if (stats.size < this._lastReadOffset) {
+        this._lastReadOffset = 0; // File was truncated or rotated
+      }
+
+      const fd = fs.openSync(msgFile, 'r');
+      const buffer = Buffer.alloc(stats.size - this._lastReadOffset);
+      fs.readSync(fd, buffer, 0, buffer.length, this._lastReadOffset);
+      fs.closeSync(fd);
+
+      const newContent = buffer.toString('utf8');
+      const lines = newContent.trim().split('\n').filter(Boolean);
+      const messages = lines.map(line => {
+        try { return JSON.parse(line); } catch { return null; }
+      }).filter(Boolean);
+
+      if (messages.length > 0) {
+        this._panel.webview.postMessage({ command: 'messages', messages });
+      }
+      this._lastReadOffset = stats.size;
+    } catch (err) {
+      console.error('[neohive] Failed to read messages.jsonl:', err);
+    }
+  }
+
+  dispose() {
+    NeohiveChatPanel.currentPanel = undefined;
+    this._panel.dispose();
+    while (this._disposables.length) {
+      const x = this._disposables.pop();
+      if (x) x.dispose();
+    }
+  }
+
+  _update() {
+    this._panel.webview.html = this._getHtmlForWebview();
+  }
+
+  _getHtmlForWebview() {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neohive Chat</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #0f0f10; color: #e0e0e0; margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; }
+        #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        .message { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; position: relative; animation: fadeIn 0.2s ease-out; }
+        .message.system { align-self: center; background: rgba(255,255,255,0.05); color: #888; font-style: italic; font-size: 11px; max-width: 100%; border: 1px solid rgba(255,255,255,0.1); }
+        .message.from-me { align-self: flex-end; background: #2c3e50; color: #fff; border-bottom-right-radius: 2px; }
+        .message.from-others { align-self: flex-start; background: #1e1e20; border: 1px solid #333; border-bottom-left-radius: 2px; }
+        .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; gap: 8px; }
+        .from { font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .time { font-size: 10px; color: #666; }
+        .content { white-space: pre-wrap; word-wrap: break-word; }
+        #input-area { padding: 16px; background: #0f0f10; border-top: 1px solid #222; display: flex; gap: 10px; }
+        input { flex: 1; background: #1a1a1c; border: 1px solid #333; color: #fff; padding: 8px 12px; border-radius: 6px; outline: none; }
+        input:focus { border-color: #007acc; }
+        button { background: #007acc; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: background 0.2s; }
+        button:hover { background: #0062a3; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="messages"></div>
+    <div id="input-area">
+        <input type="text" id="chat-input" placeholder="Type a message to the coordinator..." />
+        <button id="send-btn">Send</button>
+    </div>
+    <script>
+        const vscode = acquireVsCodeApi();
+        const msgContainer = document.getElementById('messages');
+        const input = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+
+        function escapeHtml(s) {
+            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        function appendMessage(msg) {
+            const div = document.createElement('div');
+            const isMe = msg.from === '__user__';
+            const isSystem = msg.system || msg.from === '__system__';
+            
+            div.className = 'message ' + (isSystem ? 'system' : (isMe ? 'from-me' : 'from-others'));
+            
+            if (!isSystem) {
+                const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+                div.innerHTML = \`
+                    <div class="header">
+                        <span class="from" style="color: \${getAgentColor(msg.from)}">\${msg.from === '__user__' ? 'You' : msg.from}</span>
+                        <span class="time">\${ts}</span>
+                    </div>
+                    <div class="content">\${escapeHtml(msg.content)}</div>
+                \`;
+            } else {
+                div.innerHTML = \`<div class="content">\${escapeHtml(msg.content)}</div>\`;
+            }
+            
+            msgContainer.appendChild(div);
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
+
+        function getAgentColor(name) {
+            if (name === '__user__') return '#4fc3f7';
+            if (name === 'ClaudeLead') return '#ff8a65';
+            const colors = ['#81c784', '#ba68c8', '#ffd54f', '#4db6ac', '#95a5a6'];
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        sendBtn.onclick = () => {
+            const text = input.value;
+            if (text) {
+                vscode.postMessage({ command: 'send', text });
+                input.value = '';
+            }
+        };
+
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') sendBtn.onclick();
+        };
+
+        window.addEventListener('message', event => {
+            const message = event.data;
+            switch (message.command) {
+                case 'messages':
+                    message.messages.forEach(appendMessage);
+                    break;
+            }
+        });
+    </script>
+</body>
+</html>`;
+  }
+}
+
 // --- Claude Hooks Auto-Setup ---
+
 
 /**
  * Write/merge neohive hooks into .claude/settings.json on activate.
@@ -1197,7 +1463,8 @@ function activate(context) {
       vscode.window.showInformationMessage('Neohive: Claude Code hooks configured in .claude/settings.json');
     }),
     vscode.commands.registerCommand('neohive.bindAgentTerminal', () => terminalBridge.bindAgentTerminal()),
-    vscode.commands.registerCommand('neohive.testTerminalBridge', () => terminalBridge.testTerminalBridge())
+    vscode.commands.registerCommand('neohive.testTerminalBridge', () => terminalBridge.testTerminalBridge()),
+    vscode.commands.registerCommand('neohive.openChat', () => NeohiveChatPanel.createOrShow(context.extensionUri))
   );
 
   // Auto-configure Claude Code hooks on every activate (idempotent merge)
