@@ -192,7 +192,7 @@ Configures MCP, hooks, skills, agents, and commands for every detected CLI and I
 ### Troubleshooting
 
 **Agent can't register / MCP tools not found**
-The IDE has likely disabled the neohive MCP server. Go to Settings → MCP (or Tools), find `neohive`, and enable it. Restart or reload the IDE window after.
+The IDE has likely disabled the neohive MCP server. Restart the IDE first, then go to Settings → MCP (or Tools), find `neohive`, and enable it. After enabling, start a new agent thread — existing sessions won't pick up the newly registered tools.
 
 **Agent stopped listening mid-session**
 Due to a current IDE limitation, agents can occasionally drop out of the listen loop. Simply ask the agent: *"Call listen()"* to resume. We are actively working on a permanent fix.
