@@ -279,7 +279,7 @@ function getServerUrl() {
 }
 
 function getPollInterval() {
-  return vscode.workspace.getConfiguration('neohive').get('pollInterval', 300000);
+  return vscode.workspace.getConfiguration('neohive').get('pollInterval', 5000);
 }
 
 function fetchJson(urlPath) {
