@@ -449,6 +449,55 @@ class WorkflowTreeProvider {
   }
 }
 
+// --- Task Board (Kanban) Webview ---
+
+class TaskBoardProvider {
+  constructor(extensionUri) {
+    this._extensionUri = extensionUri;
+    this._view = undefined;
+    this._tasks = [];
+  }
+
+  resolveWebviewView(webviewView) {
+    this._view = webviewView;
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [this._extensionUri]
+    };
+    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+    webviewView.webview.onDidReceiveMessage(data => {
+      if (data.command === 'openTask') {
+        // Task detail view could be added later
+      }
+    });
+
+    if (this._tasks.length > 0) {
+      this.updateTasks(this._tasks, {}, {});
+    }
+  }
+
+  updateTasks(tasks, agents, profiles) {
+    this._tasks = tasks || [];
+    if (this._view) {
+      this._view.webview.postMessage({ 
+        type: 'update', 
+        tasks: this._tasks, 
+        agents: agents || {}, 
+        profiles: profiles || {} 
+      });
+    }
+  }
+
+  _getHtmlForWebview(webview) {
+    const htmlPath = vscode.Uri.joinPath(this._extensionUri, 'task-board.html');
+    try {
+      return fs.readFileSync(htmlPath.fsPath, 'utf8');
+    } catch (e) {
+      return `<html><body>Error loading Task Board: ${e.message}</body></html>`;
+    }
+  }
+}
+
 // --- Status Bar ---
 
 const EXT_VERSION = require('./package.json').version;
@@ -1582,9 +1631,11 @@ function activate(context) {
 
   const agentProvider = new AgentTreeProvider();
   const workflowProvider = new WorkflowTreeProvider();
+  const taskBoardProvider = new TaskBoardProvider(context.extensionUri);
 
   vscode.window.registerTreeDataProvider('neohive-agents', agentProvider);
   vscode.window.registerTreeDataProvider('neohive-workflows', workflowProvider);
+  vscode.window.registerWebviewViewProvider('neohive-tasks', taskBoardProvider);
 
   const statusBar = createStatusBar();
   context.subscriptions.push(statusBar);
@@ -1598,6 +1649,7 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('neohive.refreshAgents', () => pollData()),
     vscode.commands.registerCommand('neohive.refreshWorkflows', () => pollData()),
+    vscode.commands.registerCommand('neohive.refreshTasks', () => pollData()),
     vscode.commands.registerCommand('neohive.showAgents', () => {
       vscode.commands.executeCommand('neohive-agents.focus');
     }),
@@ -1631,15 +1683,22 @@ function activate(context) {
 
   async function pollData() {
     try {
-      const [agentsRes, workflows] = await Promise.all([
+      const [agentsRes, workflows, tasksRes, profilesRes] = await Promise.all([
         fetchJson('/api/agents'),
         fetchJson('/api/workflows').catch(() => []),
+        fetchJson('/api/tasks').catch(() => []),
+        fetchJson('/api/profiles').catch(() => ({})),
       ]);
 
       const agents = agentsRes.agents || agentsRes;
+      const tasks = Array.isArray(tasksRes) ? tasksRes : (tasksRes.tasks || []);
+      const profiles = profilesRes.profiles || profilesRes;
+
       try { terminalBridge.onAgentsUpdate(agents); } catch (_) {}
       agentProvider.setAgents(agents);
       workflowProvider.setWorkflows(Array.isArray(workflows) ? workflows : []);
+      taskBoardProvider.updateTasks(tasks, agents, profiles);
+
       connected = true;
       updateStatusBar(statusBar, agents, true);
     } catch {
@@ -1684,6 +1743,18 @@ function activate(context) {
     mcpWatcher.onDidCreate(() => updateMcpStatusBar(getMcpStatus()));
     mcpWatcher.onDidDelete(() => updateMcpStatusBar(getMcpStatus()));
     context.subscriptions.push(mcpWatcher);
+  }
+
+  // Watch for task.json changes for real-time Kanban updates
+  const dataDir = getNeohiveDataDir();
+  if (dataDir) {
+    const tasksWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(dataDir, 'tasks.json')
+    );
+    tasksWatcher.onDidChange(() => pollData());
+    tasksWatcher.onDidCreate(() => pollData());
+    tasksWatcher.onDidDelete(() => pollData());
+    context.subscriptions.push(tasksWatcher);
   }
 }
 

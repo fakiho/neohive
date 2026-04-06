@@ -44,6 +44,12 @@
           "icon": "$(person)"
         },
         {
+          "id": "neohive-tasks",
+          "type": "webview",
+          "name": "Task Board",
+          "icon": "$(checklist)"
+        },
+        {
           "id": "neohive-workflows",
           "name": "Workflows",
           "icon": "$(history)"
@@ -59,6 +65,11 @@
       {
         "command": "neohive.refreshWorkflows",
         "title": "Neohive: Refresh Workflows",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "neohive.refreshTasks",
+        "title": "Neohive: Refresh Tasks",
         "icon": "$(refresh)"
       },
       {
@@ -98,6 +109,11 @@
         {
           "command": "neohive.refreshWorkflows",
           "when": "view == neohive-workflows",
+          "group": "navigation"
+        },
+        {
+          "command": "neohive.refreshTasks",
+          "when": "view == neohive-tasks",
           "group": "navigation"
         },
         {

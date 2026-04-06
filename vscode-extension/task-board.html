@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg: var(--vscode-sideBar-background);
+      --fg: var(--vscode-sideBar-foreground);
+      --card-bg: rgba(255, 255, 255, 0.04);
+      --card-border: var(--vscode-widget-border);
+      --accent: var(--vscode-button-background);
+      --pending: #94a3b8;
+      --in-progress: #38bdf8;
+      --in-review: #fbbf24;
+      --done: #10b981;
+      --blocked: #ef4444;
+      --surface: rgba(255, 255, 255, 0.02);
+    }
+
+    body {
+      padding: 0;
+      margin: 0;
+      font-family: var(--vscode-font-family);
+      font-size: var(--vscode-font-size);
+      color: var(--fg);
+      background: var(--bg);
+      user-select: none;
+      overflow-x: hidden;
+    }
+
+    .kanban-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 16px 12px;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .column-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      opacity: 0.6;
+      margin-bottom: 2px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(0,0,0,0.3);
+    }
+
+    .status-pending .status-dot { background: var(--pending); }
+    .status-in_progress .status-dot { background: var(--in-progress); box-shadow: 0 0 10px var(--in-progress); }
+    .status-in_review .status-dot { background: var(--in-review); }
+    .status-done .status-dot { background: var(--done); }
+    .status-blocked .status-dot { background: var(--blocked); box-shadow: 0 0 10px var(--blocked); }
+
+    .task-card {
+      background: var(--card-bg);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+      animation: cardIn 0.4s ease-out backwards;
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .task-card:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.15);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+
+    .task-title {
+      font-weight: 600;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      color: var(--vscode-sideBar-foreground);
+    }
+
+    .task-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+
+    .assignee-box {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .avatar {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      background: var(--vscode-badge-background);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: bold;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .task-assignee {
+      font-size: 0.7rem;
+      opacity: 0.8;
+      font-weight: 500;
+    }
+
+    .task-metrics {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.7rem;
+      opacity: 0.6;
+    }
+
+    /* Protocol Heat Meter */
+    .heat-meter {
+      height: 2px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 1px;
+      overflow: hidden;
+      margin-top: 4px;
+      width: 100%;
+    }
+
+    .heat-fill {
+      height: 100%;
+      transition: width 0.5s ease, background 0.5s ease;
+    }
+
+    .heat-low { background: #10b981; }
+    .heat-med { background: #f59e0b; }
+    .heat-high { background: #ef4444; }
+
+    .retry-badge {
+      color: var(--in-review);
+      font-weight: 700;
+    }
+
+    .empty-state {
+      padding: 40px 20px;
+      text-align: center;
+      opacity: 0.3;
+      font-style: italic;
+      font-size: 0.8rem;
+    }
+
+    /* Theme-aware card accent */
+    .task-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 3px;
+      height: 100%;
+      opacity: 0.6;
+    }
+
+    .status-pending .task-card::before { background: var(--pending); }
+    .status-in_progress .task-card::before { background: var(--in-progress); }
+    .status-in_review .task-card::before { background: var(--in-review); }
+    .status-done .task-card::before { background: var(--done); }
+    .status-blocked .task-card::before { background: var(--blocked); }
+
+  </style>
+</head>
+<body>
+  <div class="kanban-container" id="board">
+    <div class="empty-state">Initializing Neohive board...</div>
+  </div>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+    let lastUpdate = null;
+
+    window.addEventListener('message', event => {
+      const message = event.data;
+      if (message.type === 'update') {
+        renderBoard(message.tasks, message.agents, message.profiles);
+      }
+    });
+
+    function renderBoard(tasks, agents, profiles) {
+      const container = document.getElementById('board');
+      if (!tasks || tasks.length === 0) {
+        container.innerHTML = '<div class="empty-state">No active tasks.</div>';
+        return;
+      }
+
+      const columns = {
+        'in_progress': { name: 'In Progress', icon: '⚡' },
+        'in_review': { name: 'Review', icon: '👁️' },
+        'pending': { name: 'Pending', icon: '⏳' },
+        'done': { name: 'Done', icon: '✔️' }
+      };
+
+      let html = '';
+      for (const [status, cfg] of Object.entries(columns)) {
+        const filtered = tasks.filter(t => t.status === status);
+        if (filtered.length === 0 && (status === 'done' || status === 'in_review')) continue;
+
+        html += `
+          <div class="column status-${status}">
+            <div class="column-header">
+              <span class="status-dot"></span>
+              ${cfg.name} <span style="margin-left: auto; opacity: 0.5;">${filtered.length}</span>
+            </div>
+            \${filtered.map((t, idx) => {
+              const assignee = t.assignee;
+              const profile = profiles[assignee] || {};
+              const agent = agents[assignee] || {};
+              const heat = agent.consecutiveNonListenCalls || 0;
+              const heatPct = Math.min((heat / 15) * 100, 100);
+              const heatClass = heat > 10 ? 'heat-high' : heat > 5 ? 'heat-med' : 'heat-low';
+
+              return \`
+                <div class="task-card" style="animation-delay: \${idx * 0.05}s" onclick="openTask('\${t.id}')">
+                  <div class="task-title">\${t.title}</div>
+                  
+                  \${assignee ? \`
+                    <div class="heat-meter" title="Protocol Health: \${heat}/15 calls without listen()">
+                      <div class="heat-fill \${heatClass}" style="width: \${heatPct}%"></div>
+                    </div>
+                  \` : ''}
+
+                  <div class="task-footer">
+                    <div class="assignee-box">
+                      <div class="avatar">
+                        \${profile.avatar ? \`<img src="\${profile.avatar}" />\` : (assignee ? assignee[0].toUpperCase() : '?')}
+                      </div>
+                      <div class="task-assignee">\${profile.display_name || assignee || 'Unassigned'}</div>
+                    </div>
+                    <div class="task-metrics">
+                      \${t.retry_count ? \`<span class="retry-badge" title="Retries">↺\${t.retry_count}</span>\` : ''}
+                    </div>
+                  </div>
+                </div>
+              \`;
+            }).join('')}
+          </div>
+        `;
+      }
+      container.innerHTML = html;
+    }
+
+    function openTask(id) {
+      vscode.postMessage({ command: 'openTask', id });
+    }
+  </script>
+</body>
+</html>
