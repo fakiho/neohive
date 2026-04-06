@@ -1063,7 +1063,10 @@ class NeohiveChatPanel {
       async (message) => {
         switch (message.command) {
           case 'send':
-            await this._injectMessage(message.text);
+            await this._injectMessage(message.text, message.to);
+            return;
+          case 'getAgents':
+            this._postAgents();
             return;
         }
       },
@@ -1103,37 +1106,96 @@ class NeohiveChatPanel {
     NeohiveChatPanel.currentPanel = new NeohiveChatPanel(panel, extensionUri);
   }
 
-  async _injectMessage(text) {
+  async _injectMessage(text, to = '__group__') {
     if (!text || !text.trim()) return;
     const serverUrl = getServerUrl();
-    const payload = JSON.stringify({ from: '__user__', to: '__group__', content: text.trim() });
+    const payload = JSON.stringify({ from: '__user__', to, content: text.trim() });
 
+    return new Promise((resolve) => {
+      try {
+        const url = new URL('/api/inject', serverUrl);
+        const isHttps = url.protocol === 'https:';
+        const mod = isHttps ? require('https') : require('http');
+        const req = mod.request({
+          hostname: url.hostname,
+          port: url.port || (isHttps ? 443 : 80),
+          path: url.pathname,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(payload),
+            'X-LTT-Request': '1',
+          },
+        }, (res) => {
+          let data = '';
+          res.on('data', chunk => { data += chunk; });
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              try {
+                const result = JSON.parse(data);
+                if (result.messageId && to !== '__group__' && to !== '__all__') {
+                  this._trackPendingRead(result.messageId, to);
+                }
+                resolve(result.messageId);
+              } catch { resolve(null); }
+            } else {
+              vscode.window.showErrorMessage(`Neohive: Failed to send message (HTTP ${res.statusCode})`);
+              resolve(null);
+            }
+          });
+        });
+        req.on('error', (e) => {
+          vscode.window.showErrorMessage(`Neohive: Server unreachable (${e.message})`);
+          resolve(null);
+        });
+        req.write(payload);
+        req.end();
+      } catch (e) {
+        vscode.window.showErrorMessage(`Neohive: Error sending message (${e.message})`);
+        resolve(null);
+      }
+    });
+  }
+
+  _trackPendingRead(msgId, recipient) {
+    if (!msgId || !recipient) return;
+    if (!this._pendingReads) this._pendingReads = new Map();
+    this._pendingReads.set(msgId, recipient);
+    this._watchConsumedFile(recipient);
+  }
+
+  _watchConsumedFile(agentName) {
+    if (!this._consumedWatchers) this._consumedWatchers = new Set();
+    if (this._consumedWatchers.has(agentName)) return;
+    this._consumedWatchers.add(agentName);
+
+    const dataDir = getNeohiveDataDir();
+    if (!dataDir) return;
+    const consumedFile = path.join(dataDir, `consumed-${agentName}.json`);
+    const dir = path.dirname(consumedFile);
+    const base = path.basename(consumedFile);
+
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(dir, base)
+    );
+    const check = () => this._checkReadReceipts(agentName, consumedFile);
+    watcher.onDidChange(check, null, this._disposables);
+    watcher.onDidCreate(check, null, this._disposables);
+    this._disposables.push(watcher);
+  }
+
+  _checkReadReceipts(agentName, consumedFile) {
+    if (!this._pendingReads || this._pendingReads.size === 0) return;
     try {
-      const url = new URL('/api/inject', serverUrl);
-      const isHttps = url.protocol === 'https:';
-      const mod = isHttps ? require('https') : require('http');
-      const req = mod.request({
-        hostname: url.hostname,
-        port: url.port || (isHttps ? 443 : 80),
-        path: url.pathname,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(payload),
-          'X-LTT-Request': '1',
-        },
-      }, (res) => {
-        res.resume();
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          vscode.window.showErrorMessage(`Neohive: Failed to send message (HTTP ${res.statusCode})`);
+      if (!fs.existsSync(consumedFile)) return;
+      const ids = new Set(JSON.parse(fs.readFileSync(consumedFile, 'utf8')));
+      for (const [msgId, recipient] of this._pendingReads) {
+        if (recipient === agentName && ids.has(msgId)) {
+          this._pendingReads.delete(msgId);
+          this._panel.webview.postMessage({ command: 'markRead', msgId });
         }
-      });
-      req.on('error', (e) => vscode.window.showErrorMessage(`Neohive: Server unreachable (${e.message})`));
-      req.write(payload);
-      req.end();
-    } catch (e) {
-      vscode.window.showErrorMessage(`Neohive: Error sending message (${e.message})`);
-    }
+      }
+    } catch {}
   }
 
   _setupFileWatcher() {
@@ -1153,6 +1215,24 @@ class NeohiveChatPanel {
     }, null, this._disposables);
     
     this._disposables.push(watcher);
+  }
+
+  _postAgents() {
+    const dataDir = getNeohiveDataDir();
+    const agentsFile = dataDir && path.join(dataDir, 'agents.json');
+    if (!agentsFile || !fs.existsSync(agentsFile)) {
+      this._panel.webview.postMessage({ command: 'agents', agents: [] });
+      return;
+    }
+
+    try {
+      const agents = JSON.parse(fs.readFileSync(agentsFile, 'utf8'));
+      // Filter for online agents (or just send all, webview can filter)
+      const agentList = Object.keys(agents).filter(name => agents[name].status === 'alive');
+      this._panel.webview.postMessage({ command: 'agents', agents: agentList });
+    } catch (err) {
+      console.error('[neohive] Failed to read agents.json:', err);
+    }
   }
 
   _postNewMessages() {
@@ -1214,10 +1294,22 @@ class NeohiveChatPanel {
         .message.from-me { align-self: flex-end; background: #2c3e50; color: #fff; border-bottom-right-radius: 2px; }
         .message.from-others { align-self: flex-start; background: #1e1e20; border: 1px solid #333; border-bottom-left-radius: 2px; }
         .header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; gap: 8px; }
+        .header-left { display: flex; align-items: baseline; gap: 8px; }
+        .header-right { display: flex; align-items: center; gap: 6px; }
         .from { font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
         .time { font-size: 10px; color: #666; }
+        .read-status { font-size: 10px; color: #666; }
+        .read-status.read { color: #4fc3f7; }
         .content { white-space: pre-wrap; word-wrap: break-word; }
-        #input-area { padding: 16px; background: #0f0f10; border-top: 1px solid #222; display: flex; gap: 10px; }
+        .reply-btn { background: transparent; border: 1px solid #444; color: #aaa; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: 500; transition: all 0.15s; opacity: 0; pointer-events: none; }
+        .message:hover .reply-btn { opacity: 1; pointer-events: auto; }
+        .reply-btn:hover { background: #333; color: #fff; border-color: #666; }
+        #input-area { padding: 16px; background: #0f0f10; border-top: 1px solid #222; display: flex; flex-direction: column; gap: 6px; }
+        #reply-indicator { display: none; font-size: 11px; color: #4fc3f7; padding: 0 4px; }
+        #reply-indicator.visible { display: flex; align-items: center; gap: 6px; }
+        #reply-indicator button { background: transparent; border: none; color: #888; cursor: pointer; padding: 0 4px; font-size: 12px; }
+        #reply-indicator button:hover { color: #fff; }
+        #input-row { display: flex; gap: 10px; }
         input { flex: 1; background: #1a1a1c; border: 1px solid #333; color: #fff; padding: 8px 12px; border-radius: 6px; outline: none; }
         input:focus { border-color: #007acc; }
         button { background: #007acc; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: background 0.2s; }
@@ -1228,41 +1320,91 @@ class NeohiveChatPanel {
 <body>
     <div id="messages"></div>
     <div id="input-area">
-        <input type="text" id="chat-input" placeholder="Type a message to the coordinator..." />
-        <button id="send-btn">Send</button>
+        <div id="reply-indicator">
+            <span id="reply-label"></span>
+            <button id="clear-reply" title="Cancel reply">✕</button>
+        </div>
+        <div id="input-row">
+            <input type="text" id="chat-input" placeholder="Type a message..." />
+            <button id="send-btn">Send</button>
+        </div>
     </div>
     <script>
         const vscode = acquireVsCodeApi();
         const msgContainer = document.getElementById('messages');
         const input = document.getElementById('chat-input');
         const sendBtn = document.getElementById('send-btn');
+        const replyIndicator = document.getElementById('reply-indicator');
+        const replyLabel = document.getElementById('reply-label');
+        const clearReplyBtn = document.getElementById('clear-reply');
+
+        let replyTo = null;
+        const seenIds = new Set();
 
         function escapeHtml(s) {
             return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
 
+        function setReply(agentName) {
+            replyTo = agentName;
+            replyLabel.textContent = \`↩ Replying to \${agentName}\`;
+            replyIndicator.classList.add('visible');
+            input.placeholder = \`Message to \${agentName}...\`;
+            input.focus();
+        }
+
+        function clearReply() {
+            replyTo = null;
+            replyIndicator.classList.remove('visible');
+            input.placeholder = 'Type a message...';
+        }
+
+        clearReplyBtn.onclick = clearReply;
+
         function appendMessage(msg) {
+            if (msg.id && seenIds.has(msg.id)) return;
+            if (msg.id) seenIds.add(msg.id);
+
             const div = document.createElement('div');
             const isMe = msg.from === '__user__';
             const isSystem = msg.system || msg.from === '__system__';
             
             div.className = 'message ' + (isSystem ? 'system' : (isMe ? 'from-me' : 'from-others'));
+            if (msg.id) div.dataset.msgId = msg.id;
             
             if (!isSystem) {
                 const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+                const displayName = isMe ? 'You' : escapeHtml(msg.from);
+                const replyBtnHtml = !isMe ? \`<button class="reply-btn" data-agent="\${escapeHtml(msg.from)}">↩ Reply</button>\` : '';
+                const readHtml = isMe ? \`<span class="read-status" data-msg-id="\${msg.id || ''}">✓</span>\` : '';
                 div.innerHTML = \`
                     <div class="header">
-                        <span class="from" style="color: \${getAgentColor(msg.from)}">\${msg.from === '__user__' ? 'You' : msg.from}</span>
-                        <span class="time">\${ts}</span>
+                        <div class="header-left">
+                            <span class="from" style="color: \${getAgentColor(msg.from)}">\${displayName}</span>
+                            <span class="time">\${ts}</span>
+                        </div>
+                        <div class="header-right">
+                            \${readHtml}
+                            \${replyBtnHtml}
+                        </div>
                     </div>
                     <div class="content">\${escapeHtml(msg.content)}</div>
                 \`;
+                if (!isMe) {
+                    div.querySelector('.reply-btn').addEventListener('click', () => setReply(msg.from));
+                }
             } else {
                 div.innerHTML = \`<div class="content">\${escapeHtml(msg.content)}</div>\`;
             }
             
             msgContainer.appendChild(div);
             msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
+
+        function markRead(msgId) {
+            const el = document.querySelector(\`[data-msg-id="\${msgId}"] .read-status\`) ||
+                       document.querySelector(\`.read-status[data-msg-id="\${msgId}"]\`);
+            if (el) { el.textContent = '✓✓'; el.classList.add('read'); }
         }
 
         function getAgentColor(name) {
@@ -1275,15 +1417,17 @@ class NeohiveChatPanel {
         }
 
         sendBtn.onclick = () => {
-            const text = input.value;
+            const text = input.value.trim();
             if (text) {
-                vscode.postMessage({ command: 'send', text });
+                vscode.postMessage({ command: 'send', text, to: replyTo || '__group__' });
                 input.value = '';
+                clearReply();
             }
         };
 
         input.onkeydown = (e) => {
             if (e.key === 'Enter') sendBtn.onclick();
+            if (e.key === 'Escape') clearReply();
         };
 
         window.addEventListener('message', event => {
@@ -1291,6 +1435,9 @@ class NeohiveChatPanel {
             switch (message.command) {
                 case 'messages':
                     message.messages.forEach(appendMessage);
+                    break;
+                case 'markRead':
+                    if (message.msgId) markRead(message.msgId);
                     break;
             }
         });
