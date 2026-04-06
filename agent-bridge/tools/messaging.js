@@ -58,7 +58,7 @@ module.exports = function (ctx) {
       result.urgency = oldestAge > 120 ? 'critical' : oldestAge > 30 ? 'urgent' : 'normal';
       result.next_action = 'Call listen() to receive and process these messages.';
     } else {
-      result.next_action = 'No messages. Call listen() to wait for new messages.';
+      result.next_action = 'Call listen() to wait for new messages.';
     }
 
     return result;

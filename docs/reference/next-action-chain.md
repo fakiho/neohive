@@ -33,7 +33,7 @@ There are two places `next_action` can be set:
 
 2. **Post-processing middleware** (fallback) — If no `next_action` was set by the tool, the middleware in `server.js` injects a default based on pending message state.
 
-The middleware never overwrites a tool-specific `next_action` (except the 3-call warning override for non-coordinators).
+The middleware never overwrites a tool-specific `next_action` (except the 10-call warning override for non-coordinators).
 
 ---
 
@@ -88,7 +88,7 @@ Standard agents (non-coordinator, non-autonomous) follow the `listen()` loop. Ev
 
 ### Block Protection (Call-Count)
 
-If an agent makes 3+ tool calls without calling `listen()`, the middleware overrides `next_action`:
+If an agent makes 10+ tool calls without calling `listen()`, the middleware overrides `next_action`:
 
 ```
 Call 10: next_action: "WARNING: 10 calls without listen(). Tools BLOCKED at 15. Call listen() NOW."
