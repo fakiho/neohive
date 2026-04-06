@@ -2733,6 +2733,31 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ error: 'Failed to set coordinator mode: ' + e.message }));
       }
     }
+    else if (url.pathname === '/api/config' && req.method === 'GET') {
+      const projectPath = url.searchParams.get('project') || null;
+      const config = readJson(filePath('config.json', projectPath));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(config));
+    }
+    else if (url.pathname === '/api/config' && req.method === 'POST') {
+      try {
+        const body = await parseBody(req).catch(() => ({}));
+        const projectPath = url.searchParams.get('project') || null;
+        const dataDir = resolveDataDir(projectPath);
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        const configFile = filePath('config.json', projectPath);
+        await withFileLock(configFile, () => {
+          const config = readJson(configFile);
+          Object.assign(config, body);
+          fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to save config: ' + e.message }));
+      }
+    }
     else if (url.pathname === '/api/reset' && req.method === 'POST') {
       const body = await parseBody(req).catch(() => ({}));
       if (!body.confirm) {

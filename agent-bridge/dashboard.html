@@ -4388,6 +4388,15 @@
         <div class="settings-item" onclick="toggleTheme();toggleSettingsMenu()"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="4"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/></svg> Theme</div>
         <div class="settings-item" id="settings-notif-item" onclick="toggleCombinedNotifications();"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6a4 4 0 018 0v3l2 2H2l2-2z"/><path d="M6 13a2 2 0 004 0"/></svg> <span id="settings-notif-label">Notifications</span></div>
         <div style="height:1px;background:var(--border);margin:4px 8px"></div>
+        <div style="padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted)">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2"/></svg>
+          <span style="flex:1;white-space:nowrap">Idle poll (s)</span>
+          <input id="settings-idle-poll-input" type="number" min="10" max="600" step="10" value="90"
+            style="width:60px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:2px 6px;font-size:13px;text-align:right"
+            onclick="event.stopPropagation()"
+            onchange="setIdlePollInterval(this.value)">
+        </div>
+        <div style="height:1px;background:var(--border);margin:4px 8px"></div>
         <div class="settings-item" onclick="exportShareableHTML();toggleSettingsMenu()">Export HTML</div>
         <div class="settings-item" onclick="exportJSON();toggleSettingsMenu()">Export JSON</div>
         <div class="settings-item" onclick="enterReplay();toggleSettingsMenu()">Replay</div>
@@ -10672,7 +10681,11 @@ function copyLaunchPrompt() {
 
 function toggleSettingsMenu() {
   var menu = document.getElementById('settings-menu');
-  if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  if (menu) {
+    var opening = menu.style.display === 'none';
+    menu.style.display = opening ? 'block' : 'none';
+    if (opening) initIdlePollInput();
+  }
 }
 // Close settings when clicking outside
 document.addEventListener('click', function(e) {
@@ -10973,6 +10986,33 @@ function setCoordinatorMode(mode) {
   }).catch(function() {
     showToast('!', 'Failed to change coordinator mode');
   });
+}
+
+// ==================== IDLE POLL INTERVAL ====================
+
+function setIdlePollInterval(value) {
+  var secs = parseInt(value, 10);
+  if (isNaN(secs) || secs < 10) return;
+  lttFetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idle_poll_interval: secs })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.error) {
+      showToast('!', 'Failed: ' + data.error);
+    } else {
+      showToast('&#x2713;', 'Idle poll interval: ' + secs + 's');
+    }
+  }).catch(function() {
+    showToast('!', 'Failed to save idle poll interval');
+  });
+}
+
+function initIdlePollInput() {
+  lttFetch('/api/config').then(function(r) { return r.json(); }).then(function(cfg) {
+    var input = document.getElementById('settings-idle-poll-input');
+    if (input && cfg.idle_poll_interval) input.value = cfg.idle_poll_interval;
+  }).catch(function() {});
 }
 
 // ==================== TOAST NOTIFICATIONS ====================
