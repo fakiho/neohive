@@ -41,6 +41,14 @@
 
 <br />
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/fakiho/neohive/master/assets/screenshots/hero-animation.gif" alt="Neohive — Terminal + IDE working together" width="100%" />
+</p>
+
+---
+
+<br />
+
 You open Claude Code in one terminal and Gemini CLI in another. Both are powerful — but they can't see each other. You copy context between windows, manually coordinate who does what.
 
 **Neohive removes that bottleneck.** Install once, and your AI agents discover each other, send messages, delegate tasks, review work, and execute multi-step workflows — automatically.
@@ -52,12 +60,13 @@ You open Claude Code in one terminal and Gemini CLI in another. Both are powerfu
 ## Contents
 
 - [Quick Start](#-quick-start)
-- [Recommended Setup](#-recommended-setup)
 - [Features](#-features)
+- [Recommended Setup](#-recommended-setup)
 - [How It Works](#-how-it-works)
 - [Supported IDEs & CLIs](#-supported-ides--clis)
 - [Team Templates](#-team-templates)
 - [Dashboard](#-dashboard)
+- [VS Code Extension](#-vs-code-extension)
 - [MCP Tools](#-mcp-tools)
 - [CLI Reference](#%EF%B8%8F-cli-reference)
 - [Configuration](#%EF%B8%8F-configuration)
@@ -78,14 +87,14 @@ That's it. Neohive auto-detects your CLI, writes the MCP config, and creates a `
 
 **MCP config:** `npx neohive init` writes the **absolute path** to the same Node binary that ran the command (so Volta, nvm, or custom installs work even when your IDE’s MCP subprocess has a minimal `PATH`). For **Claude Code**, the project file is `.mcp.json` in the repo root; you can merge the same `neohive` entry into `~/.claude/mcp.json` if you prefer a user-wide setup. Restart the IDE or reload MCP tools after init.
 
-Now open two terminals in the same project:
+Now open two terminals in the same project and paste each prompt into a Claude Code session:
 
 ```
 # Terminal 1
-Register as "Alice" and send a greeting to Bob, then call listen()
+Register as Alice. Send a greeting to Bob, then call listen().
 
 # Terminal 2
-Register as "Bob" and call listen()
+Register as Bob, then call listen().
 ```
 
 Watch them communicate in real time:
@@ -98,6 +107,26 @@ npx neohive dashboard    # opens http://localhost:3000
 > ```bash
 > npx neohive init --template team    # Coordinator + Researcher + Coder
 > ```
+
+<br />
+
+## ✨ Features
+
+| | Feature | Description |
+|---|---------|-------------|
+| 💬 | **Real-time Messaging** | Send, broadcast, listen, thread, acknowledge — with rate limiting and dedup |
+| 📋 | **Task Management** | Create, assign, and track tasks with a drag-and-drop kanban board |
+| 🔄 | **Workflow Pipelines** | Multi-step automation with dependency graphs and auto-handoff |
+| 🤖 | **Autonomy Engine** | Agents find work, self-verify, retry on failure, and escalate when stuck |
+| 🎯 | **Managed Mode** | Structured turn-taking with floor control for disciplined multi-agent teams |
+| 📊 | **Live Dashboard** | Web UI with messages, tasks, workflows, agent monitoring, and stats |
+| 🧠 | **Knowledge Base** | Shared team memory for decisions, learnings, and patterns |
+| 🔒 | **File Locking** | Concurrent write protection across all 19 data files |
+| 🌿 | **Branching** | Fork conversations at any point with isolated history |
+| 📡 | **Channels** | Sub-team communication with dedicated message streams |
+| 🗳️ | **Voting & Reviews** | Team decisions and structured code review workflows |
+| 👁 | **Agent Liveness** | Passive stdin tracking, PID checks, auto-reclaim dead seats, unknown/stale/offline states |
+| 🔌 | **Multi-CLI** | Works across Claude Code, Gemini CLI, Cursor, VS Code Copilot, Antigravity, Codex CLI, and Ollama |
 
 <br />
 
@@ -169,26 +198,6 @@ The IDE has likely disabled the neohive MCP server. Go to Settings → MCP (or T
 Due to a current IDE limitation, agents can occasionally drop out of the listen loop. Simply ask the agent: *"Call listen()"* to resume. We are actively working on a permanent fix.
 
 ---
-
-## ✨ Features
-
-| | Feature | Description |
-|---|---------|-------------|
-| 💬 | **Real-time Messaging** | Send, broadcast, listen, thread, acknowledge — with rate limiting and dedup |
-| 📋 | **Task Management** | Create, assign, and track tasks with a drag-and-drop kanban board |
-| 🔄 | **Workflow Pipelines** | Multi-step automation with dependency graphs and auto-handoff |
-| 🤖 | **Autonomy Engine** | Agents find work, self-verify, retry on failure, and escalate when stuck |
-| 🎯 | **Managed Mode** | Structured turn-taking with floor control for disciplined multi-agent teams |
-| 📊 | **Live Dashboard** | Web UI with messages, tasks, workflows, agent monitoring, and stats |
-| 🧠 | **Knowledge Base** | Shared team memory for decisions, learnings, and patterns |
-| 🔒 | **File Locking** | Concurrent write protection across all 19 data files |
-| 🌿 | **Branching** | Fork conversations at any point with isolated history |
-| 📡 | **Channels** | Sub-team communication with dedicated message streams |
-| 🗳️ | **Voting & Reviews** | Team decisions and structured code review workflows |
-| 👁 | **Agent Liveness** | Passive stdin tracking, PID checks, auto-reclaim dead seats, unknown/stale/offline states |
-| 🔌 | **Multi-CLI** | Works across Claude Code, Gemini CLI, Cursor, VS Code Copilot, Antigravity, Codex CLI, and Ollama |
-
-<br />
 
 ## 🏗 How It Works
 
@@ -327,6 +336,7 @@ neohive msg <agent> <text>  # send message from CLI
 neohive doctor              # diagnostic health check
 neohive templates           # list available templates
 neohive hooks               # install listen-enforcement hooks into .claude/settings.json
+neohive skills              # install neohive skills & agents for all detected IDEs
 neohive reset --force       # clear data (auto-archives first)
 neohive uninstall           # remove from all CLI configs
 ```
@@ -343,6 +353,26 @@ neohive uninstall           # remove from all CLI configs
 | `NEOHIVE_PORT` | `3000` | Dashboard port |
 | `NEOHIVE_LAN` | `false` | Enable LAN access |
 | `NEOHIVE_LOG_LEVEL` | `warn` | Logging: `error` · `warn` · `info` · `debug` |
+
+<br />
+
+## 🧩 VS Code Extension
+
+The [Neohive extension](https://marketplace.visualstudio.com/items?itemName=alionix.neohive) brings agent monitoring and team coordination directly into your editor.
+
+| Feature | Description |
+|---------|-------------|
+| **Agent Sidebar** | See all registered agents, their status (online/stale/offline), and provider in the activity bar |
+| **Task Board** | In-editor kanban board — view and track tasks without opening the dashboard |
+| **Workflow Viewer** | Monitor active workflows and step progress in real time |
+| **`@neohive` Chat** | Query agent status, tasks, and messages directly from Copilot Chat |
+| **Auto MCP Setup** | Configures MCP and hooks automatically on activation — no manual config needed |
+
+**Install:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=alionix.neohive) — or search "Neohive" in the Extensions panel.
+
+<br />
+
+<img src="https://raw.githubusercontent.com/fakiho/neohive/master/vscode-extension/assets/screenshots/vscode-extension-overview.png" alt="Neohive VS Code Extension — Team Chat, Agent Sidebar, Task Board, and Workflows" width="100%" />
 
 <br />
 
@@ -411,8 +441,9 @@ node dashboard.js # run the dashboard
 </p>
 
 <p align="center">
+  <a href="https://neohive.alionix.com">Website</a> &middot;
   <a href="https://github.com/fakiho/neohive">GitHub</a> &middot;
   <a href="https://www.npmjs.com/package/neohive">npm</a> &middot;
-  <a href="docs/documentation.md">Docs</a> &middot;
+  <a href="../docs/documentation.md">Docs</a> &middot;
   <a href="mailto:contact@alionix.com">Contact</a>
 </p>

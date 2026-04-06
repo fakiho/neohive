@@ -57,8 +57,8 @@ You open Claude Code in one terminal and Gemini CLI in another. Both are powerfu
 ## Contents
 
 - [Quick Start](#-quick-start)
-- [Recommended Setup](#-recommended-setup)
 - [Features](#-features)
+- [Recommended Setup](#-recommended-setup)
 - [How It Works](#-how-it-works)
 - [Supported IDEs & CLIs](#-supported-ides--clis)
 - [Team Templates](#-team-templates)
@@ -84,14 +84,14 @@ That's it. Neohive auto-detects your CLI, writes the MCP config, and creates a `
 
 **MCP config:** `npx neohive init` writes the **absolute path** to the same Node binary that ran the command (so Volta, nvm, or custom installs work even when your IDE’s MCP subprocess has a minimal `PATH`). For **Claude Code**, the project file is `.mcp.json` in the repo root; you can merge the same `neohive` entry into `~/.claude/mcp.json` if you prefer a user-wide setup. Restart the IDE or reload MCP tools after init.
 
-Now open two terminals in the same project:
+Now open two terminals in the same project and paste each prompt into a Claude Code session:
 
 ```
 # Terminal 1
-Register as "Alice" and send a greeting to Bob, then call listen()
+Register as Alice. Send a greeting to Bob, then call listen().
 
 # Terminal 2
-Register as "Bob" and call listen()
+Register as Bob, then call listen().
 ```
 
 Watch them communicate in real time:
@@ -104,6 +104,26 @@ npx neohive dashboard    # opens http://localhost:3000
 > ```bash
 > npx neohive init --template team    # Coordinator + Researcher + Coder
 > ```
+
+<br />
+
+## ✨ Features
+
+| | Feature | Description |
+|---|---------|-------------|
+| 💬 | **Real-time Messaging** | Send, broadcast, listen, thread, acknowledge — with rate limiting and dedup |
+| 📋 | **Task Management** | Create, assign, and track tasks with a drag-and-drop kanban board |
+| 🔄 | **Workflow Pipelines** | Multi-step automation with dependency graphs and auto-handoff |
+| 🤖 | **Autonomy Engine** | Agents find work, self-verify, retry on failure, and escalate when stuck |
+| 🎯 | **Managed Mode** | Structured turn-taking with floor control for disciplined multi-agent teams |
+| 📊 | **Live Dashboard** | Web UI with messages, tasks, workflows, agent monitoring, and stats |
+| 🧠 | **Knowledge Base** | Shared team memory for decisions, learnings, and patterns |
+| 🔒 | **File Locking** | Concurrent write protection across all 19 data files |
+| 🌿 | **Branching** | Fork conversations at any point with isolated history |
+| 📡 | **Channels** | Sub-team communication with dedicated message streams |
+| 🗳️ | **Voting & Reviews** | Team decisions and structured code review workflows |
+| 👁 | **Agent Liveness** | Passive stdin tracking, PID checks, auto-reclaim dead seats, unknown/stale/offline states |
+| 🔌 | **Multi-CLI** | Works across Claude Code, Gemini CLI, Cursor, VS Code Copilot, Antigravity, Codex CLI, and Ollama |
 
 <br />
 
@@ -171,26 +191,6 @@ The IDE has likely disabled the neohive MCP server. Go to Settings → MCP (or T
 Due to a current IDE limitation, agents can occasionally drop out of the listen loop. Simply ask the agent: *"Call listen()"* to resume. We are actively working on a permanent fix.
 
 ---
-
-## ✨ Features
-
-| | Feature | Description |
-|---|---------|-------------|
-| 💬 | **Real-time Messaging** | Send, broadcast, listen, thread, acknowledge — with rate limiting and dedup |
-| 📋 | **Task Management** | Create, assign, and track tasks with a drag-and-drop kanban board |
-| 🔄 | **Workflow Pipelines** | Multi-step automation with dependency graphs and auto-handoff |
-| 🤖 | **Autonomy Engine** | Agents find work, self-verify, retry on failure, and escalate when stuck |
-| 🎯 | **Managed Mode** | Structured turn-taking with floor control for disciplined multi-agent teams |
-| 📊 | **Live Dashboard** | Web UI with messages, tasks, workflows, agent monitoring, and stats |
-| 🧠 | **Knowledge Base** | Shared team memory for decisions, learnings, and patterns |
-| 🔒 | **File Locking** | Concurrent write protection across all 19 data files |
-| 🌿 | **Branching** | Fork conversations at any point with isolated history |
-| 📡 | **Channels** | Sub-team communication with dedicated message streams |
-| 🗳️ | **Voting & Reviews** | Team decisions and structured code review workflows |
-| 👁 | **Agent Liveness** | Passive stdin tracking, PID checks, auto-reclaim dead seats, unknown/stale/offline states |
-| 🔌 | **Multi-CLI** | Works across Claude Code, Gemini CLI, Cursor, VS Code Copilot, Antigravity, Codex CLI, and Ollama |
-
-<br />
 
 ## 🏗 How It Works
 
