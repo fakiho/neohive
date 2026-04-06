@@ -7,14 +7,18 @@ disable-model-invocation: true
 
 Launch a multi-agent team using Neohive templates.
 
-1. Call the `list_agents` MCP tool to see who's already online
+1. Call `list_agents` to see who's already online
 2. Call `workflow_status` to check if there's an active workflow
 3. If $ARGUMENTS is provided, use it as the template name
 4. If no template specified, list available templates:
-   - **pair** -- 2 agents for brainstorming
-   - **team** -- Coordinator + Researcher + Coder
-   - **review** -- Author + Reviewer
-   - **managed** -- Manager with floor control + Designer + Coder + Tester
-   - **debate** -- Pro vs Con structured debate
-5. For the chosen template, generate the launch prompt for each agent
-6. Display the prompts and instruct the user to paste each into a new terminal running `claude`
+   - **pair** — 2 agents for brainstorming or Q&A
+   - **team** — Coordinator + Researcher + Coder for complex features
+   - **review** — Author + Reviewer for code review pipeline
+   - **managed** — Manager with floor control for structured sessions with large teams
+   - **debate** — Pro vs Con structured debate between two agents
+5. For the chosen template, generate the launch prompt for each agent role
+6. Each prompt must instruct the agent to:
+   - Call `register(name="<AgentName>")` first
+   - Call `get_briefing()` to load context
+   - Call `listen()` to enter the listen loop
+7. Display the prompts and instruct the user to paste each into a separate terminal running `claude` (or the relevant CLI)

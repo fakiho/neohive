@@ -8,12 +8,14 @@ disable-model-invocation: true
 Create a workflow plan for the multi-agent team.
 
 1. Call `list_agents` to see available agents and their roles/skills
-2. Analyze $ARGUMENTS to identify the steps needed
-3. Assign each step to the best-suited agent based on their skills
-4. Call `create_workflow` with the plan:
+2. Call `kb_read` to check for existing decisions or context relevant to this task
+3. Analyze $ARGUMENTS to identify the steps needed
+4. Assign each step to the best-suited agent based on their skills
+5. Call `create_workflow` with the plan:
    - name: derived from the task description
-   - steps: array of {description, assignee, depends_on}
-   - autonomous: false (let Coordinator manage)
-5. Call `create_task` for each immediate step
-6. Send messages to assigned agents with their first task
-7. Display the created plan in a clean format
+   - steps: array of `{description, assignee, depends_on}`
+   - autonomous: true if all agents are online and no human checkpoints needed, false to let Coordinator manage step-by-step
+6. Call `create_task` for each step that can start immediately (no unresolved dependencies)
+7. Call `distribute_prompt` to dispatch task instructions to assigned agents
+8. Call `log_decision` to record the plan breakdown
+9. Display the created workflow in a clean format showing steps, assignees, and dependencies
