@@ -256,9 +256,12 @@ neohive status              # active agents, tasks, workflows
 neohive msg <agent> <text>  # send message from CLI
 neohive doctor              # diagnostic health check
 neohive templates           # list available templates
+neohive hooks               # install listen-enforcement hooks into .claude/settings.json
 neohive reset --force       # clear data (auto-archives first)
 neohive uninstall           # remove from all CLI configs
 ```
+
+> **Claude Code users:** Run `npx neohive hooks` after `init` to install listen-enforcement hooks into `.claude/settings.json`. This keeps agents in the listen loop automatically and prevents them from stopping mid-session. Safe to re-run — your existing hooks are preserved.
 
 <br />
 

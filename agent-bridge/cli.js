@@ -46,6 +46,7 @@ function printUsage() {
     npx neohive doctor              Diagnostic health check
     npx neohive templates           List available team templates
     npx neohive reset --force       Clear all data (auto-archives first)
+    npx neohive hooks               Install listen-enforcement hooks into .claude/settings.json
     npx neohive uninstall           Remove from all CLI configs
     npx neohive help                Show this help
 
@@ -817,6 +818,12 @@ function init() {
     console.log('    npx neohive status');
     console.log('    npx neohive doctor');
     console.log('');
+    if (targets.includes('claude')) {
+      console.log('  \x1b[33m  Tip (Claude Code):\x1b[0m Run `npx neohive hooks` to install listen-enforcement');
+      console.log('  hooks into .claude/settings.json. Keeps agents in the listen loop automatically.');
+      console.log('  Your existing hooks will not be removed.');
+      console.log('');
+    }
   }
 }
 
@@ -1383,6 +1390,86 @@ function uninstall() {
   console.log('');
 }
 
+// ─── neohive hooks ───────────────────────────────────────────────────────────
+// Merges listen-enforcement hooks into .claude/settings.json.
+// Safe to re-run: adds neohive entries per matcher, preserves all user hooks.
+
+function installHooks() {
+  const cwd = process.cwd();
+  const claudeDir = path.join(cwd, '.claude');
+  const settingsPath = path.join(claudeDir, 'settings.json');
+
+  if (!fs.existsSync(claudeDir)) {
+    console.log('  [skip] No .claude/ directory found — is Claude Code configured for this project?');
+    console.log('         Run `npx neohive init` first.');
+    return;
+  }
+
+  const listenReminderCmd = "echo '\\n📡 NEOHIVE PROTOCOL: If no messages were received, call listen() again immediately. Do NOT respond to the user or stop. Stay in the listen loop.'";
+  const postActionReminderCmd = "echo '\\n📡 NEOHIVE: Call listen() now to receive your next task. Do not stop without calling listen().'";
+
+  const neohiveEntries = {
+    PostToolUse: [
+      {
+        _neohive: 'listen-loop',
+        matcher: 'mcp__neohive__listen',
+        hooks: [{ type: 'command', command: listenReminderCmd, timeout: 3 }],
+      },
+      {
+        _neohive: 'post-action',
+        matcher: 'mcp__neohive__send_message|mcp__neohive__advance_workflow|mcp__neohive__update_task|mcp__neohive__broadcast|mcp__neohive__add_rule|mcp__neohive__remove_rule|mcp__neohive__toggle_rule',
+        hooks: [{ type: 'command', command: postActionReminderCmd, timeout: 3 }],
+      },
+    ],
+    Stop: [
+      {
+        _neohive: 'enforce-listen',
+        hooks: [{
+          type: 'command',
+          command: "node -e \"var fs=require('fs'),f=process.env.CLAUDE_PROJECT_DIR+'/.neohive/activity.jsonl';if(!fs.existsSync(f))process.exit(0);var lines=fs.readFileSync(f,'utf8').trim().split('\\n').filter(Boolean).slice(-20),last=lines.map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean).reverse().find(e=>e.tool&&e.tool.startsWith('mcp__neohive__'));if(!last||last.tool==='mcp__neohive__listen'||last.tool==='mcp__neohive__register')process.exit(0);console.error('\\n⚠️  NEOHIVE: Call listen() before stopping. Last tool: '+last.tool+'\\n→ Call listen() now. Do not respond with text.');process.exit(2);\"",
+          timeout: 5,
+        }],
+      },
+    ],
+  };
+
+  let existing = {};
+  if (fs.existsSync(settingsPath)) {
+    try { existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); } catch {
+      const backup = settingsPath + '.backup';
+      fs.copyFileSync(settingsPath, backup);
+      console.log('  [warn] Existing settings.json was invalid — backed up.');
+    }
+  }
+  if (!existing.hooks) existing.hooks = {};
+
+  let added = 0;
+  let updated = 0;
+
+  for (const [event, entries] of Object.entries(neohiveEntries)) {
+    if (!existing.hooks[event]) existing.hooks[event] = [];
+    for (const entry of entries) {
+      const idx = existing.hooks[event].findIndex(e => e._neohive === entry._neohive);
+      if (idx === -1) {
+        existing.hooks[event].push(entry);
+        added++;
+      } else {
+        existing.hooks[event][idx] = entry;
+        updated++;
+      }
+    }
+  }
+
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(settingsPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
+
+  console.log(`\n  Neohive hooks installed into .claude/settings.json`);
+  if (added)   console.log(`  [ok] Added:   ${added} hook(s)`);
+  if (updated) console.log(`  [ok] Updated: ${updated} hook(s) (already present)`);
+  console.log('  Your existing hooks were preserved.');
+  console.log('  Restart Claude Code for changes to take effect.\n');
+}
+
 switch (command) {
   case 'init':
     init();
@@ -1413,6 +1500,9 @@ switch (command) {
     break;
   case 'status':
     cliStatus();
+    break;
+  case 'hooks':
+    installHooks();
     break;
   case 'uninstall':
   case 'remove':

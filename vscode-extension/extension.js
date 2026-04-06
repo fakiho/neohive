@@ -1527,9 +1527,12 @@ function setupClaudeHooks() {
   // fall back to minimal inline commands for external installs
   const listenReminder = "echo '\\n📡 NEOHIVE: Call listen() now to receive your next task. Do not stop without calling listen().'";
 
-  const neohiveHooks = {
+  // Each entry has a _neohive key — used as a stable ID for safe merging.
+  // Entries with different _neohive values are never touched.
+  const neohiveEntries = {
     UserPromptSubmit: scriptRef ? [
       {
+        _neohive: 'before-prompt',
         hooks: [{
           type: 'command',
           command: `${scriptRef}/before-prompt.sh`,
@@ -1540,6 +1543,7 @@ function setupClaudeHooks() {
     ] : [],
     PreToolUse: scriptRef ? [
       {
+        _neohive: 'enforce-locks',
         matcher: 'Edit|Write',
         hooks: [{
           type: 'command',
@@ -1551,6 +1555,7 @@ function setupClaudeHooks() {
     ] : [],
     PostToolUse: [
       ...(scriptRef ? [{
+        _neohive: 'track-activity',
         matcher: 'mcp__neohive__.*',
         hooks: [{
           type: 'command',
@@ -1560,6 +1565,16 @@ function setupClaudeHooks() {
         }],
       }] : []),
       {
+        _neohive: 'listen-loop',
+        matcher: 'mcp__neohive__listen',
+        hooks: [{
+          type: 'command',
+          command: "echo '\\n📡 NEOHIVE PROTOCOL: If no messages were received, call listen() again immediately. Do NOT respond to the user or stop. Stay in the listen loop.'",
+          timeout: 3,
+        }],
+      },
+      {
+        _neohive: 'post-action',
         matcher: 'mcp__neohive__send_message|mcp__neohive__advance_workflow|mcp__neohive__update_task|mcp__neohive__broadcast|mcp__neohive__add_rule|mcp__neohive__remove_rule|mcp__neohive__toggle_rule',
         hooks: [{
           type: 'command',
@@ -1568,6 +1583,7 @@ function setupClaudeHooks() {
         }],
       },
       ...(scriptRef ? [{
+        _neohive: 'post-tool-use',
         matcher: 'Edit|Write|MultiEdit|mcp__neohive__update_task',
         hooks: [{
           type: 'command',
@@ -1579,11 +1595,12 @@ function setupClaudeHooks() {
     ],
     Stop: [
       {
+        _neohive: 'enforce-listen',
         hooks: [{
           type: 'command',
           command: scriptRef
             ? `${scriptRef}/enforce-listen.sh`
-            : `node -e "const h=require('fs').existsSync(process.env.CLAUDE_PROJECT_DIR+'/.neohive/activity.jsonl');process.exit(h?0:0)"`,
+            : "node -e \"var fs=require('fs'),f=process.env.CLAUDE_PROJECT_DIR+'/.neohive/activity.jsonl';if(!fs.existsSync(f))process.exit(0);var lines=fs.readFileSync(f,'utf8').trim().split('\\n').filter(Boolean).slice(-20),last=lines.map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean).reverse().find(e=>e.tool&&e.tool.startsWith('mcp__neohive__'));if(!last||last.tool==='mcp__neohive__listen'||last.tool==='mcp__neohive__register')process.exit(0);console.error('\\n⚠️  NEOHIVE: Call listen() before stopping. Last tool: '+last.tool+'\\n→ Call listen() now.');process.exit(2);\"",
           timeout: 5,
         }],
       },
@@ -1595,15 +1612,22 @@ function setupClaudeHooks() {
     if (fs.existsSync(settingsPath)) {
       try { existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); } catch {}
     }
+    if (!existing.hooks) existing.hooks = {};
 
-    // Merge: replace only the neohive-managed hook events; preserve everything else
-    existing.hooks = Object.assign({}, existing.hooks || {}, neohiveHooks);
-
-    // Drop empty arrays (e.g. UserPromptSubmit when no scripts available)
-    for (const key of Object.keys(existing.hooks)) {
-      if (Array.isArray(existing.hooks[key]) && existing.hooks[key].length === 0) {
-        delete existing.hooks[key];
+    // Merge per entry using _neohive as stable ID.
+    // User hooks without a _neohive key are never touched.
+    for (const [event, entries] of Object.entries(neohiveEntries)) {
+      if (!existing.hooks[event]) existing.hooks[event] = [];
+      for (const entry of entries) {
+        const idx = existing.hooks[event].findIndex(e => e._neohive === entry._neohive);
+        if (idx === -1) {
+          existing.hooks[event].push(entry);
+        } else {
+          existing.hooks[event][idx] = entry;
+        }
       }
+      // Drop empty arrays
+      if (existing.hooks[event].length === 0) delete existing.hooks[event];
     }
 
     fs.mkdirSync(claudeDir, { recursive: true });

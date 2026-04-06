@@ -4382,7 +4382,7 @@
     <!-- Settings dropdown -->
     <div style="position:relative;display:inline-block">
       <button class="header-settings-btn" onclick="toggleSettingsMenu()" title="Settings">
-        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"/></svg>
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6.5 1.5h3l.5 1.5a5 5 0 011.2.7l1.6-.4 1.5 2.6-1.1 1.2a5 5 0 010 1.4l1.1 1.2-1.5 2.6-1.6-.4a5 5 0 01-1.2.7l-.5 1.5h-3l-.5-1.5A5 5 0 014.8 12l-1.6.4L1.7 9.8l1.1-1.2a5 5 0 010-1.4L1.7 6l1.5-2.6 1.6.4a5 5 0 011.2-.7z"/><circle cx="8" cy="8" r="2"/></svg>
       </button>
       <div id="settings-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:6px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;z-index:300;min-width:180px;box-shadow:var(--shadow-lg)">
         <div class="settings-item" onclick="toggleTheme();toggleSettingsMenu()"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="4"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/></svg> Theme</div>
@@ -4395,6 +4395,14 @@
             style="width:60px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:2px 6px;font-size:13px;text-align:right"
             onclick="event.stopPropagation()"
             onchange="setIdlePollInterval(this.value)">
+        </div>
+        <div style="padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted)">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1v6l3 3"/><circle cx="8" cy="8" r="7"/></svg>
+          <span style="flex:1;white-space:nowrap">Listen timeout (s)</span>
+          <input id="settings-listen-poll-input" type="number" min="30" max="600" step="30" value="120"
+            style="width:60px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:2px 6px;font-size:13px;text-align:right"
+            onclick="event.stopPropagation()"
+            onchange="setListenPollInterval(this.value)">
         </div>
         <div style="height:1px;background:var(--border);margin:4px 8px"></div>
         <div class="settings-item" onclick="exportShareableHTML();toggleSettingsMenu()">Export HTML</div>
@@ -10684,7 +10692,7 @@ function toggleSettingsMenu() {
   if (menu) {
     var opening = menu.style.display === 'none';
     menu.style.display = opening ? 'block' : 'none';
-    if (opening) initIdlePollInput();
+    if (opening) { initIdlePollInput(); initListenPollInput(); }
   }
 }
 // Close settings when clicking outside
@@ -10981,6 +10989,8 @@ function setCoordinatorMode(mode) {
       showToast('!', 'Failed: ' + data.error);
     } else {
       showToast('&#x2713;', 'Coordinator mode: ' + (mode === 'responsive' ? 'Stay with me' : 'Run autonomously'));
+      var listenInput = document.getElementById('settings-listen-poll-input');
+      if (listenInput) listenInput.value = mode === 'responsive' ? 120 : 90;
       renderOverview();
     }
   }).catch(function() {
@@ -11012,6 +11022,33 @@ function initIdlePollInput() {
   lttFetch('/api/config').then(function(r) { return r.json(); }).then(function(cfg) {
     var input = document.getElementById('settings-idle-poll-input');
     if (input && cfg.idle_poll_interval) input.value = cfg.idle_poll_interval;
+  }).catch(function() {});
+}
+
+// ==================== LISTEN POLL INTERVAL ====================
+
+function setListenPollInterval(value) {
+  var secs = parseInt(value, 10);
+  if (isNaN(secs) || secs < 30) return;
+  lttFetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ listen_poll_interval: secs })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.error) {
+      showToast('!', 'Failed: ' + data.error);
+    } else {
+      showToast('&#x2713;', 'Listen timeout: ' + secs + 's');
+    }
+  }).catch(function() {
+    showToast('!', 'Failed to save listen timeout');
+  });
+}
+
+function initListenPollInput() {
+  lttFetch('/api/config').then(function(r) { return r.json(); }).then(function(cfg) {
+    var input = document.getElementById('settings-listen-poll-input');
+    if (input && cfg.listen_poll_interval) input.value = cfg.listen_poll_interval;
   }).catch(function() {});
 }
 

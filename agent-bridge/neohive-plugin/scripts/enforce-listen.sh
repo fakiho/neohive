@@ -34,13 +34,7 @@ AGENT_NAME=$(tail -100 "$ACTIVITY_FILE" 2>/dev/null | jq -r --arg session "$SESS
 ' | tail -1)
 AGENT="${AGENT_NAME:-unknown}"
 
-# ROLE EXEMPTION: Exempt Coordinator/lead from blocking (they use check_messages not listen)
-if [ -f "$NEOHIVE_DIR/profiles.json" ]; then
-  ROLE=$(jq -r --arg name "$AGENT" '.[$name].role // empty' "$NEOHIVE_DIR/profiles.json")
-  if [ "$ROLE" = "Coordinator" ] || [ "$ROLE" = "lead" ]; then
-    exit 0
-  fi
-fi
+# All roles must call listen() — no exemptions
 
 # Last action was listen/register/rules management — allow stop
 case "$LAST_TOOL" in

@@ -2328,12 +2328,15 @@ async function toolListen(from = null, outcome = null, task_id = null, summary =
 
       heartbeatTimer = setInterval(() => { touchHeartbeat(registeredName); }, 15000);
 
+      const listenTimeoutMs = (getConfig().listen_poll_interval || 120) * 1000;
       timer = setTimeout(() => {
         touchActivity();
         autoCompact();
         if (checkMessages()) return;
-        setupWatcher();
-      }, 300000);
+        // Return cleanly so Claude sees retry:true rather than a client-side MCP timeout
+        setListening(false);
+        done({ retry: true, next_action: 'No messages. Call listen() again immediately.' });
+      }, listenTimeoutMs);
     }
 
     setupWatcher();
@@ -2665,9 +2668,12 @@ async function toolListenGroup(outcome = null, task_id = null, summary = null) {
 
   const consumed = getConsumedIds(registeredName);
 
-  // Autonomous mode: cap listen at 30s — agents should use get_work() instead
-  const autonomousTimeout = isAutonomousMode() ? SERVER_CONFIG.AUTONOMOUS_LISTEN_MS : null;
-  const MAX_LISTEN_MS = 120000; // 2 minutes — MCP has no tool timeout, heartbeat keeps agent alive
+  // Autonomous mode: cap listen at 90s — agents should use get_work() instead
+  // Responsive mode (Stay with me) overrides autonomous timeout — always uses configured listen interval
+  const coordinatorMode = getConfig().coordinator_mode || 'responsive';
+  const autonomousTimeout = (coordinatorMode !== 'responsive' && isAutonomousMode()) ? SERVER_CONFIG.AUTONOMOUS_LISTEN_MS : null;
+  const configuredListenMs = (getConfig().listen_poll_interval || 120) * 1000;
+  const MAX_LISTEN_MS = configuredListenMs; // configurable via dashboard settings (default 2 min)
   const listenStart = Date.now();
 
   // Helper: collect unconsumed messages from all sources (general + channels)
