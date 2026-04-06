@@ -1079,6 +1079,7 @@ class NeohiveChatPanel {
 
     // Initial load
     this._postNewMessages();
+    this._postAgents();
   }
 
   static createOrShow(extensionUri) {
