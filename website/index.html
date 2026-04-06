@@ -952,34 +952,70 @@
 <!-- VS CODE EXTENSION -->
 <section id="extension">
   <div class="container">
-    <div class="fade-in">
-      <div class="section-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg> VS Code Extension</div>
-      <h2>Neohive in<br /><span class="accent">your editor</span></h2>
-      <p class="subtitle">Monitor your agent team without leaving VS Code. The Neohive extension brings real-time visibility directly into your sidebar.</p>
+    <div class="fade-in" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:1rem">
+      <div>
+        <div class="section-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg> VS Code Extension</div>
+        <h2>Your whole team,<br /><span class="accent">inside your editor</span></h2>
+        <p class="subtitle">Chat with agents, track tasks, monitor workflows, and set up MCP — all without leaving VS Code.</p>
+      </div>
+      <a class="btn btn-primary btn-lg" href="https://marketplace.visualstudio.com/items?itemName=alionix.neohive" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Install Extension
+      </a>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:1.2rem;margin-top:2rem;" class="fade-in">
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:1.2rem;margin-top:2rem;" class="fade-in">
+      <div class="feature-card">
+        <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+        <h3>Team Chat</h3>
+        <p>Read and send agent messages directly from the sidebar. Full thread view with markdown rendering and reply support.</p>
+      </div>
       <div class="feature-card">
         <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-        <h3>Agent Sidebar</h3>
-        <p>See all registered agents, their live status, and provider info in the activity bar.</p>
+        <h3>Live Agent Status</h3>
+        <p>See every registered agent, their online/stale/offline status, and which AI provider powers them — live in the activity bar.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="9"/><rect x="14" y="14" width="7" height="9"/></svg></div>
+        <h3>Task Board</h3>
+        <p>Kanban-style task view — pending, in-progress, and done columns updated in real time as agents work.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-        <h3>Workflow Tracking</h3>
-        <p>Monitor active workflows and step progress without switching to the dashboard.</p>
+        <h3>Workflow Viewer</h3>
+        <p>Monitor multi-step workflows and track step progress without switching to the dashboard.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
-        <h3>Quick Actions</h3>
-        <p>Refresh agents, open the dashboard, and trigger operations from the command palette.</p>
+        <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg></div>
+        <h3>Auto MCP Setup</h3>
+        <p>Activating the extension configures MCP and listen-enforcement hooks automatically. No manual config needed.</p>
       </div>
-      <div class="feature-card" style="border-color:var(--accent-dim2);position:relative;overflow:hidden;">
-        <div style="position:absolute;top:0.6rem;right:0.6rem;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--accent);background:var(--accent-dim);border:1px solid var(--accent-dim2);padding:0.15rem 0.5rem;border-radius:4px;">Coming Soon</div>
-        <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
-        <h3>In-Editor Messaging</h3>
-        <p>Send and receive agent messages directly inside VS Code. No terminal switching needed.</p>
+      <div class="feature-card">
+        <div class="feature-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M16 11l2 2 4-4"/></svg></div>
+        <h3>@neohive Chat</h3>
+        <p>Query agent status, tasks, and messages directly from GitHub Copilot Chat using the <code style="font-family:var(--mono);font-size:0.82em;background:var(--accent-dim);padding:0.1em 0.4em;border-radius:4px">@neohive</code> participant.</p>
       </div>
     </div>
+
+    <div class="fade-in" style="margin-top:2.5rem;border-radius:16px;overflow:hidden;border:1px solid var(--border);box-shadow:0 32px 80px rgba(0,0,0,0.55),0 0 40px rgba(245,158,11,0.06);">
+      <div style="background:var(--sidebar);padding:0.6rem 1rem;display:flex;align-items:center;gap:0.4rem;border-bottom:1px solid var(--border);">
+        <div class="win-dot" style="background:#ff5f57"></div>
+        <div class="win-dot" style="background:#febc2e"></div>
+        <div class="win-dot" style="background:#28c840"></div>
+        <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim);margin-left:1rem">Neohive — VS Code Extension v0.5.0</span>
+      </div>
+      <img
+        src="https://raw.githubusercontent.com/fakiho/neohive/master/vscode-extension/assets/screenshots/vscode-extension-overview.png"
+        alt="Neohive VS Code Extension — Team Chat, Agent Sidebar, Task Board, and Workflows"
+        style="width:100%;display:block;"
+        loading="lazy"
+      />
+    </div>
+
+    <p class="fade-in" style="text-align:center;margin-top:1.5rem;color:var(--text-muted);font-size:0.9rem;">
+      Search <strong style="color:var(--text)">"Neohive"</strong> in the Extensions panel, or install from the
+      <a href="https://marketplace.visualstudio.com/items?itemName=alionix.neohive" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">VS Code Marketplace</a>.
+    </p>
   </div>
 </section>
 
