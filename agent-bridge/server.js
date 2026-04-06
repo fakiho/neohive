@@ -5863,6 +5863,59 @@ function toolListChannels() {
   return { channels: result, your_channels: getAgentChannels(registeredName) };
 }
 
+// --- Self-healing Watchdog: reclaim tasks from dead/stale agents ---
+// Specified in GEMINI.md: runs every 60s; scans in_progress tasks.
+function runSelfHealingWatchdog() {
+  if (!registeredName) return;
+  try {
+    const tasks = getTasks();
+    const agents = getAgents();
+    let changed = false;
+    const now = Date.now();
+    const STALE_THRESHOLD_MS = 300000; // 5 minutes
+
+    for (const task of tasks) {
+      if (task.status !== 'in_progress' || !task.assignee) continue;
+      
+      const assignee = agents[task.assignee];
+      let isStale = false;
+
+      if (!assignee) {
+        isStale = true; // Assignee no longer in registry
+      } else {
+        const lastActivity = assignee.last_activity ? new Date(assignee.last_activity).getTime() : 0;
+        const heartbeatStale = now - lastActivity > STALE_THRESHOLD_MS;
+        const pidDead = !isPidAlive(assignee.pid, assignee.last_activity);
+        
+        if (pidDead && heartbeatStale) {
+          isStale = true;
+        }
+      }
+
+      if (isStale) {
+        const retryCount = (task.retry_count || 0) + 1;
+        task.retry_count = retryCount;
+        task.updated_at = new Date().toISOString();
+        
+        if (retryCount >= 3) {
+          task.status = 'blocked_permanent';
+          task.blocked_reason = `Agent "${task.assignee}" failed 3 times (PID dead + heartbeat stale >5min). Coordinator intervention required.`;
+          broadcastSystemMessage(`⛔ [WATCHDOG: POISON PILL] Task "${task.title}" marked as blocked_permanent after 3 failed attempts by ${task.assignee}. Coordinator intervention required.`, registeredName);
+        } else {
+          const oldAssignee = task.assignee;
+          task.status = 'pending';
+          task.assignee = null;
+          changed = true;
+          broadcastSystemMessage(`↺ [WATCHDOG: RECLAIMED] Task "${task.title}" reclaimed from stale agent "${oldAssignee}" (retry ${retryCount}/3). Reset to pending.`, registeredName);
+        }
+        changed = true;
+      }
+    }
+
+    if (changed) saveTasks(tasks);
+  } catch (e) { log.warn("Self-healing watchdog failed:", e.message); }
+}
+
 // Auto-escalation: notify team about tasks blocked for >5 minutes
 // Uses task.escalated_at field for cross-process dedup (file-based, not in-memory)
 function escalateBlockedTasks() {
@@ -7630,7 +7683,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // Escalating listen() enforcement — block tools after too many non-listen calls
     // send_message is exempt so blocked agents can escalate to coordinator before calling listen()
     // messages is exempt (unified query tool — replaces check_messages/consume_messages)
-    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'wait_for_reply', 'update_profile', 'list_agents', 'add_rule', 'remove_rule', 'toggle_rule', 'list_rules', 'send_message', 'messages']);
+    // lock_file and unlock_file are safety housekeeping, not comms — exempt from the listen counter
+    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'wait_for_reply', 'update_profile', 'list_agents', 'add_rule', 'remove_rule', 'toggle_rule', 'list_rules', 'send_message', 'messages', 'lock_file', 'unlock_file']);
     if (listenExemptTools.has(name)) {
       if (name === 'listen' || name === 'wait_for_reply') {
         consecutiveNonListenCalls = 0;
@@ -7652,7 +7706,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       if (!isCoordinatorExempt) {
         consecutiveNonListenCalls++;
-        if (consecutiveNonListenCalls >= 5) {
+        if (consecutiveNonListenCalls >= 15) {
           const coordinator = (() => {
             try {
               const profs = getProfiles();
@@ -7955,8 +8009,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           } catch {}
         }
 
-        if (consecutiveNonListenCalls >= 3) {
-          result.next_action = `WARNING: ${consecutiveNonListenCalls} calls without listen(). Tools BLOCKED at 5. Call listen() NOW.`;
+        if (consecutiveNonListenCalls >= 10) {
+          result.next_action = `WARNING: ${consecutiveNonListenCalls} calls without listen(). Tools BLOCKED at 15. Call listen() NOW.`;
         }
 
         // Soft-enforce user reply: remind agent they have an unanswered user message
@@ -8084,9 +8138,19 @@ function autoReclaimDeadSeat() {
     autoReclaimedName = true; // mark as auto-reclaimed so toolRegister() can override it
     registeredToken = agents[bestName].token || '';
     touchHeartbeat(bestName);
-    // Start 10s heartbeat interval so the agent stays alive past the first 30s window
+    // Start 10s heartbeat interval; watchdog runs every 60s (6 ticks)
     if (heartbeatInterval) clearInterval(heartbeatInterval);
-    heartbeatInterval = setInterval(() => { touchHeartbeat(registeredName); }, 10000);
+    let watchdogTick = 0;
+    heartbeatInterval = setInterval(() => { 
+      touchHeartbeat(registeredName); 
+      watchdogTick++;
+      if (watchdogTick >= 6) {
+        watchdogTick = 0;
+        runSelfHealingWatchdog();
+        escalateBlockedTasks();
+        triggerStandupIfDue();
+      }
+    }, 10000);
     heartbeatInterval.unref();
     console.error(`[neohive] Auto-reclaimed seat "${bestName}" (previous PID dead)`);
   } catch (e) {
