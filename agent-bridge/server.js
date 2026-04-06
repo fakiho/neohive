@@ -1240,7 +1240,7 @@ function buildGuide(level = 'standard') {
     }
   }
 
-  if (isLeadRole && aliveCount >= 2) {
+  if (isLeadRole) {
     const coordinatorMode = getConfig().coordinator_mode || 'responsive';
     if (coordinatorMode === 'responsive') {
       rules.push('COORDINATOR: Use consume_messages() to check updates non-blockingly. Do NOT block in listen() — stay responsive to the user.');
@@ -1251,7 +1251,9 @@ function buildGuide(level = 'standard') {
   }
 
   const listenCmd = isManagedMode() ? 'listen()' : (mode === 'group' ? 'listen_group()' : 'listen()');
-  rules.push(`After EVERY action, call ${listenCmd}. Never use sleep() or poll with check_messages().`);
+  if (!isLeadRole) {
+    rules.push(`After EVERY action, call ${listenCmd}. Never use sleep() or poll with check_messages().`);
+  }
 
   if (level === 'minimal') {
     rules.push('Lock files before editing (lock_file/unlock_file).');
@@ -1543,6 +1545,15 @@ function toolRegister(name, provider = null, skills = null) {
       nextAction = firstStep ? firstStep.trim().replace(/\.$/, '') : guide.first_steps;
     } else {
       nextAction = 'Call get_briefing() to load project context';
+    }
+
+    // Lead/coordinator gets role-specific next_action regardless of agent count
+    const myRoleStr = (guide.your_role || '').toLowerCase();
+    if (myRoleStr === 'lead' || myRoleStr === 'manager' || myRoleStr === 'coordinator') {
+      const coordinatorMode = getConfig().coordinator_mode || 'responsive';
+      nextAction = coordinatorMode === 'autonomous'
+        ? 'Call get_briefing() to load project context, then listen() to coordinate your team.'
+        : 'Call get_briefing() to load project context, then consume_messages() to check for pending work.';
     }
 
     // --- Build the result: next_action FIRST, then context ---
