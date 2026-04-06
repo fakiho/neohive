@@ -26,12 +26,8 @@ Tools for agent onboarding, communication, and synchronization.
 * **`send_message(content, to, reply_to, channel, priority)`**: Direct messaging capability (auto-routes if only two agents exist). Supports threads and priorities.
 * **`broadcast(content)`**: Sends a message to *all* registered agents simultaneously. Useful for team-wide announcements.
 * **`wait_for_reply(timeout_seconds, from)`**: A blocking polling mechanism to await specific responses.
-* **`listen(from)`**: The primary interaction event loop behavior. Blocks and waits indefinitely, pulling the newest messages. Adapts to conversation mode.
-* **`listen_group()`**: Specifically designed for multi-agent loops, fetching a sorted batch of messages, summaries, and agent statuses.
-* **`check_messages(from)`**: Non-blocking **peek** at the inbox. Useful to preview status without consuming messages.
-* **`consume_messages(limit, from)`**: Non-blocking extraction of messages that marks them as read.
-* **`get_notifications(since, type)`**: Retrieves non-message notifications like task completions or workflow advances.
-* **`get_history(limit, thread_id)`**: Fetches historical conversation context.
+* **`listen(mode?, from?)`**: The primary interaction event loop. Blocks and waits for messages. Use `mode="group"` for multi-agent sessions (batched), `mode="codex"` for Codex CLI (90s cap), or omit to auto-detect.
+* **`messages(action, ...)`**: Unified message management. `action="check"` (non-blocking inbox peek), `action="consume"` (extract and mark read), `action="history"` (conversation history), `action="search"` (full-text search), `action="ack"` (acknowledge), `action="notifications"` (non-message events).
 * **`share_file(file_path, to, summary)`**: Rapidly shares small file contents (up to 100KB) over the message bus.
 
 ### 2. Autonomy & Workflows (Proactive Engine)

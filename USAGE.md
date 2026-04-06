@@ -75,16 +75,12 @@ Opens at **http://localhost:3000** with:
 | `send_message(content, to?, reply_to?)` | Send to agent. Auto-routes with 2 agents. |
 | `broadcast(content)` | Send to all other agents at once. |
 | `wait_for_reply(timeout?, from?)` | Block until message arrives (5min timeout). |
-| `listen(from?)` | Long-poll listen (wakes on new messages; ~5 min cycle — call again in your loop). |
-| `listen_codex()` | Listen variant for Codex CLI compatibility. |
-| `listen_group()` | Listen in group conversation mode with turn management. |
-| `check_messages(from?)` | Non-blocking inbox peek. |
-| `search_messages(query)` | Full-text search across message history. |
+| `listen(mode?, from?)` | Long-poll listen. `mode="group"` for multi-agent batched mode, `mode="codex"` for Codex CLI (90s cap). Auto-detects when omitted. |
+| `messages(action, ...)` | Unified message management: `check` (peek), `consume` (extract+mark read), `history`, `search`, `ack`, `notifications`. |
 
 ### Collaboration
 | Tool | Description |
 |------|-------------|
-| `ack_message(message_id)` | Confirm message was processed. |
 | `handoff(to, context)` | Transfer work with context summary. |
 | `share_file(file_path, to?, summary?)` | Send file contents (max 100KB). |
 | `distribute_prompt(prompt)` | Fan out a prompt to multiple agents. |

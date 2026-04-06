@@ -175,7 +175,7 @@ Coordinators (agents with role `lead`, `manager`, or `coordinator`) have two ope
 
 ### Responsive Mode (default)
 
-The coordinator stays with the human user. It does **not** call `listen()` — instead it polls for agent updates non-blockingly with `consume_messages()`.
+The coordinator stays with the human user. It does **not** call `listen()` — instead it polls for agent updates non-blockingly with `messages(action="consume")`.
 
 ```
      Human User                    Responsive Coordinator              Worker Agent
@@ -193,7 +193,7 @@ The coordinator stays with the human user. It does **not** call `listen()` — i
                                         │
                                         │  If pending messages exist:
                                         │  next_action: "2 agent update(s)
-                                        │   waiting. Call consume_messages()."
+                                        │   waiting. Call messages(action="consume")."
                                         │
                                         │  If no pending messages:
                                         │  (no next_action — follows
@@ -218,7 +218,7 @@ The coordinator stays with the human user. It does **not** call `listen()` — i
   "How's the deploy going?"
         │
         ▼
-                              consume_messages()
+                              messages(action="consume")
                               ──► reads worker's status update
                               next_action: "Process these updates,
                                then respond to the user."
@@ -229,7 +229,7 @@ The coordinator stays with the human user. It does **not** call `listen()` — i
 
 **Middleware behavior for responsive coordinators:**
 - `next_action` from tool handlers is preserved as-is
-- If no tool-specific `next_action`: suggests `consume_messages()` only when agents have pending updates
+- If no tool-specific `next_action`: suggests `messages(action="consume")` only when agents have pending updates
 - The 3-call `listen()` warning is **not** applied
 - The 5-call block threshold is **not** applied
 

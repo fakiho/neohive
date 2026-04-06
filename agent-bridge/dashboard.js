@@ -2662,9 +2662,9 @@ const server = http.createServer(async (req, res) => {
       prompt += `**Instructions:**\n`;
       prompt += `1. Register as "${agentName}" using the register tool\n`;
       prompt += `2. Call get_briefing() for full project context\n`;
-      prompt += `3. Call listen_group() to rejoin the conversation\n`;
+      prompt += `3. Call listen() to rejoin the conversation\n`;
       prompt += `4. Announce you're back and pick up your active tasks\n`;
-      prompt += `5. Stay in listen_group() loop — never stop listening\n`;
+      prompt += `5. Stay in listen() loop — never stop listening\n`;
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
@@ -2717,7 +2717,7 @@ const server = http.createServer(async (req, res) => {
         try {
           const messagesFile = filePath('messages.jsonl', projectPath);
           const historyFile = filePath('history.jsonl', projectPath);
-          const modeText = newMode === 'responsive' ? 'Coordinator stays with human, uses consume_messages().' : 'Coordinator runs autonomously in listen() loop.';
+          const modeText = newMode === 'responsive' ? 'Coordinator stays with human, uses messages(action="check").' : 'Coordinator runs autonomously in listen() loop.';
           const sysMsg = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), from: '__system__', to: '__group__', content: `[MODE] Coordinator mode changed to "${newMode}". ${modeText} Coordinator: call get_guide() to update your instructions.`, timestamp: new Date().toISOString(), system: true };
           fs.appendFileSync(messagesFile, JSON.stringify(sysMsg) + '\n');
           fs.appendFileSync(historyFile, JSON.stringify(sysMsg) + '\n');

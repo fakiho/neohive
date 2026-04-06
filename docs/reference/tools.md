@@ -91,31 +91,9 @@ listen()
 // → { success: true, message: { id: "...", from: "Bob", content: "Done!", ... }, pending_count: 0 }
 ```
 
-> **Important:** `listen()` is how agents receive messages. Always call `listen()` after completing any action. Never use `sleep()` or poll with `check_messages()` in a loop.
+> **Important:** `listen()` is how agents receive messages. Always call `listen()` after completing any action. Never use `sleep()` or poll in a loop.
 
----
-
-### listen_group
-
-Listen in group or managed mode. Returns batched messages sorted by priority.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| *(none)* | | | |
-
-**Returns:** Batch of messages with `batch_summary`, agent statuses, and behavioral hints.
-
----
-
-### listen_codex
-
-Codex CLI-specific listener with 90-second timeout (due to Codex tool time limits).
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `from` | string | No | Only listen for messages from this specific agent |
-
-**Returns:** Same as `listen`.
+Use `mode` to select the listen variant: `"group"` for group/managed sessions (batched messages), `"codex"` for Codex CLI (90-second cap), or omit to auto-detect.
 
 ---
 
@@ -136,44 +114,34 @@ wait_for_reply({ timeout_seconds: 60, from: "Reviewer" })
 
 ---
 
-### check_messages
+### messages
 
-Non-blocking peek at your inbox. Does **not** consume messages.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `from` | string | No | Only check messages from this agent |
-
-**Returns:** Preview of pending messages with count.
-
----
-
-### ack_message
-
-Acknowledge that a message has been processed.
+Unified message management tool — replaces the former individual tools (`check_messages`, `consume_messages`, `get_history`, `search_messages`, `ack_message`, `get_notifications`).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `message_id` | string | Yes | The ID of the message to acknowledge |
+| `action` | string | Yes | One of: `check`, `consume`, `history`, `search`, `ack`, `notifications` |
+| `from` | string | No | Filter by sender (applies to `check`, `consume`, `history`) |
+| `limit` | number | No | Max results to return (applies to `consume`, `history`, `search`) |
+| `thread_id` | string | No | Filter to a specific thread (applies to `history`) |
+| `query` | string | No | Search query — required for `action="search"` |
+| `message_id` | string | No | Message ID — required for `action="ack"` |
 
-**Returns:** `{ success: true }`
-
----
-
-### get_history
-
-Get conversation history, optionally filtered by thread.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `limit` | number | No | Number of recent messages to return (default: 50) |
-| `thread_id` | string | No | Filter to only messages in this thread |
-
-**Returns:** Array of messages with acknowledgment status.
+| Action | Behaviour |
+|--------|-----------|
+| `check` | Non-blocking peek at inbox. Does **not** consume messages. |
+| `consume` | Extract and mark unread messages as consumed. |
+| `history` | Fetch conversation history, optionally filtered by thread. |
+| `search` | Search history by keyword. |
+| `ack` | Acknowledge a specific message by ID. |
+| `notifications` | Retrieve non-message notifications (task completions, workflow advances). |
 
 ```
-get_history({ limit: 20 })
-// → { count: 20, total: 150, messages: [...] }
+messages({ action: "check" })
+messages({ action: "consume", limit: 10 })
+messages({ action: "history", limit: 20 })
+messages({ action: "search", query: "authentication" })
+messages({ action: "ack", message_id: "abc123" })
 ```
 
 ---
@@ -282,22 +250,6 @@ Get a condensed summary of recent conversation.
 **Returns:** Summary with participants, topics, and message count.
 
 ---
-
-### search_messages
-
-Search conversation history by keyword.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `query` | string | Yes | Search query (minimum 2 characters) |
-| `from` | string | No | Filter by sender |
-| `limit` | number | No | Max results (default: 20, max: 50) |
-
-**Returns:** Matching messages with content previews.
-
-```
-search_messages({ query: "authentication", from: "Researcher" })
-```
 
 ---
 

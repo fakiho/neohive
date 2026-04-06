@@ -5282,10 +5282,10 @@ function respawnAgent(agentName) {
 }
 
 function generateFallbackRespawnPrompt(agentName) {
-  return 'Register as \'' + agentName + '\', then call get_briefing() and listen_group() to rejoin the conversation. ' +
+  return 'Register as \'' + agentName + '\', then call get_briefing() and listen() to rejoin the conversation. ' +
     'You are resuming a previous session — call get_compressed_history() to catch up on what you missed. ' +
     'Check your workspace with workspace_read() for any saved state. ' +
-    'Then call listen_group() and respond to any pending messages.';
+    'Then call listen() and respond to any pending messages.';
 }
 
 function showRespawnModal(agentName, prompt) {
@@ -10301,7 +10301,7 @@ function doLaunch() {
   }
 
   // Use generated prompt if available, otherwise build a default
-  var launchPrompt = window._generatedLaunchPrompt || 'You are agent "' + agentName + '". Use the register tool to register as "' + agentName + '", then use listen_group() to join the conversation.';
+  var launchPrompt = window._generatedLaunchPrompt || 'You are agent "' + agentName + '". Use the register tool to register as "' + agentName + '", then use listen() to join the conversation.';
   navigator.clipboard.writeText(launchPrompt).catch(function() {});
   selectedCli = cli;
 
@@ -10392,7 +10392,7 @@ function doLaunchAll() {
     w.state = 'launching';
     renderLaunchStatusTracker();
 
-    var agentPrompt = w.prompt || 'You are agent "' + w.name + '". Use the register tool to register as "' + w.name + '", then use listen_group() to join the conversation.';
+    var agentPrompt = w.prompt || 'You are agent "' + w.name + '". Use the register tool to register as "' + w.name + '", then use listen() to join the conversation.';
 
     lttFetch('/api/launch', {
       method: 'POST',
@@ -10559,7 +10559,7 @@ function renderDocs() {
       '<p>Opens this web dashboard at <code>http://localhost:3777</code>. You can watch agents chat in real-time, send them messages, and manage your team.</p>' +
       '<h4>3. Start Your Agents</h4>' +
       '<p>Open two or more terminal windows in your project folder. In each one, start your AI CLI (e.g. type <code>claude</code>) and tell it to register:</p>' +
-      '<pre><code># Terminal 1\nRegister as "Alice" and use listen_group() to join the conversation.\n\n# Terminal 2\nRegister as "Bob" and use listen_group() to join the conversation.</code></pre>' +
+      '<pre><code># Terminal 1\nRegister as "Alice" and use listen() to join the conversation.\n\n# Terminal 2\nRegister as "Bob" and use listen() to join the conversation.</code></pre>' +
       '<p>That\'s it! Your agents can now talk to each other. Or use the <strong>Launch</strong> tab to do this with one click.</p>' +
     '</div>' +
 
@@ -10643,7 +10643,7 @@ function renderDocs() {
       '<h4>Can I run multiple projects?</h4>' +
       '<p>Yes. Each project has its own <code>.neohive/</code> directory. The dashboard supports multiple projects \u2014 click the project selector in the header to switch between them.</p>' +
       '<h4>How do I send a message to agents from the dashboard?</h4>' +
-      '<p>Click any agent\'s avatar in the Messages tab. A dialog lets you type and send a message that agents will receive on their next <code>listen_group()</code> call.</p>' +
+      '<p>Click any agent\'s avatar in the Messages tab. A dialog lets you type and send a message that agents will receive on their next <code>listen()</code> call.</p>' +
     '</div>' +
 
     '</div>';
@@ -10662,8 +10662,8 @@ function copyLaunchPrompt() {
   if (!prompt) {
     var agentName = document.getElementById('launch-name').value.trim();
     prompt = agentName
-      ? 'You are agent "' + agentName + '". Use the register tool to register as "' + agentName + '", then use listen_group() to join the conversation.'
-      : 'Register with the neohive MCP tools and use listen_group() to join the conversation.';
+      ? 'You are agent "' + agentName + '". Use the register tool to register as "' + agentName + '", then use listen() to join the conversation.'
+      : 'Register with the neohive MCP tools and use listen() to join the conversation.';
   }
   navigator.clipboard.writeText(prompt).then(function() {
     var resultEl = document.getElementById('launch-result');

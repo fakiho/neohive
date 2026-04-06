@@ -332,8 +332,8 @@ The MCP server exposes **70+ built-in tools** in one registration list (no separ
 | Category | Tools |
 |----------|-------|
 | **Identity & briefing** | `register` · `list_agents` · `update_profile` · `get_briefing` · `get_guide` |
-| **Messaging** | `send_message` · `broadcast` · `listen` · `listen_group` · `listen_codex` · `wait_for_reply` · `check_messages` · `consume_messages` · `get_notifications` · `ack_message` |
-| **History & search** | `get_history` · `get_summary` · `search_messages` · `get_compressed_history` |
+| **Messaging** | `send_message` · `broadcast` · `listen` · `wait_for_reply` · `messages` |
+| **History & search** | `get_summary` · `get_compressed_history` · `messages` |
 | **Collaboration** | `handoff` · `share_file` · `lock_file` · `unlock_file` |
 | **Tasks** | `create_task` · `update_task` · `list_tasks` |
 | **Workflows** | `create_workflow` · `advance_workflow` · `workflow_status` |

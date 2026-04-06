@@ -1183,7 +1183,7 @@ function buildGuide(level = 'standard') {
     } else {
       rules.push('ROLE: Managed agent. The manager controls your turn.');
       rules.push('LOOP: listen() → receive work → update_task(id, "in_progress") → do work → update_task(id, "done") → send_message(manager, summary) → listen(). Never stop.');
-      rules.push('Never call get_work() or check_messages() in managed mode.');
+      rules.push('Never call get_work() or messages() in managed mode.');
     }
     rules.push('Keep messages short (2-3 paragraphs). Report what you did and what files changed.');
   }
@@ -1260,16 +1260,16 @@ function buildGuide(level = 'standard') {
   if (isLeadRole) {
     const coordinatorMode = getConfig().coordinator_mode || 'responsive';
     if (coordinatorMode === 'responsive') {
-      rules.push('COORDINATOR: Use consume_messages() to check updates non-blockingly. Do NOT block in listen() — stay responsive to the user.');
+      rules.push('COORDINATOR: Use messages(action="check") to check updates non-blockingly. Do NOT block in listen() — stay responsive to the user.');
     } else {
       rules.push('COORDINATOR: Use listen() to wait for agent results. Only return to human when all tasks are done or blocked.');
     }
     rules.push('Coordinators do NOT edit files or write code. Delegate ALL code work to other agents.');
   }
 
-  const listenCmd = isManagedMode() ? 'listen()' : (mode === 'group' ? 'listen_group()' : 'listen()');
+  const listenCmd = isManagedMode() ? 'listen()' : (mode === 'group' ? 'listen(mode="group")' : 'listen()');
   if (!isLeadRole) {
-    rules.push(`After EVERY action, call ${listenCmd}. Never use sleep() or poll with check_messages().`);
+    rules.push(`After EVERY action, call ${listenCmd}. Never use sleep() or poll with messages().`);
   }
 
   if (level === 'minimal') {
@@ -1570,7 +1570,7 @@ function toolRegister(name, provider = null, skills = null) {
       const coordinatorMode = getConfig().coordinator_mode || 'responsive';
       nextAction = coordinatorMode === 'autonomous'
         ? 'Call get_briefing() to load project context, then listen() to coordinate your team.'
-        : 'Call get_briefing() to load project context, then consume_messages() to check for pending work.';
+        : 'Call get_briefing() to load project context, then messages(action="check") to check for pending work.';
     }
 
     // --- Build the result: next_action FIRST, then context ---
@@ -1695,7 +1695,7 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
   const effectiveSendLimit = isAutonomousMode() ? 5 : sendLimit;
   const myRole = (getProfiles()[registeredName] || {}).role;
   if (isGroupMode() && sendsSinceLastListen >= effectiveSendLimit && myRole !== 'Coordinator') {
-    return { error: `You must call listen_group() before sending again. You've sent ${sendsSinceLastListen} message(s) without listening (limit: ${effectiveSendLimit}). This prevents message storms.` };
+    return { error: `You must call listen() before sending again. You've sent ${sendsSinceLastListen} message(s) without listening (limit: ${effectiveSendLimit}). This prevents message storms.` };
   }
 
   // Response budget: track unaddressed sends, hint when depleted
@@ -1993,7 +1993,7 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
   if (!recipientAlive) {
     result.warning = `Agent "${to}" appears offline (PID not running). Message queued but may not be received until they reconnect.`;
   } else if (to !== '__user__' && agents[to] && !agents[to].listening_since) {
-    result.note = `Agent "${to}" is currently working (not in listen mode). Message queued — they'll see it when they finish their current task and call listen_group().`;
+    result.note = `Agent "${to}" is currently working (not in listen mode). Message queued — they'll see it when they finish their current task and call listen().`;
   }
 
   // Coordinator enforcement: warn if sending work assignment without creating a task first
@@ -2036,7 +2036,7 @@ function toolBroadcast(content) {
   const effectiveSendLimitBcast = isAutonomousMode() ? 5 : sendLimit;
   const myRole = (getProfiles()[registeredName] || {}).role;
   if (isGroupMode() && sendsSinceLastListen >= effectiveSendLimitBcast && myRole !== 'Coordinator') {
-    return { error: `You must call listen_group() before broadcasting again. You've sent ${sendsSinceLastListen} message(s) without listening (limit: ${effectiveSendLimitBcast}).` };
+    return { error: `You must call listen() before broadcasting again. You've sent ${sendsSinceLastListen} message(s) without listening (limit: ${effectiveSendLimitBcast}).` };
   }
 
   const rateErr = checkRateLimit(content, '__broadcast__');
@@ -2355,10 +2355,10 @@ async function toolListenCodex(from = null, outcome = null, task_id = null, summ
     const taskList = getTasks();
     const task = taskList.find(t => t.id === task_id);
     if (!task) {
-      return { error: true, message: `Invalid task_id "${task_id}" — task does not exist. Check list_tasks() and call listen_codex() again with the correct task_id.` };
+      return { error: true, message: `Invalid task_id "${task_id}" — task does not exist. Check list_tasks() and call listen(mode="codex") again with the correct task_id.` };
     }
     if (task.assignee && task.assignee !== registeredName) {
-      return { error: true, message: `Task "${task_id}" is assigned to ${task.assignee}, not to you (${registeredName}). You cannot update another agent's task via listen_codex().` };
+      return { error: true, message: `Task "${task_id}" is assigned to ${task.assignee}, not to you (${registeredName}). You cannot update another agent's task via listen(mode="codex").` };
     }
     const statusMap = { completed: 'done', blocked: 'blocked', failed: 'blocked_permanent' };
     const newStatus = statusMap[outcome];
@@ -2486,9 +2486,9 @@ function toolSetConversationMode(mode) {
   }
 
   const messages = {
-    group: 'Group mode enabled. Use listen_group() to receive batched messages. All messages are shared with everyone.',
+    group: 'Group mode enabled. Use listen(mode="group") to receive batched messages. All messages are shared with everyone.',
     direct: 'Direct mode enabled. Use listen() for point-to-point messaging.',
-    managed: 'Managed mode enabled. Call claim_manager() to become the manager, or wait for the manager to give you the floor via yield_floor(). Use listen() or listen_group() to receive messages.',
+    managed: 'Managed mode enabled. Call claim_manager() to become the manager, or wait for the manager to give you the floor via yield_floor(). Use listen() to receive messages.',
   };
   return { success: true, mode, message: messages[mode] };
 }
@@ -2649,10 +2649,10 @@ async function toolListenGroup(outcome = null, task_id = null, summary = null) {
     const taskList = getTasks();
     const task = taskList.find(t => t.id === task_id);
     if (!task) {
-      return { error: true, message: `Invalid task_id "${task_id}" — task does not exist. Check list_tasks() and call listen_group() again with the correct task_id.` };
+      return { error: true, message: `Invalid task_id "${task_id}" — task does not exist. Check list_tasks() and call listen() again with the correct task_id.` };
     }
     if (task.assignee && task.assignee !== registeredName) {
-      return { error: true, message: `Task "${task_id}" is assigned to ${task.assignee}, not to you (${registeredName}). You cannot update another agent's task via listen_group().` };
+      return { error: true, message: `Task "${task_id}" is assigned to ${task.assignee}, not to you (${registeredName}). You cannot update another agent's task via listen().` };
     }
     const statusMap = { completed: 'done', blocked: 'blocked', failed: 'blocked_permanent' };
     const newStatus = statusMap[outcome];
@@ -2906,8 +2906,8 @@ function classifyPriority(msg) {
   return 'normal';
 }
 
-// Build the response for listen_group — kept lean to reduce context accumulation
-// Context/history removed: agents should call get_history() when they need it
+// Build the response for listen (group mode) — kept lean to reduce context accumulation
+// Context/history removed: agents should call messages(action="history") when they need it
 function buildListenGroupResponse(batch, consumed, agentName, listenStart) {
   saveConsumedIds(agentName, consumed);
   touchActivity();
@@ -5465,7 +5465,7 @@ function toolStartPlan(params) {
   broadcastSystemMessage(
     `[PLAN LAUNCHED] "${name}" — ${steps.length} steps, autonomous mode, ${useParallel ? 'parallel' : 'sequential'}. ` +
     `${startedSteps.length} step(s) started. ` +
-    `All agents: call get_work() to enter the autonomous work loop. Do NOT call listen_group().`
+    `All agents: call get_work() to enter the autonomous work loop. Do NOT call listen().`
   );
 
   touchActivity();
@@ -5886,7 +5886,7 @@ function triggerStandupIfDue() {
     if (inProgress.length > 0) summary += ` In progress: ${inProgress.map(t => `"${t.title}" (${t.assignee || '?'})`).join(', ')}.`;
     if (blocked.length > 0) summary += ` BLOCKED: ${blocked.map(t => `"${t.title}" (${t.assignee || '?'})`).join(', ')}.`;
     if (recentDone.length > 0) summary += ` Recently done: ${recentDone.length} task(s).`;
-    summary += ' Each agent: report what you did, what\'s blocked, what\'s next. Then call listen_group().';
+    summary += ' Each agent: report what you did, what\'s blocked, what\'s next. Then call listen().';
 
     broadcastSystemMessage(summary, registeredName);
   } catch (e) { log.warn("standup trigger failed:", e.message); }
@@ -6180,7 +6180,7 @@ function toolGetGuide(level = 'standard') {
   const guide = buildGuide(level);
   guide.your_name = registeredName;
   if (level !== 'minimal') {
-    guide.workflow = '1. get_briefing → 2. list_tasks/suggest_task → 3. claim task → 4. lock_file → 5. work → 6. unlock_file → 7. update_task done → 8. listen_group';
+    guide.workflow = '1. get_briefing → 2. list_tasks/suggest_task → 3. claim task → 4. lock_file → 5. work → 6. unlock_file → 7. update_task done → 8. listen()';
   }
   return guide;
 }
@@ -7191,7 +7191,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: 'register',
-        description: 'Register this agent\'s identity. Must be called first. Returns a collaboration guide with all tool categories, critical rules, and workflow patterns — READ IT CAREFULLY before doing anything else. Then call get_briefing() for project context, then listen_group() to join the conversation.',
+        description: 'Register this agent\'s identity. Must be called first. Returns a collaboration guide with all tool categories, critical rules, and workflow patterns — READ IT CAREFULLY before doing anything else. Then call get_briefing() for project context, then listen() to join the conversation.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -7289,7 +7289,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'listen',
-        description: 'Listen for messages. Use mode="standard" (default, direct 1:1), mode="group" (group/managed conversation, batched), or mode="codex" (Codex CLI — returns after 90s). Auto-detects mode from conversation state when mode is omitted. Replaces listen_group and listen_codex (now deprecated aliases).',
+        description: 'Listen for messages. Use mode="standard" (default, direct 1:1), mode="group" (group/managed conversation, batched), or mode="codex" (Codex CLI — returns after 90s). Auto-detects mode from conversation state when mode is omitted.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -7901,7 +7901,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         try {
           const pending = getUnconsumedMessages(registeredName);
           const pendingHint = pending.length > 0
-            ? `${pending.length} agent update(s) waiting. Call consume_messages() to read them.`
+            ? `${pending.length} agent update(s) waiting. Call messages(action="consume") to read them.`
             : null;
           if (!na || bareListenRe.test(na)) {
             // No guidance or bare listen() — replace with coordinator hint or nothing
