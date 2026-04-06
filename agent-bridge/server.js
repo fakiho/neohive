@@ -4277,10 +4277,10 @@ async function toolGetWork(params = {}) {
   touchActivity();
   const idleResult = {
     type: 'idle',
-    next_action: isManagedMode() ? 'Call listen() to wait for work.' : 'Call get_work() again in 30 seconds.',
+    next_action: isManagedMode() ? 'Call listen() to wait for work.' : 'Call get_work() again in 90 seconds.',
     instruction: isManagedMode()
       ? 'No work available right now. Call listen() to wait for the manager to assign work or give you the floor.'
-      : 'No work available right now. Call get_work() again in 30 seconds.'
+      : 'No work available right now. Call get_work() again in 90 seconds.'
   };
   // Item 4: warn demoted agents
   const agentRep = getReputation();

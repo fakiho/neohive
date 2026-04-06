@@ -307,7 +307,7 @@ Agents in autonomous workflows use `get_work()` instead of `listen()`. The `next
   │                       then call submit_review()."            │
   │                                                              │
   ├─ idle              → next_action: "Call get_work() again     │
-  │                       in 30 seconds."                        │
+  │                       in 90 seconds."                        │
   │                                                              │
   └─ (7 more types)    → each has a specific next_action         │
                                                                  │
