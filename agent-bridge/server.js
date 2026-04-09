@@ -6498,7 +6498,7 @@ function toolSubmitReview(reviewId, status, feedback) {
 
   review.status = status;
   review.reviewer = registeredName;
-  review.feedback = (feedback || '').substring(0, 2000);
+  review.feedback = feedback || '';
   review.reviewed_at = new Date().toISOString();
 
   // Review → retry loop: track review rounds, auto-route feedback, auto-approve after 2 rounds

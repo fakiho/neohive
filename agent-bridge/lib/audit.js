@@ -10,8 +10,8 @@ const crypto = require('crypto');
 // Configuration
 const AUDIT_MAX_SIZE = parseInt(process.env.NEOHIVE_AUDIT_MAX_SIZE) || 10485760; // 10MB
 const AUDIT_RETENTION_DAYS = parseInt(process.env.NEOHIVE_AUDIT_RETENTION_DAYS) || 30;
-const AUDIT_ARGS_MAX_LENGTH = parseInt(process.env.NEOHIVE_AUDIT_ARGS_MAX_LENGTH) || 500;
-const AUDIT_RESULT_MAX_LENGTH = parseInt(process.env.NEOHIVE_AUDIT_RESULT_MAX_LENGTH) || 1000;
+const AUDIT_ARGS_MAX_LENGTH = parseInt(process.env.NEOHIVE_AUDIT_ARGS_MAX_LENGTH) || 50000;
+const AUDIT_RESULT_MAX_LENGTH = parseInt(process.env.NEOHIVE_AUDIT_RESULT_MAX_LENGTH) || 10000;
 const AUDIT_LEVEL = process.env.NEOHIVE_AUDIT_LEVEL || 'standard';
 
 // Tool categories for classification
@@ -201,12 +201,14 @@ function logToolCall(agent, toolName, args, result, durationMs, context = {}) {
     }
   };
   
-  // Truncate large args/results
-  if (entry.args) {
-    entry.args = JSON.parse(truncateContent(JSON.stringify(entry.args), AUDIT_ARGS_MAX_LENGTH));
+  // Truncate large args/results only when serializing (never parse truncated JSON)
+  const argsStr = JSON.stringify(entry.args);
+  if (argsStr && argsStr.length > AUDIT_ARGS_MAX_LENGTH) {
+    entry.args = { _truncated: true, preview: argsStr.substring(0, AUDIT_ARGS_MAX_LENGTH) };
   }
-  if (entry.result) {
-    entry.result = JSON.parse(truncateContent(JSON.stringify(entry.result), AUDIT_RESULT_MAX_LENGTH));
+  const resultStr = JSON.stringify(entry.result);
+  if (resultStr && resultStr.length > AUDIT_RESULT_MAX_LENGTH) {
+    entry.result = { _truncated: true, preview: resultStr.substring(0, AUDIT_RESULT_MAX_LENGTH) };
   }
   
   // Add to pending writes for batch processing
