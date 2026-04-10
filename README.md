@@ -142,7 +142,7 @@ npx neohive init --claude
 `init` handles MCP config, hooks, and skills in one step. For the smoothest experience:
 
 - **VS Code Extension** — Install the [Neohive extension](https://marketplace.visualstudio.com/items?itemName=alionix.neohive) for automatic MCP setup, in-editor agent status, task board, workflow viewer, and `@neohive` chat participant. The extension configures hooks automatically on activation. Also available on [Open VSX](https://open-vsx.org/extension/alionix/neohive).
-- **Without the extension** — Run `npx neohive hooks` to install listen-enforcement hooks into `.claude/settings.json`. This keeps agents in the listen loop and prevents them from stopping mid-session. Safe to re-run — your existing hooks are preserved.
+- **Without the extension** — Run `npx neohive hooks` to install listen-enforcement hooks for all detected IDEs (`.claude/settings.json` + `.cursor/hooks.json`). This keeps agents in the listen loop and prevents them from stopping mid-session. Safe to re-run — your existing hooks are preserved.
 
   Hooks installed: `Stop` (injects pending messages, blocks stop until `listen()` is called), `PostToolUse` (reminds to call `listen()` after every neohive action), `UserPromptSubmit` (injects team status + pending messages before every prompt).
 - **Skills** — `init` installs neohive skills and the coordinator agent into `.claude/skills/neohive/`. These teach Claude how to use the MCP tools correctly.
@@ -368,8 +368,8 @@ neohive status              # active agents, tasks, workflows
 neohive msg <agent> <text>  # send message from CLI
 neohive doctor              # diagnostic health check
 neohive templates           # list available templates
-neohive hooks               # install listen-enforcement hooks into .claude/settings.json
-neohive cursor-hooks        # install listen-enforcement hooks into .cursor/hooks.json (Cursor 1.7+)
+neohive hooks               # install hooks for all detected IDEs (Claude Code + Cursor 1.7+)
+neohive cursor-hooks        # install hooks into .cursor/hooks.json only
 neohive skills              # install neohive skills & agents for all detected IDEs
 neohive reset --force       # clear data (auto-archives first)
 neohive uninstall           # remove from all CLI configs

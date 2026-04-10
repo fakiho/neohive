@@ -46,8 +46,8 @@ function printUsage() {
     npx neohive doctor              Diagnostic health check
     npx neohive templates           List available team templates
     npx neohive reset --force       Clear all data (auto-archives first)
-    npx neohive hooks               Install listen-enforcement hooks into .claude/settings.json
-    npx neohive cursor-hooks        Install listen-enforcement hooks into .cursor/hooks.json
+    npx neohive hooks               Install listen-enforcement hooks for all detected IDEs (Claude + Cursor)
+    npx neohive cursor-hooks        Install listen-enforcement hooks into .cursor/hooks.json only
     npx neohive skills              Install neohive skills & agents for all detected IDEs
     npx neohive uninstall           Remove from all CLI configs
     npx neohive help                Show this help
@@ -1660,6 +1660,7 @@ switch (command) {
     break;
   case 'hooks':
     installHooks();
+    installCursorHooks();
     break;
   case 'cursor-hooks':
     installCursorHooks();
