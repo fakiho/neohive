@@ -275,7 +275,19 @@ function createIdeLivenessBridge(context) {
 // --- HTTP client for Neohive server ---
 
 function getServerUrl() {
-  return vscode.workspace.getConfiguration('neohive').get('serverUrl', 'http://localhost:4321');
+  // 1. Check .neohive/dashboard.json written by the dashboard on startup
+  const dataDir = getNeohiveDataDir();
+  if (dataDir) {
+    try {
+      const dashboardJson = path.join(dataDir, 'dashboard.json');
+      if (fs.existsSync(dashboardJson)) {
+        const meta = JSON.parse(fs.readFileSync(dashboardJson, 'utf8'));
+        if (meta && meta.url) return meta.url;
+      }
+    } catch {}
+  }
+  // 2. VS Code setting (user can override manually)
+  return vscode.workspace.getConfiguration('neohive').get('serverUrl', 'http://localhost:3000');
 }
 
 function getPollInterval() {
@@ -1734,9 +1746,91 @@ function activate(context) {
   // Initial poll
   pollData();
 
-  // Recurring poll
+  // Recurring poll (fallback — SSE handles real-time, this catches missed updates)
   const interval = setInterval(pollData, getPollInterval());
   context.subscriptions.push({ dispose: () => clearInterval(interval) });
+
+  // --- SSE push connection — real-time agent message delivery ---
+  // Replaces polling for message arrival: server pushes targeted events the moment
+  // a new message is written to messages.jsonl, waking the right agent terminal instantly.
+  let sseReq = null;
+  let sseReconnectTimer = null;
+  let sseStopped = false;
+
+  function connectSse() {
+    if (sseStopped) return;
+    try {
+      const base = getServerUrl();
+      const url = new URL('/api/events', base);
+      const mod = url.protocol === 'https:' ? require('https') : http;
+      let buf = '';
+      sseReq = mod.get(url.toString(), { headers: { Accept: 'text/event-stream' } }, (res) => {
+        if (res.statusCode !== 200) { res.resume(); scheduleReconnect(); return; }
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          buf += chunk;
+          // Parse SSE frames — each event ends with \n\n
+          let boundary;
+          while ((boundary = buf.indexOf('\n\n')) !== -1) {
+            const frame = buf.slice(0, boundary);
+            buf = buf.slice(boundary + 2);
+            let eventName = 'message';
+            let dataLine = '';
+            for (const line of frame.split('\n')) {
+              if (line.startsWith('event:')) eventName = line.slice(6).trim();
+              else if (line.startsWith('data:')) dataLine = line.slice(5).trim();
+            }
+            // Only handle targeted message delivery events
+            if (eventName !== 'message' || !dataLine) continue;
+            try {
+              const msg = JSON.parse(dataLine);
+              if (!msg || msg.type !== 'message') continue;
+              const agentName = getEffectiveAgentName();
+              if (!agentName) continue;
+              // Check if this message is for the current agent
+              if (msg.to !== agentName && msg.to !== '__group__' && msg.to !== '__all__') continue;
+              // Re-poll data to refresh sidebar
+              pollData();
+              // Find the agent's terminal and wake it by injecting a newline
+              // so Claude Code's idle loop picks up the pending message via listen()
+              const agentTerminal = vscode.window.terminals.find(
+                t => isLikelyAgentTerminal(t, agentName)
+              );
+              if (agentTerminal) {
+                // Show a VS Code notification with message preview
+                const preview = (msg.preview || '').slice(0, 120);
+                const fromLabel = msg.from || 'unknown';
+                vscode.window.showInformationMessage(
+                  `📨 Neohive: message from ${fromLabel} → ${agentName}: ${preview}`,
+                  'Wake agent'
+                ).then(action => {
+                  if (action === 'Wake agent') agentTerminal.show(false);
+                });
+              }
+            } catch {}
+          }
+        });
+        res.on('end', scheduleReconnect);
+        res.on('error', scheduleReconnect);
+      });
+      sseReq.on('error', scheduleReconnect);
+    } catch { scheduleReconnect(); }
+  }
+
+  function scheduleReconnect() {
+    if (sseStopped) return;
+    if (sseReconnectTimer) return;
+    sseReconnectTimer = setTimeout(() => { sseReconnectTimer = null; connectSse(); }, 3000);
+  }
+
+  connectSse();
+  context.subscriptions.push({
+    dispose: () => {
+      sseStopped = true;
+      if (sseReconnectTimer) clearTimeout(sseReconnectTimer);
+      if (sseReq) { try { sseReq.destroy(); } catch {} sseReq = null; }
+    }
+  });
 
   // Re-poll on config change
   context.subscriptions.push(

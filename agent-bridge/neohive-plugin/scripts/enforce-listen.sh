@@ -1,72 +1,139 @@
 #!/bin/bash
-# Stop hook: block agent from stopping if last neohive action wasn't listen()
-# Also auto-reports to coordinator via /api/inject when blocking.
-# Exit 2 = block stop (forces Claude to continue and call listen)
+# Stop hook — two jobs:
+#   1. If pending messages exist for this agent: inject them directly into context (no listen() needed)
+#   2. If no pending messages but last tool wasn't listen: prompt agent to call listen()
+#
+# Exit 2 = block stop (inject message or reminder into context)
 # Exit 0 = allow stop
 
 NEOHIVE_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}/.neohive"
 ACTIVITY_FILE="$NEOHIVE_DIR/activity.jsonl"
 SESSION="${CLAUDE_SESSION_ID:-}"
-NEOHIVE_URL="${NEOHIVE_SERVER_URL:-http://localhost:4321}"
 
-# Allow exit: no tool calls this session (user cancelled before any tools ran)
-LOOP_COUNT="${CLAUDE_LOOP_COUNT:-0}"
-[ "$LOOP_COUNT" = "0" ] && exit 0
+# Auto-discover dashboard URL
+_DASHBOARD_JSON="${NEOHIVE_DIR}/dashboard.json"
+if [ -z "$NEOHIVE_SERVER_URL" ] && [ -f "$_DASHBOARD_JSON" ]; then
+  _DISCOVERED=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('url',''))" "$_DASHBOARD_JSON" 2>/dev/null)
+  [ -n "$_DISCOVERED" ] && NEOHIVE_SERVER_URL="$_DISCOVERED"
+fi
+NEOHIVE_URL="${NEOHIVE_SERVER_URL:-http://localhost:${NEOHIVE_PORT:-3000}}"
 
-# Allow exit: user aborted — agent had no chance to call listen()
-STOP_STATUS="${CLAUDE_STOP_HOOK_STATUS:-}"
-[ "$STOP_STATUS" = "aborted" ] && exit 0
+# Allow: user aborted or no tool calls this turn
+[ "${CLAUDE_STOP_HOOK_STATUS:-}" = "aborted" ] && exit 0
+[ "${CLAUDE_LOOP_COUNT:-0}" = "0" ] && exit 0
 
-# Not a neohive project — allow stop
+# Not a neohive project
 [ -f "$ACTIVITY_FILE" ] || exit 0
 
-# Get the last neohive tool used in THIS session
-LAST_TOOL=$(tail -100 "$ACTIVITY_FILE" 2>/dev/null | jq -r --arg session "$SESSION" '
-  select(.session == $session or $session == "") | .tool
-' | grep "^mcp__neohive__" | tail -1)
+# Resolve agent name + last tool for this session from activity log
+read -r AGENT_NAME LAST_TOOL <<< "$(tail -200 "$ACTIVITY_FILE" 2>/dev/null | python3 -c "
+import sys, json
+session = '$SESSION'
+agent = ''
+last_tool = ''
+for line in sys.stdin:
+    line = line.strip()
+    if not line: continue
+    try:
+        e = json.loads(line)
+        if session and e.get('session', '') != session and session != '': continue
+        if e.get('agent') and e['agent'] not in ('unknown', ''):
+            agent = e['agent']
+        if e.get('tool', '').startswith('mcp__neohive__'):
+            last_tool = e['tool']
+    except: pass
+print(agent or 'unknown', last_tool)
+" 2>/dev/null)"
 
-# No neohive tools used in this session — allow stop
+# No neohive tools used this session — allow stop
 [ -z "$LAST_TOOL" ] && exit 0
 
-# Look up agent name from the last activity
-AGENT_NAME=$(tail -100 "$ACTIVITY_FILE" 2>/dev/null | jq -r --arg session "$SESSION" '
-  select(.session == $session or $session == "") | .agent
-' | tail -1)
-AGENT="${AGENT_NAME:-unknown}"
-
-# All roles must call listen() — no exemptions
-
-# Last action was listen/register/rules management — allow stop
+# Already listening/registering — allow stop
 case "$LAST_TOOL" in
-  mcp__neohive__listen|\
-  mcp__neohive__register|\
-  mcp__neohive__add_rule|mcp__neohive__remove_rule|mcp__neohive__toggle_rule)
-    exit 0
-    ;;
+  mcp__neohive__listen|mcp__neohive__register|mcp__neohive__listen_codex|mcp__neohive__listen_group)
+    exit 0 ;;
 esac
 
-# Last neohive action was something other than listen — report + block
+# Check for pending messages for this agent in messages.jsonl
+PENDING_MSGS=""
+if [ "$AGENT_NAME" != "unknown" ] && [ -f "$NEOHIVE_DIR/messages.jsonl" ]; then
+  PENDING_MSGS=$(python3 - "$NEOHIVE_DIR/messages.jsonl" "$NEOHIVE_DIR/consumed-${AGENT_NAME}.json" "$AGENT_NAME" <<'PYEOF'
+import sys, json
 
-# Auto-report to coordinator via neohive /api/inject (HTTP equivalent of send_message)
-# Fire-and-forget: don't fail if dashboard isn't running
-PAYLOAD=$(printf '{"from":"%s","to":"__user__","content":"[STOP HOOK] %s attempted to stop without calling listen(). Last tool: %s. Blocking stop — agent will be prompted to call listen() now.","priority":"normal"}' \
-  "$AGENT" "$AGENT" "$LAST_TOOL")
+msg_file, consumed_file, agent = sys.argv[1], sys.argv[2], sys.argv[3]
+
+# Load consumed IDs
+consumed = set()
+try:
+    with open(consumed_file) as f:
+        consumed = set(json.load(f))
+except: pass
+
+# Scan all messages for unconsumed ones addressed to this agent
+pending = []
+try:
+    with open(msg_file) as f:
+        for line in f:
+            line = line.strip()
+            if not line: continue
+            try:
+                m = json.loads(line)
+                if m.get('id') in consumed: continue
+                to = m.get('to', '')
+                if to != agent and to != '__group__' and to != '__all__': continue
+                if to == '__group__' and m.get('from') == agent: continue
+                if m.get('system'): continue  # skip system messages
+                pending.append(m)
+            except: pass
+except: pass
+
+# Output up to 3 pending messages, priority order
+priority_order = {'critical': 0, 'high': 1, 'normal': 2, 'low': 3}
+pending.sort(key=lambda m: priority_order.get(m.get('priority'), 2))
+
+for m in pending[:3]:
+    sender = m.get('from', '?')
+    content = m.get('content', '').replace('\n', ' ').strip()[:400]
+    msg_id = m.get('id', '')
+    print(f"FROM {sender}: {content} [id:{msg_id}]")
+PYEOF
+  2>/dev/null)
+fi
+
+# ── Case 1: Pending messages exist — inject them directly ─────────────────────
+if [ -n "$PENDING_MSGS" ]; then
+  # Report to dashboard
+  PAYLOAD=$(printf '{"from":"%s","to":"__user__","content":"[PUSH DELIVERY] %s has %s pending message(s) — injecting into context.","priority":"normal"}' \
+    "$AGENT_NAME" "$AGENT_NAME" "$(echo "$PENDING_MSGS" | wc -l | tr -d ' ')")
+  curl -s -X POST "${NEOHIVE_URL}/api/inject" \
+    -H "Content-Type: application/json" -d "$PAYLOAD" --max-time 2 > /dev/null 2>&1 || true
+
+  cat <<EOF
+
+📨 NEOHIVE — INCOMING MESSAGE(S) FOR ${AGENT_NAME}:
+
+${PENDING_MSGS}
+
+These messages are waiting for you. Call listen() to officially receive and consume them,
+then process and respond. Do not stop — call listen() now.
+EOF
+  exit 2
+fi
+
+# ── Case 2: No pending messages but last tool wasn't listen ───────────────────
 curl -s -X POST "${NEOHIVE_URL}/api/inject" \
   -H "Content-Type: application/json" \
-  -d "$PAYLOAD" \
-  --max-time 2 \
-  > /dev/null 2>&1 || true
+  -d "$(printf '{"from":"%s","to":"__user__","content":"[STOP HOOK] %s stopping without listen(). Last tool: %s. Prompting to call listen().","priority":"low"}' \
+    "$AGENT_NAME" "$AGENT_NAME" "$LAST_TOOL")" \
+  --max-time 2 > /dev/null 2>&1 || true
 
 cat <<'EOF'
 
-⚠️  NEOHIVE — REQUIRED ACTION BEFORE STOPPING:
+⚠️  NEOHIVE — CALL listen() BEFORE STOPPING:
 
-Your last neohive action was not listen(). You MUST call listen() before stopping.
-This keeps you in the receive loop for your next task.
-Your coordinator has been notified via the dashboard.
+No pending messages right now, but you must stay in the receive loop.
+Call listen() now — it will return immediately if nothing arrives, with retry:true.
 
 → Call: listen()
-
-Do not respond with text. Call listen() now.
 EOF
 exit 2

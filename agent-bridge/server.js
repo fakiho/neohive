@@ -551,14 +551,14 @@ function readNewMessagesFromFile(fromOffset, filePath) {
 
 // Build a standard message delivery response with context
 function buildMessageResponse(msg, consumedIds) {
-  // Count remaining unconsumed messages — use lightweight read from current offset
-  // instead of full file scan to avoid performance issues in busy conversations
+  // Count remaining unconsumed messages — scan from 0 to catch messages that arrived
+  // before the current offset (e.g. queued batch where only first was returned)
   let pendingCount = 0;
   try {
     const msgFile = getMessagesFile(currentBranch);
     if (fs.existsSync(msgFile)) {
-      const { messages: tail } = readNewMessages(lastReadOffset);
-      pendingCount = tail.filter(m => m.to === registeredName && m.id !== msg.id && !consumedIds.has(m.id)).length;
+      const { messages: all } = readJsonlFromOffset(msgFile, 0);
+      pendingCount = all.filter(m => m.to === registeredName && m.id !== msg.id && !consumedIds.has(m.id)).length;
     }
   } catch (e) { log.debug('pending count failed:', e.message); }
 
@@ -781,17 +781,20 @@ function markAsRead(agentName, messageId) {
 function getUnconsumedMessages(agentName, fromFilter = null) {
   // Optimization: read only new bytes since last offset for scalability (100+ agents)
   const msgFile = getMessagesFile(currentBranch);
-  const { messages: newMessages, newOffset } = readJsonlFromOffset(msgFile, lastReadOffset);
+  const { messages: newMessages } = readJsonlFromOffset(msgFile, lastReadOffset);
 
-  // If we have new messages, filter them; also check any previously unread messages
-  // For correctness, on first call (offset=0), this reads the full file
+  // Fast path: new messages since last offset
+  // Full-scan fallback: when the watcher's checkMessages() advanced lastReadOffset past
+  // a multi-message batch but only consumed the first, remaining messages sit before the
+  // current offset. Scanning from 0 catches them; consumed IDs skip what's already delivered.
   let messages;
-  if (lastReadOffset === 0) {
-    messages = newMessages; // Full read on first call
-  } else if (newMessages.length > 0) {
-    messages = newMessages; // Only new messages since last offset
+  if (newMessages.length > 0) {
+    messages = newMessages;
+  } else if (lastReadOffset > 0) {
+    const { messages: all } = readJsonlFromOffset(msgFile, 0);
+    messages = all;
   } else {
-    return []; // No new data — nothing to filter
+    return [];
   }
   // Don't update lastReadOffset here — let listen/listen_group handle it
   // to avoid skipping messages that arrive between get_work checks
@@ -806,12 +809,18 @@ function getUnconsumedMessages(agentName, fromFilter = null) {
   const myChannels = useRelevanceFilter ? new Set(getAgentChannels(agentName)) : null;
   const myTaskIds = useRelevanceFilter ? new Set(getTasks().filter(t => t.assignee === agentName && t.status === 'in_progress').map(t => t.id)) : null;
 
-  return messages.filter(m => {
+  const now = Date.now();
+  const filtered = messages.filter(m => {
     if (m.to !== agentName && m.to !== '__group__' && m.to !== '__all__') return false;
     if (m.to === '__group__' && m.from === agentName) return false;
     if (m.exclude_agent && m.exclude_agent === agentName) return false;
     if (consumed.has(m.id)) return false;
     if (fromFilter && m.from !== fromFilter && !m.system) return false;
+    // TTL: skip expired messages (critical messages exempt)
+    if (m.ttl_ms && m.priority !== 'critical') {
+      const sent = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+      if (sent > 0 && now - sent > m.ttl_ms) return false;
+    }
     if (perms[agentName] && perms[agentName].can_read) {
       const allowed = perms[agentName].can_read;
       if (allowed !== '*' && Array.isArray(allowed) && !allowed.includes(m.from) && !m.system) return false;
@@ -839,6 +848,11 @@ function getUnconsumedMessages(agentName, fromFilter = null) {
 
     return true;
   });
+
+  // Priority ordering: critical → high → normal → low → undefined
+  const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };
+  filtered.sort((a, b) => (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2));
+  return filtered;
 }
 
 // --- Profile helpers ---
@@ -1678,7 +1692,7 @@ function toolListAgents() {
   return { agents: result };
 }
 
-async function toolSendMessage(content, to = null, reply_to = null, channel = null, priority = null) {
+async function toolSendMessage(content, to = null, reply_to = null, channel = null, priority = null, ttl_ms = null) {
   if (!registeredName) {
     return { error: 'You must call register() first' };
   }
@@ -1883,7 +1897,8 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
     to: isGroup ? '__group__' : to,
     content,
     timestamp: new Date().toISOString(),
-    ...(priority && ['critical', 'normal', 'low'].includes(priority) && { priority }),
+    ...(priority && ['critical', 'high', 'normal', 'low'].includes(priority) && { priority }),
+    ...(ttl_ms && typeof ttl_ms === 'number' && ttl_ms > 0 && { ttl_ms }),
     ...(isGroup && to && { addressed_to: [to] }),
     ...(channel && { channel }),
     ...(reply_to && { reply_to }),
@@ -2375,9 +2390,13 @@ async function toolListenCodex(from = null, outcome = null, task_id = null, summ
     consumed.add(msg.id);
     saveConsumedIds(registeredName, consumed);
     markAsRead(registeredName, msg.id);
-    const _mfC1 = getMessagesFile(currentBranch);
-    if (fs.existsSync(_mfC1)) {
-      lastReadOffset = fs.statSync(_mfC1).size;
+    // Only advance offset when this is the last queued message — otherwise keep
+    // offset back so getUnconsumedMessages finds remaining messages on next call
+    if (existing.length <= 1) {
+      const _mfC1 = getMessagesFile(currentBranch);
+      if (fs.existsSync(_mfC1)) {
+        lastReadOffset = fs.statSync(_mfC1).size;
+      }
     }
     touchActivity();
     setListening(false);
@@ -3440,18 +3459,32 @@ function toolUpdateTask(taskId, status, notes = null) {
   if (status === 'done') {
     fireEvent('task_complete', { title: task.title, created_by: task.created_by });
     appendNotification('task_done', registeredName, `Task "${task.title}" completed by ${registeredName}`, task.id);
-    // Check if this resolves any dependencies
+    // Check if this resolves any dependencies — auto-unblock waiting tasks
     const deps = getDeps();
+    const unblocked = [];
     for (const dep of deps) {
       if (dep.depends_on === taskId && !dep.resolved) {
         dep.resolved = true;
         const blockedTask = tasks.find(t => t.id === dep.task_id);
-        if (blockedTask && blockedTask.assignee) {
+        if (blockedTask) {
+          // Only unblock if ALL of the task's dependencies are now resolved
+          const allDepsResolved = deps
+            .filter(d => d.task_id === blockedTask.id)
+            .every(d => d.resolved);
+          if (allDepsResolved && blockedTask.status === 'blocked') {
+            blockedTask.status = 'pending';
+            blockedTask.updated_at = new Date().toISOString();
+            unblocked.push(blockedTask);
+          }
           fireEvent('dependency_met', { task_title: task.title, notify: blockedTask.assignee });
         }
       }
     }
     writeJsonFile(DEPS_FILE, deps);
+    if (unblocked.length > 0) {
+      saveTasks(tasks);
+      broadcastSystemMessage(`[AUTO-UNBLOCK] Task "${task.title}" completed. Unblocked: ${unblocked.map(t => `"${t.title}"`).join(', ')} — now pending.`);
+    }
 
     // Task-channel auto-cleanup: archive task channel when task is done
     if (task.channel) {
@@ -7246,8 +7279,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             priority: {
               type: 'string',
-              enum: ['critical', 'normal', 'low'],
-              description: 'Message priority (optional — auto-classified if omitted). Critical messages are delivered first and retained longer.',
+              enum: ['critical', 'high', 'normal', 'low'],
+              description: 'Message priority (optional — auto-classified if omitted). Delivery order: critical → high → normal → low.',
+            },
+            ttl_ms: {
+              type: 'number',
+              description: 'Time-to-live in milliseconds (optional). Message is skipped after this duration. Critical priority messages ignore TTL. Example: 300000 for 5 minutes.',
             },
           },
           required: ['content'],
@@ -7662,7 +7699,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolListAgents();
         break;
       case 'send_message':
-        result = await toolSendMessage(args.content, args?.to, args?.reply_to, args?.channel, args?.priority);
+        result = await toolSendMessage(args.content, args?.to, args?.reply_to, args?.channel, args?.priority, args?.ttl_ms);
         break;
       case 'wait_for_reply':
         result = await toolWaitForReply(args?.timeout_seconds, args?.from);

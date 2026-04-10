@@ -3929,6 +3929,18 @@ const server = http.createServer(async (req, res) => {
 // Watches data files and pushes updates to connected clients instantly
 const sseClients = new Set();
 
+// Byte offset tracker for messages.jsonl — lets us push only NEW messages over SSE
+let sseMessagesOffset = 0;
+
+// Push a raw SSE payload to all connected clients, cleaning up dead ones
+function sseSend(payload) {
+  const dead = [];
+  for (const res of Array.from(sseClients)) {
+    try { res.write(payload); } catch { dead.push(res); }
+  }
+  for (const res of dead) sseClients.delete(res);
+}
+
 function sseNotifyAll(changeType) {
   // Generate notifications from agent state changes
   try {
@@ -3936,17 +3948,43 @@ function sseNotifyAll(changeType) {
     generateNotifications(agents);
   } catch {}
 
-  // Send typed change event so client can do targeted fetches
-  const eventData = changeType || 'update';
-  const dead = [];
-  for (const res of Array.from(sseClients)) {
+  // When messages changed: push targeted per-agent delivery events so IDE extensions
+  // can wake the right agent terminal immediately instead of waiting for polling.
+  if (changeType && changeType.includes('messages')) {
     try {
-      res.write(`data: ${(eventData || '').replace(/[\r\n]/g, '')}\n\n`);
-    } catch {
-      dead.push(res);
-    }
+      const msgFile = filePath('messages.jsonl');
+      if (fs.existsSync(msgFile)) {
+        const stat = fs.statSync(msgFile);
+        if (stat.size > sseMessagesOffset) {
+          const fd = fs.openSync(msgFile, 'r');
+          const buf = Buffer.alloc(stat.size - sseMessagesOffset);
+          fs.readSync(fd, buf, 0, buf.length, sseMessagesOffset);
+          fs.closeSync(fd);
+          sseMessagesOffset = stat.size;
+          const lines = buf.toString('utf8').trim().split(/\r?\n/);
+          for (const line of lines) {
+            try {
+              const msg = JSON.parse(line);
+              if (!msg.id || !msg.to) continue;
+              // Push a targeted delivery event per new message
+              const event = JSON.stringify({
+                type: 'message',
+                to: msg.to,
+                from: msg.from || '__system__',
+                id: msg.id,
+                preview: (msg.content || '').slice(0, 200),
+                ts: msg.timestamp || Date.now(),
+              });
+              sseSend(`event: message\ndata: ${event}\n\n`);
+            } catch {}
+          }
+        }
+      }
+    } catch {}
   }
-  for (const res of dead) sseClients.delete(res);
+
+  // Send typed change event so client can do targeted fetches
+  sseSend(`data: ${(changeType || 'update').replace(/[\r\n]/g, '')}\n\n`);
 }
 
 // Watch data directory for changes and push SSE notifications
@@ -4031,6 +4069,24 @@ server.on('error', (err) => {
 server.listen(PORT, LAN_MODE ? '0.0.0.0' : '127.0.0.1', () => {
   const dataDir = resolveDataDir();
   const lanIP = getLanIP();
+
+  // Initialise SSE message offset to current file end — only push NEW messages
+  try {
+    const msgFile = path.join(dataDir, 'messages.jsonl');
+    if (fs.existsSync(msgFile)) sseMessagesOffset = fs.statSync(msgFile).size;
+  } catch {}
+
+  // Write port to .neohive/dashboard.json so hook scripts auto-discover it
+  try {
+    const dashboardMeta = { port: PORT, url: `http://localhost:${PORT}`, pid: process.pid, started: new Date().toISOString() };
+    fs.writeFileSync(path.join(dataDir, 'dashboard.json'), JSON.stringify(dashboardMeta));
+  } catch {}
+
+  // Clean up on exit
+  process.on('exit', () => { try { fs.unlinkSync(path.join(resolveDataDir(), 'dashboard.json')); } catch {} });
+  process.on('SIGINT', () => process.exit(0));
+  process.on('SIGTERM', () => process.exit(0));
+
   console.log('');
   console.log(`  Neohive Dashboard v${pkg.version}`);
   console.log('  ============================================');

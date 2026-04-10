@@ -154,8 +154,8 @@
       "properties": {
         "neohive.serverUrl": {
           "type": "string",
-          "default": "http://localhost:4321",
-          "description": "URL of the Neohive HTTP server"
+          "default": "http://localhost:3000",
+          "description": "URL of the Neohive HTTP server (auto-detected from .neohive/dashboard.json when dashboard is running)"
         },
         "neohive.pollInterval": {
           "type": "number",

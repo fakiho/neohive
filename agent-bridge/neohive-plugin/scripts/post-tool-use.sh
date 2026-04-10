@@ -10,7 +10,13 @@
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // "unknown"' 2>/dev/null)
 NEOHIVE_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}/.neohive"
-NEOHIVE_URL="${NEOHIVE_SERVER_URL:-http://localhost:4321}"
+# Auto-discover dashboard URL: check dashboard.json written by the dashboard on startup
+_DASHBOARD_JSON="${NEOHIVE_DIR}/dashboard.json"
+if [ -z "$NEOHIVE_SERVER_URL" ] && [ -f "$_DASHBOARD_JSON" ]; then
+  _DISCOVERED=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('url',''))" "$_DASHBOARD_JSON" 2>/dev/null)
+  [ -n "$_DISCOVERED" ] && NEOHIVE_SERVER_URL="$_DISCOVERED"
+fi
+NEOHIVE_URL="${NEOHIVE_SERVER_URL:-http://localhost:${NEOHIVE_PORT:-3000}}"
 
 [ -d "$NEOHIVE_DIR" ] || exit 0
 
