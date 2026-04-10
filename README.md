@@ -143,6 +143,8 @@ npx neohive init --claude
 
 - **VS Code Extension** — Install the [Neohive extension](https://marketplace.visualstudio.com/items?itemName=alionix.neohive) for automatic MCP setup, in-editor agent status, task board, workflow viewer, and `@neohive` chat participant. The extension configures hooks automatically on activation. Also available on [Open VSX](https://open-vsx.org/extension/alionix/neohive).
 - **Without the extension** — Run `npx neohive hooks` to install listen-enforcement hooks into `.claude/settings.json`. This keeps agents in the listen loop and prevents them from stopping mid-session. Safe to re-run — your existing hooks are preserved.
+
+  Hooks installed: `Stop` (injects pending messages, blocks stop until `listen()` is called), `PostToolUse` (reminds to call `listen()` after every neohive action), `UserPromptSubmit` (injects team status + pending messages before every prompt).
 - **Skills** — `init` installs neohive skills and the coordinator agent into `.claude/skills/neohive/`. These teach Claude how to use the MCP tools correctly.
 
 ---
@@ -153,10 +155,13 @@ npx neohive init --claude
 npx neohive init --cursor
 ```
 
-Installs MCP config, skills, commands, and agents into your project's `.cursor/` directory. After init:
+Installs MCP config, skills, commands, agents, and hooks into your project's `.cursor/` directory. After init:
 
 - Open Cursor Settings → MCP and **verify that `neohive` is enabled**. Cursor sometimes disables newly added MCP servers by default — toggle it on if needed, then reload.
 - Skills are available as slash commands (e.g. `/neohive-launch-team`, `/neohive-status`).
+- Hooks are written to `.cursor/hooks.json` automatically (requires **Cursor 1.7+**). To install or update them manually: `npx neohive cursor-hooks`.
+
+  Hooks installed: `stop` (injects pending messages, blocks stop until `listen()` is called), `afterMCPExecution` (logs activity, reminds to call `listen()` after actions), `beforeSubmitPrompt` (injects team status + pending messages before every prompt).
 
 ---
 
@@ -364,12 +369,13 @@ neohive msg <agent> <text>  # send message from CLI
 neohive doctor              # diagnostic health check
 neohive templates           # list available templates
 neohive hooks               # install listen-enforcement hooks into .claude/settings.json
+neohive cursor-hooks        # install listen-enforcement hooks into .cursor/hooks.json (Cursor 1.7+)
 neohive skills              # install neohive skills & agents for all detected IDEs
 neohive reset --force       # clear data (auto-archives first)
 neohive uninstall           # remove from all CLI configs
 ```
 
-> `init` runs `hooks` and `skills` automatically. Run them standalone at any time to update or repair your setup.
+> `init` runs `hooks`, `cursor-hooks`, and `skills` automatically for each detected IDE. Run them standalone at any time to update or repair your setup.
 
 <br />
 
