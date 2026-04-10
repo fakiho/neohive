@@ -130,6 +130,7 @@ let sendLimit = 1; // default: 1 send per listen cycle (2 if addressed)
 let unaddressedSends = 0; // response budget: unaddressed sends counter
 let budgetResetTime = Date.now(); // resets every 60s
 let _channelSendTimes = {}; // per-channel rate limit sliding window
+let pushPort = null; // local HTTP port for receiving push messages from dashboard
 
 // cachedRead, invalidateCache imported from lib/file-io.js
 
@@ -1411,6 +1412,7 @@ function toolRegister(name, provider = null, skills = null) {
     const token = generateToken();
     const agentEntry = { pid: process.pid, ppid: process.ppid, timestamp: now, last_activity: now, last_listened_at: now, provider: provider || 'unknown', branch: currentBranch, token, started_at: now };
     if (process.env.CLAUDE_SESSION_ID) agentEntry.claude_session_id = process.env.CLAUDE_SESSION_ID;
+    if (pushPort) agentEntry.push_port = pushPort;
     agents[name] = agentEntry;
     saveAgents(agents);
     registeredName = name;
@@ -8120,6 +8122,61 @@ function autoReclaimDeadSeat() {
   }
 }
 
+// ── Sampling push server ──────────────────────────────────────────────────────
+// Starts a tiny local HTTP server so the dashboard can push messages directly
+// into this agent's context via MCP sampling/createMessage.
+// Port is random (OS-assigned), written to agents.json on register so the
+// dashboard knows where to POST.
+function startPushServer() {
+  const http = require('http');
+  const pushServer = http.createServer(async (req, res) => {
+    if (req.method !== 'POST' || req.url !== '/push') {
+      res.writeHead(404); res.end(); return;
+    }
+    let body = '';
+    req.on('data', d => { body += d; });
+    req.on('end', async () => {
+      res.writeHead(200); res.end('ok');
+      try {
+        const { content, from, id, priority } = JSON.parse(body);
+        const caps = server.getClientCapabilities();
+        if (!caps || !caps.sampling) return; // client doesn't support sampling
+
+        const label = priority && priority !== 'normal' ? ` [${priority.toUpperCase()}]` : '';
+        const text = `[NEOHIVE INCOMING MESSAGE${label} from ${from || '?'}]: ${content}\n\nProcess this message and respond. Call listen() when done.`;
+        await server.createMessage({
+          messages: [{ role: 'user', content: { type: 'text', text } }],
+          maxTokens: 2048,
+        });
+        log.info(`[push] Delivered message ${id} from ${from} via sampling`);
+      } catch (e) {
+        log.debug('[push] sampling failed:', e.message);
+      }
+    });
+  });
+
+  pushServer.listen(0, '127.0.0.1', () => {
+    pushPort = pushServer.address().port;
+    log.info(`[push] Push server listening on port ${pushPort}`);
+    // If agent is already registered (auto-reclaim scenario), write push_port now
+    if (registeredName) {
+      try {
+        lockAgentsFile();
+        const agents = getAgents(true);
+        if (agents[registeredName]) {
+          agents[registeredName].push_port = pushPort;
+          saveAgents(agents);
+        }
+      } catch (e) {
+        log.debug('[push] Failed to write push_port to agents.json:', e.message);
+      } finally {
+        unlockAgentsFile();
+      }
+    }
+  });
+  pushServer.unref(); // don't keep process alive just for push server
+}
+
 async function main() {
   try {
     ensureDataDir();
@@ -8271,6 +8328,7 @@ async function main() {
       startStdinActivityTracker();
       const transport = new StdioServerTransport();
       await server.connect(transport);
+      startPushServer(); // start after connect so server.getClientCapabilities() works
     } catch (e) {
       console.error('ERROR: MCP server failed to start: ' + e.message);
       console.error('Fix: Run "npx neohive doctor" to check your setup.');

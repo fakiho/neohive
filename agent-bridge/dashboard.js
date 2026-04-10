@@ -3929,6 +3929,52 @@ const server = http.createServer(async (req, res) => {
 // Watches data files and pushes updates to connected clients instantly
 const sseClients = new Set();
 
+// ── Sampling push relay ───────────────────────────────────────────────────────
+// When a new message arrives, POST it to the target agent's local push server
+// (started by server.js on a random port, written to agents.json as push_port).
+// The push server calls MCP sampling/createMessage to inject the message directly
+// into the agent's LLM context — no listen() needed.
+function samplingPushToAgent(msg, dataDir) {
+  try {
+    const to = msg.to;
+    // Only push to named agents (not __group__, __all__, __user__)
+    if (!to || to.startsWith('__')) return;
+    const agentsFile = path.join(dataDir, 'agents.json');
+    if (!fs.existsSync(agentsFile)) return;
+    const agents = JSON.parse(fs.readFileSync(agentsFile, 'utf8'));
+    const agent = agents[to];
+    if (!agent || !agent.push_port) return;
+    // Don't push to dead agents
+    if (agent.pid && !isPidAlive(agent.pid)) return;
+
+    const payload = JSON.stringify({
+      content: msg.content || '',
+      from: msg.from || '__system__',
+      id: msg.id || '',
+      priority: msg.priority || 'normal',
+    });
+
+    const http = require('http');
+    const req = http.request({
+      hostname: '127.0.0.1',
+      port: agent.push_port,
+      path: '/push',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+    });
+    req.setTimeout(2000, () => req.destroy());
+    req.on('error', () => {}); // fire-and-forget
+    req.write(payload);
+    req.end();
+  } catch {}
+}
+
+// Helper: check if a PID is alive (dashboard-side, no activity fallback needed)
+function isPidAlive(pid) {
+  if (!pid) return false;
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
 // Byte offset tracker for messages.jsonl — lets us push only NEW messages over SSE
 let sseMessagesOffset = 0;
 
@@ -3966,7 +4012,7 @@ function sseNotifyAll(changeType) {
             try {
               const msg = JSON.parse(line);
               if (!msg.id || !msg.to) continue;
-              // Push a targeted delivery event per new message
+              // Push a targeted delivery event per new message (for IDE extensions)
               const event = JSON.stringify({
                 type: 'message',
                 to: msg.to,
@@ -3976,6 +4022,8 @@ function sseNotifyAll(changeType) {
                 ts: msg.timestamp || Date.now(),
               });
               sseSend(`event: message\ndata: ${event}\n\n`);
+              // Also push directly into the target agent's context via sampling push server
+              samplingPushToAgent(msg, resolveDataDir());
             } catch {}
           }
         }
