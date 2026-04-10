@@ -47,6 +47,7 @@ function printUsage() {
     npx neohive templates           List available team templates
     npx neohive reset --force       Clear all data (auto-archives first)
     npx neohive hooks               Install listen-enforcement hooks into .claude/settings.json
+    npx neohive cursor-hooks        Install listen-enforcement hooks into .cursor/hooks.json
     npx neohive skills              Install neohive skills & agents for all detected IDEs
     npx neohive uninstall           Remove from all CLI configs
     npx neohive help                Show this help
@@ -870,8 +871,9 @@ function init() {
     }
   }
 
-  // Auto-install hooks for Claude targets
+  // Auto-install hooks for detected targets
   if (targets.includes('claude')) installHooks();
+  if (targets.includes('cursor')) installCursorHooks();
 
   // Add .neohive/ and MCP config files to .gitignore
   const gitignoreEntries = ['.neohive/', '.mcp.json', '.cursor/mcp.json', '.codex/', '.gemini/'];
@@ -1572,6 +1574,59 @@ function installHooks() {
   console.log('  Restart Claude Code for changes to take effect.\n');
 }
 
+// ─── Cursor hooks ─────────────────────────────────────────────────────────────
+// Merges listen-enforcement hooks into .cursor/hooks.json (Cursor 1.7+).
+// Safe to re-run: adds neohive entries, preserves all user hooks.
+function installCursorHooks() {
+  const cwd = process.cwd();
+  const cursorDir = path.join(cwd, '.cursor');
+  const hooksPath = path.join(cursorDir, 'hooks.json');
+  const scriptsDir = path.join(__dirname, 'neohive-plugin', 'scripts');
+
+  const stopScript = path.join(scriptsDir, 'cursor-stop.sh');
+  const postMcpScript = path.join(scriptsDir, 'cursor-post-mcp.sh');
+  const beforePromptScript = path.join(scriptsDir, 'cursor-before-prompt.sh');
+
+  // Make scripts executable
+  for (const s of [stopScript, postMcpScript, beforePromptScript]) {
+    try { fs.chmodSync(s, 0o755); } catch {}
+  }
+
+  let existing = { version: 1, hooks: {} };
+  if (fs.existsSync(hooksPath)) {
+    try { existing = JSON.parse(fs.readFileSync(hooksPath, 'utf8')); } catch {
+      fs.copyFileSync(hooksPath, hooksPath + '.backup');
+      console.log('  [warn] Existing hooks.json was invalid — backed up.');
+    }
+  }
+  if (!existing.hooks) existing.hooks = {};
+
+  const neohiveHooks = {
+    stop:                [{ _neohive: 'enforce-listen', command: stopScript }],
+    afterMCPExecution:   [{ _neohive: 'post-mcp',      command: postMcpScript }],
+    beforeSubmitPrompt:  [{ _neohive: 'before-prompt',  command: beforePromptScript }],
+  };
+
+  let added = 0, updated = 0;
+  for (const [event, entries] of Object.entries(neohiveHooks)) {
+    if (!existing.hooks[event]) existing.hooks[event] = [];
+    for (const entry of entries) {
+      const idx = existing.hooks[event].findIndex(e => e._neohive === entry._neohive);
+      if (idx === -1) { existing.hooks[event].push(entry); added++; }
+      else { existing.hooks[event][idx] = entry; updated++; }
+    }
+  }
+
+  fs.mkdirSync(cursorDir, { recursive: true });
+  fs.writeFileSync(hooksPath, JSON.stringify(existing, null, 2) + '\n', 'utf8');
+
+  console.log('\n  Neohive hooks installed into .cursor/hooks.json');
+  if (added)   console.log(`  [ok] Added:   ${added} hook(s)`);
+  if (updated) console.log(`  [ok] Updated: ${updated} hook(s) (already present)`);
+  console.log('  Your existing hooks were preserved.');
+  console.log('  Requires Cursor 1.7+. Reload Cursor window for changes to take effect.\n');
+}
+
 switch (command) {
   case 'init':
     init();
@@ -1605,6 +1660,9 @@ switch (command) {
     break;
   case 'hooks':
     installHooks();
+    break;
+  case 'cursor-hooks':
+    installCursorHooks();
     break;
   case 'skills':
     installSkills(detectCLIs().length ? detectCLIs() : ['claude', 'cursor', 'antigravity'], process.cwd());
