@@ -11,7 +11,8 @@
     "dashboard": "node dashboard.js",
     "test": "echo \"No tests configured\"",
     "test:e2e-scroll": "node scripts/test-message-scroll-anchor.mjs",
-    "check-paths": "node scripts/check-portable-paths.mjs"
+    "check-paths": "node scripts/check-portable-paths.mjs",
+    "acp-spike": "node scripts/acp-spike.mjs"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -62,6 +63,7 @@
     "@modelcontextprotocol/sdk": "1.27.1"
   },
   "devDependencies": {
+    "@agentclientprotocol/sdk": "^0.18.2",
     "playwright": "^1.59.1"
   }
 }

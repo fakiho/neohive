@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **MR-0 (ACP Phase 0 spike)** — `@agentclientprotocol/sdk` (devDependency); `scripts/acp-spike.mjs` minimal stdio `AgentSideConnection` echo agent; `docs/acp-mr0-zed-smoke.md` Zed smoke instructions (`npm run acp-spike`). No Neohive hub or MCP surface changes.
+
 ## [6.3.0] - 2026-04-05
 
 ### Added
