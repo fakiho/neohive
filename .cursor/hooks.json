@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "_neohive": "enforce-listen",
+        "command": "agent-bridge/neohive-plugin/scripts/cursor-stop.sh",
+        "loop_limit": 8
+      }
+    ],
+    "afterMCPExecution": [
+      {
+        "_neohive": "post-mcp",
+        "command": "agent-bridge/neohive-plugin/scripts/cursor-post-mcp.sh"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "_neohive": "before-prompt",
+        "command": "agent-bridge/neohive-plugin/scripts/cursor-before-prompt.sh"
+      }
+    ]
+  }
+}
