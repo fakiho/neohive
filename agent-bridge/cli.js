@@ -1652,9 +1652,17 @@ function installCursorHooks() {
   const stopScript = path.join(scriptsDir, 'cursor-stop.sh');
   const postMcpScript = path.join(scriptsDir, 'cursor-post-mcp.sh');
   const beforePromptScript = path.join(scriptsDir, 'cursor-before-prompt.sh');
+  const hookLib = path.join(scriptsDir, 'cursor_hook_lib.py');
+
+  /** Prefer repo-relative hook paths so .cursor/hooks.json is portable across machines. */
+  function hookCommand(absPath) {
+    const rel = path.relative(cwd, absPath);
+    if (!rel || rel.startsWith('..')) return absPath.split(path.sep).join('/');
+    return rel.split(path.sep).join('/');
+  }
 
   // Make scripts executable
-  for (const s of [stopScript, postMcpScript, beforePromptScript]) {
+  for (const s of [stopScript, postMcpScript, beforePromptScript, hookLib]) {
     try { fs.chmodSync(s, 0o755); } catch {}
   }
 
@@ -1668,9 +1676,15 @@ function installCursorHooks() {
   if (!existing.hooks) existing.hooks = {};
 
   const neohiveHooks = {
-    stop:                [{ _neohive: 'enforce-listen', command: stopScript }],
-    afterMCPExecution:   [{ _neohive: 'post-mcp',      command: postMcpScript }],
-    beforeSubmitPrompt:  [{ _neohive: 'before-prompt',  command: beforePromptScript }],
+    stop: [
+      {
+        _neohive: 'enforce-listen',
+        command: hookCommand(stopScript),
+        loop_limit: 8,
+      },
+    ],
+    afterMCPExecution: [{ _neohive: 'post-mcp', command: hookCommand(postMcpScript) }],
+    beforeSubmitPrompt: [{ _neohive: 'before-prompt', command: hookCommand(beforePromptScript) }],
   };
 
   let added = 0, updated = 0;

@@ -163,7 +163,7 @@ Installs MCP config, skills, commands, agents, and hooks into your project's `.c
 - Skills are available as slash commands (e.g. `/neohive-launch-team`, `/neohive-status`).
 - Hooks are written to `.cursor/hooks.json` automatically (requires **Cursor 1.7+**). To install or update them manually: `npx neohive cursor-hooks`.
 
-  Hooks installed: `stop` (injects pending messages, blocks stop until `listen()` is called), `afterMCPExecution` (logs activity, reminds to call `listen()` after actions), `beforeSubmitPrompt` (injects team status + pending messages before every prompt).
+  Hooks installed: `stop` (injects pending messages, blocks stop until `listen()` is called), `afterMCPExecution` (logs activity, reminds to call `listen()` after mutating actions), `beforeSubmitPrompt` (injects team status + pending messages before every prompt). **QA checklist:** [`docs/reference/cursor-neohive-hooks.md`](docs/reference/cursor-neohive-hooks.md).
 
 ---
 

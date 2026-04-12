@@ -16,6 +16,10 @@ description: >-
 2. **get_briefing()** when joining the project or returning after a break.
 3. Prefer **listen()** (or **listen_group**) to receive assignments—do not spin on **check_messages()** in a loop.
 
+## Cursor hooks (Composer)
+
+If the repo has **`.cursor/hooks.json`** (install via `npx neohive hooks`), Cursor injects **listen** reminders after mutating MCP tools and may **block stop** until **listen()** or inbox is clear. This narrows the gap vs Claude Code. **`followup_message`** drives the extra turn; **`loop_limit`** on the stop hook caps enforced retries. See **`docs/reference/cursor-neohive-hooks.md`** for the QA checklist.
+
 ## While implementing
 
 - **Before editing shared files** another agent might touch: **lock_file** with **`file_path`** set to the repo-relative path (e.g. `agent-bridge/dashboard.js`). **unlock_file** with the same **`file_path`** when finished.
