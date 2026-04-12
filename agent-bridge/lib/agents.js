@@ -219,6 +219,41 @@ function hubRegisterAgent(name, provider = null, skills = null) {
   }
 }
 
+/**
+ * Hub / ACP: remove agent row from agents.json (caller PID must match row PID).
+ * Does not delete profiles or agent-cards (persistent metadata).
+ */
+function hubUnregisterAgent(name) {
+  let safeName;
+  try {
+    safeName = sanitizeName(name);
+  } catch (e) {
+    return { error: e.message };
+  }
+  lockAgentsFile();
+  try {
+    const all = getAgents(true);
+    if (!all[safeName]) {
+      return { success: true, already_gone: true };
+    }
+    if (all[safeName].pid !== process.pid) {
+      return {
+        error: `Cannot unregister "${safeName}": owned by PID ${all[safeName].pid}, caller is ${process.pid}`,
+      };
+    }
+    delete all[safeName];
+    saveAgents(all);
+    try {
+      fs.unlinkSync(heartbeatFile(safeName));
+    } catch {
+      /* already gone */
+    }
+    return { success: true, name: safeName };
+  } finally {
+    unlockAgentsFile();
+  }
+}
+
 module.exports = {
   isPidAlive, setAutonomousModeCheck,
   getAgents, saveAgents,
@@ -227,5 +262,6 @@ module.exports = {
   getProfiles, saveProfiles,
   listAgentsMcpPayload,
   hubRegisterAgent,
+  hubUnregisterAgent,
   lockAgentsFile, unlockAgentsFile,
 };

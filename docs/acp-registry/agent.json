@@ -1,0 +1,15 @@
+{
+  "name": "neohive",
+  "version": "6.4.2",
+  "description": "Multi-agent collaboration hub — ACP bridge to shared .neohive/ (same hub as MCP).",
+  "command": "node",
+  "args": ["${workspaceFolder}/node_modules/neohive/acp-agent.mjs"],
+  "env": {
+    "NEOHIVE_DATA_DIR": "${workspaceFolder}/.neohive",
+    "NEOHIVE_ACP_AGENT_NAME": "acp-${workspaceName}"
+  },
+  "capabilities": {
+    "mcpBridge": true
+  },
+  "_comment": "Draft for agentclientprotocol/registry PR — align paths and version with npm publish; use static NEOHIVE_ACP_AGENT_NAME if the client does not expand tokens (see SPEC.md §7.1)."
+}

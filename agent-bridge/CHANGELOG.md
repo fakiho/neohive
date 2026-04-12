@@ -4,6 +4,8 @@
 
 ### Added
 
+- **ACP dual-node router** — `acp-orchestrator.mjs` (`WorkerSession`, `ClientSideConnection` to headless ACP workers): forwards `sessionUpdate` / `requestPermission` (with MVP fallback) and optional `readTextFile` / `writeTextFile` to Zed; hub poll via `setTimeout` chain + in-flight guard; PID-safe **`hub.unregister`** / **`hubUnregisterAgent`**. **`acp-agent.mjs`**: `dispatch worker=<id> cwd=<path>` (+ JSON `action: dispatch`), session **`allowedRoots`**, teardown on cancel / connection abort; **`npx neohive init --acp-worker`** + **`templates/acp-workers.json`**. **Docs:** `docs/acp-registry/` draft for upstream registry PR; README / `docs/documentation.md` / `docs/reference/cli.md` updates. **`package.json` `files`:** `acp-orchestrator.mjs`.
+
 - **`messages(action="consume", drain=true)`** — full-scan `messages.jsonl` from offset 0, ignore `limit`, return and mark consumed all pending inbox rows in one non-blocking call (coordinator batch drain).
 - **`[STATUS]` system broadcasts** — `broadcastSystemMessage` / `lib/messaging` skip `messages.jsonl` when content starts with `[STATUS]`; still append to `history.jsonl` so the dashboard and history APIs see liveness lines while agents do not.
 

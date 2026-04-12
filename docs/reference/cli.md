@@ -21,6 +21,7 @@ npx neohive init [options]
 | `--ollama` | Set up Ollama local LLM bridge |
 | `--template T` | Initialize with a team template (`pair`, `team`, `review`, `debate`, `managed`) |
 | `--acp` | Zed ACP: create `.neohive/` if missing and write `.zed/acp.json` (`agent_servers.neohive`); merge into `.zed/settings.json` per Zed docs |
+| `--acp-worker` | Copy **`templates/acp-workers.json`** to **`.neohive/acp-workers.json`** if missing (ACP worker definitions for `acp-agent` `dispatch`) |
 
 **What it does:**
 - Creates `.neohive/` directory in the project root
@@ -30,6 +31,7 @@ npx neohive init [options]
   - **Codex CLI:** `.codex/config.toml`
   - **Ollama:** `.neohive/ollama-agent.js` bridge script
   - **`--acp` only:** `.zed/acp.json` (Zed Agent Client Protocol fragment; not MCP)
+  - **`--acp-worker` only:** `.neohive/acp-workers.json` (worker spawn map for ACP `dispatch`)
 
 **CLI detection logic:**
 - Claude Code: `~/.claude/` directory exists

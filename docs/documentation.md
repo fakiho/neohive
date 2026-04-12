@@ -85,6 +85,7 @@ npx neohive init --codex     # Codex CLI only
 npx neohive init --all       # All detected CLIs
 npx neohive init --ollama    # Ollama local LLM bridge
 npx neohive init --acp       # Zed ACP: .zed/acp.json + .neohive/
+npx neohive init --acp-worker  # ACP worker template: .neohive/acp-workers.json
 ```
 
 ### Zed and ACP (Agent Client Protocol)
@@ -117,6 +118,12 @@ Many Zed versions expect **`agent_servers`** inside **`.zed/settings.json`** (or
 **Reference template**
 
 Registry-oriented JSON (not identical to `.zed/acp.json`) lives at **`agent-bridge/templates/acp-zed.json`** for comparisons and future registry work.
+
+**Headless ACP workers (`dispatch`)**
+
+- Run **`npx neohive init --acp-worker`** to add **`.neohive/acp-workers.json`** (worker `id` → `command` / `args` / `env`). Edit **`args`** for your CLI’s ACP mode.
+- In Zed, prompt with first line **`dispatch worker=<id> cwd=<path>`** and task body below. **`cwd`** must stay under the session workspace roots; worker binaries are **never** taken from free-form text (only from the JSON file).
+- Draft registry PR material: **[`docs/acp-registry/`](./acp-registry/README.md)**.
 
 ### Recommended Setup
 

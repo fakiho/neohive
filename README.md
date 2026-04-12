@@ -284,6 +284,18 @@ Zed’s documented hook for custom agents is **`agent_servers`** in **settings**
 
 For ACP Registry–style copy-paste (and comparison with `init --acp`), see **`agent-bridge/templates/acp-zed.json`**.
 
+### ACP Registry (upstream submission)
+
+Draft **[`docs/acp-registry/agent.json`](docs/acp-registry/agent.json)** is for opening a PR to **[agentclientprotocol/registry](https://github.com/agentclientprotocol/registry)**; see **[`docs/acp-registry/README.md`](docs/acp-registry/README.md)**.
+
+### Orchestrating headless ACP workers
+
+Neohive can spawn an ACP **worker** subprocess from Zed via the **`dispatch`** command in **`acp-agent.mjs`** (dual-node router). The same **`.neohive/`** hub applies: MCP agents can `send_message` to the worker’s hub name while the session runs.
+
+1. **`npx neohive init --acp-worker`** — creates **`.neohive/acp-workers.json`** (map of worker `id` → `command` / `args` / `env`). Edit **`args`** for your ACP-capable CLI (e.g. Gemini CLI — align with upstream **`zedIntegration.ts`**).
+2. In Zed, use a prompt whose first line is **`dispatch worker=<id> cwd=<path>`**, then the task body on following lines. **`cwd`** must fall under the workspace roots Zed supplied for the session (`path.resolve` + prefix check; `..` escapes are rejected).
+3. **`command` / `args` are never taken from free-form prompt text** — only from **`acp-workers.json`** (trust boundary). Errors from spawn or ACP are streamed back as text chunks.
+
 <br />
 
 ## 🧩 Team Templates

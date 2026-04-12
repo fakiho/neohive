@@ -18,12 +18,13 @@ import * as acp from '@agentclientprotocol/sdk';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { Readable, Writable } from 'node:stream';
+import { buildWorkerSessionFromConfig, isCwdAllowed } from './acp-orchestrator.mjs';
 
 const require = createRequire(import.meta.url);
 const hub = require('./core/hub.js');
 
 const STDERR_BANNER =
-  '[neohive] acp-agent (MR-2): ACP stdio ↔ core/hub.js — set NEOHIVE_DATA_DIR; NEOHIVE_ACP_AGENT_NAME optional. Commands: help | register | send_message | list_agents | get_briefing | listen\n';
+  '[neohive] acp-agent: ACP stdio ↔ core/hub.js (+ optional worker dispatch). Set NEOHIVE_DATA_DIR; NEOHIVE_ACP_AGENT_NAME optional. Commands: help | register | send_message | list_agents | get_briefing | listen | dispatch\n';
 
 process.stderr.write(STDERR_BANNER);
 
@@ -59,6 +60,10 @@ function extractUserText(promptBlocks) {
 }
 
 const HELP_TEXT = `Neohive ACP hub commands (MVP):
+• dispatch — spawn headless ACP worker (see .neohive/acp-workers.json); first line:
+    dispatch worker=<id> cwd=<path>
+    <task body>
+  cwd must be under the session workspace roots from Zed. Same-machine trust only.
 • register [name] — register with Neohive (optional name; max 20 chars alnum/_/-)
 • send_message — block format:
     send_message
@@ -72,7 +77,7 @@ const HELP_TEXT = `Neohive ACP hub commands (MVP):
 • listen [from:Name] — consume next message for this agent (optional from-filter)
 • help — this text
 
-JSON: {"action":"send_message","to":"X","content":"..."} | list_agents | get_briefing | listen | register | help
+JSON: {"action":"dispatch","worker":"gemini","cwd":"...","content":"..."} | send_message | list_agents | get_briefing | listen | register | help
 `;
 
 async function pushText(connection, sessionId, text, signal) {
@@ -164,6 +169,18 @@ function parsePromptTurn(text, defaultName) {
       }
       return { kind: 'listen', from };
     }
+    case 'dispatch': {
+      const head = lines[0] || '';
+      const mW = head.match(/\bworker\s*=\s*(\S+)/i);
+      const mC = head.match(/\bcwd\s*=\s*(\S+)/i);
+      const body = lines.slice(1).join('\n').trim();
+      return {
+        kind: 'dispatch',
+        worker: mW ? mW[1] : null,
+        cwd: mC ? mC[1] : null,
+        body,
+      };
+    }
     case 'help':
     case '?':
       return { kind: 'help' };
@@ -175,8 +192,65 @@ function parsePromptTurn(text, defaultName) {
   }
 }
 
+async function runDispatch(agent, sessionId, turn, signal) {
+  const session = agent.sessions.get(sessionId);
+  if (!session) {
+    return;
+  }
+  const allowedRoots = session.allowedRoots && session.allowedRoots.length > 0 ? session.allowedRoots : [process.cwd()];
+
+  if (!turn.worker) {
+    await pushText(agent.connection, sessionId, '[dispatch] missing worker= id (see .neohive/acp-workers.json)', signal);
+    return;
+  }
+
+  const cwdCandidate = turn.cwd || allowedRoots[0];
+  if (!isCwdAllowed(cwdCandidate, allowedRoots)) {
+    await pushText(
+      agent.connection,
+      sessionId,
+      `[dispatch] cwd not under allowed workspace roots: ${cwdCandidate}`,
+      signal,
+    );
+    return;
+  }
+
+  const resolvedCwd = path.resolve(cwdCandidate);
+  const built = buildWorkerSessionFromConfig(turn.worker, sessionId, agent.connection, {
+    spawnCwd: resolvedCwd,
+  });
+  if (built.error) {
+    await pushText(agent.connection, sessionId, `[dispatch] ${built.error}`, signal);
+    return;
+  }
+
+  const ws = built.workerSession;
+  session.worker = ws;
+  try {
+    if (signal.aborted) {
+      return;
+    }
+    await ws.init(resolvedCwd);
+    ws.startHubPoll(2000);
+    if (signal.aborted) {
+      return;
+    }
+    await ws.prompt(turn.body || '');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await pushText(agent.connection, sessionId, `[dispatch] worker error: ${msg}`, signal);
+  } finally {
+    try {
+      ws.destroy();
+    } catch {
+      /* ignore */
+    }
+    session.worker = null;
+  }
+}
+
 /** @returns {Promise<string|undefined>} new agent name when register succeeds */
-async function runJsonAction(connection, sessionId, agentName, j, signal) {
+async function runJsonAction(connection, sessionId, agentName, j, signal, neohiveAgent) {
   const a = String(j.action || '').toLowerCase().replace(/-/g, '_');
   switch (a) {
     case 'register':
@@ -206,6 +280,21 @@ async function runJsonAction(connection, sessionId, agentName, j, signal) {
     case 'listen': {
       const r = hub.listen(agentName, { from: j.from || undefined });
       await pushText(connection, sessionId, formatResult('listen', r), signal);
+      return undefined;
+    }
+    case 'dispatch': {
+      const body =
+        typeof j.content === 'string'
+          ? j.content
+          : typeof j.body === 'string'
+            ? j.body
+            : '';
+      await runDispatch(neohiveAgent, sessionId, {
+        kind: 'dispatch',
+        worker: j.worker,
+        cwd: j.cwd || null,
+        body,
+      }, signal);
       return undefined;
     }
     case 'help':
@@ -240,12 +329,23 @@ class NeohiveAcpAgent {
   /** @param {object} connection */
   constructor(connection) {
     this.connection = connection;
-    /** @type {Map<string, { pendingPrompt: AbortController | null }>} */
+    /** @type {Map<string, { pendingPrompt: AbortController | null, worker: object | null, allowedRoots: string[] }>} */
     this.sessions = new Map();
     this.defaultName = resolveAgentName();
     /** @type {string | null} */
     this.agentName = null;
     this.initError = null;
+
+    connection.signal.addEventListener('abort', () => {
+      for (const [, ses] of this.sessions) {
+        try {
+          ses.worker?.destroy();
+        } catch {
+          /* ignore */
+        }
+        ses.worker = null;
+      }
+    });
   }
 
   async initialize(_params) {
@@ -272,11 +372,21 @@ class NeohiveAcpAgent {
     };
   }
 
-  async newSession(_params) {
+  async newSession(params) {
     const sessionId = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
-    this.sessions.set(sessionId, { pendingPrompt: null });
+    const allowedRoots = [];
+    if (params?.cwd) {
+      allowedRoots.push(path.resolve(params.cwd));
+    }
+    for (const d of params?.additionalDirectories || []) {
+      if (d) allowedRoots.push(path.resolve(d));
+    }
+    if (allowedRoots.length === 0) {
+      allowedRoots.push(process.cwd());
+    }
+    this.sessions.set(sessionId, { pendingPrompt: null, worker: null, allowedRoots });
     return { sessionId };
   }
 
@@ -322,6 +432,7 @@ class NeohiveAcpAgent {
           agentName,
           turn.payload,
           signal,
+          this,
         );
         if (renamed) this.agentName = renamed;
       } else if (turn.kind === 'register') {
@@ -344,6 +455,8 @@ class NeohiveAcpAgent {
       } else if (turn.kind === 'listen') {
         const r = hub.listen(agentName, { from: turn.from || undefined });
         await pushText(this.connection, params.sessionId, formatResult('listen', r), signal);
+      } else if (turn.kind === 'dispatch') {
+        await runDispatch(this, params.sessionId, turn, signal);
       } else {
         const extra = turn.unknown ? `Unknown command "${turn.unknown}".\n\n` : '';
         await pushText(this.connection, params.sessionId, extra + HELP_TEXT, signal);
@@ -360,7 +473,22 @@ class NeohiveAcpAgent {
   }
 
   async cancel(params) {
-    this.sessions.get(params.sessionId)?.pendingPrompt?.abort();
+    const session = this.sessions.get(params.sessionId);
+    session?.pendingPrompt?.abort();
+    const w = session?.worker;
+    if (w) {
+      try {
+        await w.cancel();
+      } catch {
+        /* ignore */
+      }
+      try {
+        w.destroy();
+      } catch {
+        /* ignore */
+      }
+      session.worker = null;
+    }
   }
 }
 

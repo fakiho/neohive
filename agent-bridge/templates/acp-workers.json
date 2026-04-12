@@ -1,0 +1,11 @@
+{
+  "_readme": "Worker definitions for ACP dispatch from Zed (acp-agent.mjs). Run: npx neohive init --acp-worker. Set args to match your ACP-capable CLI (e.g. Gemini CLI — see upstream zedIntegration.ts).",
+  "workers": [
+    {
+      "id": "gemini",
+      "command": "gemini",
+      "args": [],
+      "env": {}
+    }
+  ]
+}

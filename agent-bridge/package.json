@@ -38,7 +38,8 @@
     "LICENSE",
     "SECURITY.md",
     "CHANGELOG.md",
-    "acp-agent.mjs"
+    "acp-agent.mjs",
+    "acp-orchestrator.mjs"
   ],
   "keywords": [
     "mcp",

@@ -2,7 +2,7 @@
 
 /**
  * MR-1 — Hub façade for ACP (and future non-MCP callers).
- * Five exports only; each delegates to lib/agents or lib/messaging.
+ * Delegates to lib/agents or lib/messaging (register + unregister + messaging helpers).
  * MCP server is unchanged; wire this from MR-2 acp-agent.mjs via createRequire.
  */
 
@@ -29,10 +29,15 @@ function listen(agentName, opts) {
   return messaging.hubListenNext(agentName, opts || {});
 }
 
+function unregister(name) {
+  return agents.hubUnregisterAgent(name);
+}
+
 module.exports = {
   register,
   sendMessage,
   listAgents,
   getBriefing,
   listen,
+  unregister,
 };

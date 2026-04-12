@@ -38,6 +38,7 @@ function printUsage() {
     npx neohive init --ollama       Setup Ollama local LLM bridge
     npx neohive init --template T   Initialize with a team template
     npx neohive init --acp         Zed ACP: write .zed/acp.json (+ .neohive/)
+    npx neohive init --acp-worker  ACP workers: copy acp-workers.json template into .neohive/
     npx neohive serve               Run MCP server in HTTP mode (port 4321)
     npx neohive serve --port 8080   Custom port for HTTP server
     npx neohive dashboard           Launch web dashboard (http://localhost:3000)
@@ -722,6 +723,23 @@ function setupZedAcp(cwd) {
   console.log('  [ok] Zed ACP: .zed/acp.json (agent_servers.neohive)');
 }
 
+// Headless ACP worker definitions for acp-agent dispatch (dual-node router).
+function setupAcpWorkersFile(cwd) {
+  const src = path.join(__dirname, 'templates', 'acp-workers.json');
+  const dest = path.join(cwd, '.neohive', 'acp-workers.json');
+  if (!fs.existsSync(src)) {
+    console.log('  [warn] templates/acp-workers.json not found in package');
+    return;
+  }
+  if (fs.existsSync(dest)) {
+    console.log('  [skip] .neohive/acp-workers.json already exists');
+    return;
+  }
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
+  console.log('  [ok] .neohive/acp-workers.json (edit command/args for your ACP worker)');
+}
+
 // Setup Ollama agent bridge script
 function setupOllama(serverPath, cwd) {
   const dir = dataDir(cwd);
@@ -874,6 +892,18 @@ function init() {
     console.log('  Merge `agent_servers` from .zed/acp.json into Zed project settings if needed');
     console.log('  (`zed: open project settings` → .zed/settings.json). See README “Zed + ACP”.');
     console.log('  Requires: npm install neohive (path uses node_modules/neohive/acp-agent.mjs).');
+    console.log('');
+    return;
+  }
+
+  if (flag === '--acp-worker') {
+    const neohiveDir = dataDir(cwd);
+    if (!fs.existsSync(neohiveDir)) {
+      fs.mkdirSync(neohiveDir, { recursive: true, mode: 0o700 });
+      console.log('  [ok] Created ' + path.basename(neohiveDir) + '/');
+    }
+    setupAcpWorkersFile(cwd);
+    console.log('  For Zed dispatch, use hub commands in acp-agent (see README “Orchestrating headless ACP workers”).');
     console.log('');
     return;
   }
