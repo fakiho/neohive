@@ -37,6 +37,7 @@ function printUsage() {
     npx neohive mcp                 Start MCP stdio server (used internally by IDE configs)
     npx neohive init --ollama       Setup Ollama local LLM bridge
     npx neohive init --template T   Initialize with a team template
+    npx neohive init --acp         ACP bridge config (stub until MR-3)
     npx neohive serve               Run MCP server in HTTP mode (port 4321)
     npx neohive serve --port 8080   Custom port for HTTP server
     npx neohive dashboard           Launch web dashboard (http://localhost:3000)
@@ -811,6 +812,12 @@ function init() {
   console.log('');
 
   let targets = [];
+
+  if (flag === '--acp') {
+    console.log('ACP configuration coming in MR-3 — flag registered.');
+    console.log('');
+    return;
+  }
 
   if (flag === '--claude') {
     targets = ['claude'];
