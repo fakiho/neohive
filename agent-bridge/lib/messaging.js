@@ -53,6 +53,11 @@ function sendSystemMessage(toAgent, content) {
   fs.appendFileSync(getHistoryFile(recipientBranch), JSON.stringify(msg) + '\n');
 }
 
+// Match server.js: [STATUS] broadcasts are history/dashboard-only (not agent inbox).
+function isHistoryOnlySystemStatus(content) {
+  return typeof content === 'string' && content.startsWith('[STATUS]');
+}
+
 function broadcastSystemMessage(content, excludeAgent = null) {
   state.messageSeq++;
   const msg = {
@@ -66,7 +71,9 @@ function broadcastSystemMessage(content, excludeAgent = null) {
   };
   if (excludeAgent) msg.exclude_agent = excludeAgent;
   ensureDataDir();
-  fs.appendFileSync(getMessagesFile(state.currentBranch), JSON.stringify(msg) + '\n');
+  if (!isHistoryOnlySystemStatus(content)) {
+    fs.appendFileSync(getMessagesFile(state.currentBranch), JSON.stringify(msg) + '\n');
+  }
   fs.appendFileSync(getHistoryFile(state.currentBranch), JSON.stringify(msg) + '\n');
 }
 
@@ -165,15 +172,73 @@ function messageVisibleToAgent(m, agentName) {
   return false;
 }
 
+/** @returns {number} batch size 1–20 (default 1) for hub listen */
+function hubParseListenN(n) {
+  if (n == null || n === '') return 1;
+  const x = Number(n);
+  if (!Number.isFinite(x)) return 1;
+  const i = Math.floor(x);
+  if (i < 1) return 1;
+  return Math.min(20, i);
+}
+
 function hubListenNext(agentName, opts = {}) {
   if (!agentName || typeof agentName !== 'string') return { error: 'agentName is required' };
+  const n = hubParseListenN(opts.n);
   const branch = opts.branch || state.currentBranch || 'main';
   const fromFilter = opts.from || null;
   const mf = getMessagesFile(branch);
-  if (!fs.existsSync(mf)) return { success: true, message: null };
+  if (!fs.existsSync(mf)) {
+    return n === 1
+      ? { success: true, message: null }
+      : { success: true, messages: [], count: 0, pending_count: 0 };
+  }
   const consumed = compact.getConsumedIds(agentName);
   const raw = fs.readFileSync(mf, 'utf8').trim();
-  if (!raw) return { success: true, message: null };
+  if (!raw) {
+    return n === 1
+      ? { success: true, message: null }
+      : { success: true, messages: [], count: 0, pending_count: 0 };
+  }
+
+  function countPendingVisible(consumedSet) {
+    let c = 0;
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      let m;
+      try {
+        m = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (consumedSet.has(m.id)) continue;
+      if (!messageVisibleToAgent(m, agentName)) continue;
+      if (fromFilter && m.from !== fromFilter) continue;
+      c++;
+    }
+    return c;
+  }
+
+  if (n === 1) {
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      let m;
+      try {
+        m = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (consumed.has(m.id)) continue;
+      if (!messageVisibleToAgent(m, agentName)) continue;
+      if (fromFilter && m.from !== fromFilter) continue;
+      consumed.add(m.id);
+      compact.saveConsumedIds(agentName, consumed);
+      return { success: true, message: m };
+    }
+    return { success: true, message: null };
+  }
+
+  const collected = [];
   for (const line of raw.split(/\r?\n/)) {
     if (!line.trim()) continue;
     let m;
@@ -186,10 +251,19 @@ function hubListenNext(agentName, opts = {}) {
     if (!messageVisibleToAgent(m, agentName)) continue;
     if (fromFilter && m.from !== fromFilter) continue;
     consumed.add(m.id);
-    compact.saveConsumedIds(agentName, consumed);
-    return { success: true, message: m };
+    collected.push(m);
+    if (collected.length >= n) break;
   }
-  return { success: true, message: null };
+  if (collected.length === 0) {
+    return { success: true, messages: [], count: 0, pending_count: countPendingVisible(consumed) };
+  }
+  compact.saveConsumedIds(agentName, consumed);
+  return {
+    success: true,
+    messages: collected,
+    count: collected.length,
+    pending_count: countPendingVisible(consumed),
+  };
 }
 
 function hubBuildBriefing(agentName) {

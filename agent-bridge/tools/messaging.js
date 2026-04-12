@@ -69,7 +69,8 @@ module.exports = function (ctx) {
   function toolConsumeMessages(from, limit) {
     if (!state.registeredName) return { error: 'You must call register() first' };
 
-    let unconsumed = getUnconsumedMessages(state.registeredName, from || null);
+    const drain = limit === null; // set by handler when args.drain is true
+    let unconsumed = getUnconsumedMessages(state.registeredName, from || null, { forceFullScan: drain });
     if (limit && limit > 0 && unconsumed.length > limit) {
       unconsumed = unconsumed.slice(0, limit);
     }
@@ -92,7 +93,7 @@ module.exports = function (ctx) {
 
     touchActivity();
 
-    const remaining = getUnconsumedMessages(state.registeredName, null);
+    const remaining = getUnconsumedMessages(state.registeredName, null, { forceFullScan: drain });
     const agents = getAgents();
     const agentsOnline = Object.entries(agents).filter(([, info]) => isPidAlive(info.pid, info.last_activity)).length;
 
@@ -286,7 +287,7 @@ module.exports = function (ctx) {
     {
       name: 'consume_messages',
       description: 'Non-blocking check that returns ALL unconsumed messages with full content AND marks them as consumed. Unlike check_messages (peek-only) or listen (blocking), this is a one-shot "grab everything and mark it read" call. Ideal for agents that need to process a batch of messages without blocking.',
-      inputSchema: { type: 'object', properties: { from: { type: 'string', description: 'Only consume from this agent (optional)' }, limit: { type: 'number', description: 'Max messages to consume (optional)' } }, additionalProperties: false },
+      inputSchema: { type: 'object', properties: { from: { type: 'string', description: 'Only consume from this agent (optional)' }, limit: { type: 'number', description: 'Max messages to consume (optional)' }, drain: { type: 'boolean', description: 'If true, full inbox scan and ignore limit (coordinator drain)' } }, additionalProperties: false },
     },
     {
       name: 'ack_message',
@@ -312,7 +313,7 @@ module.exports = function (ctx) {
 
   const handlers = {
     check_messages: function (args) { return toolCheckMessages(args.from); },
-    consume_messages: function (args) { return toolConsumeMessages(args.from, args.limit); },
+    consume_messages: function (args) { return toolConsumeMessages(args.from, args.drain ? null : args.limit); },
     ack_message: function (args) { return toolAckMessage(args.message_id); },
     get_history: function (args) { return toolGetHistory(args.limit, args.thread_id); },
     get_notifications: function (args) { return toolGetNotifications(args.since, args.type); },

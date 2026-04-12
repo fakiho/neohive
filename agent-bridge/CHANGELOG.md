@@ -4,6 +4,9 @@
 
 ### Added
 
+- **`messages(action="consume", drain=true)`** — full-scan `messages.jsonl` from offset 0, ignore `limit`, return and mark consumed all pending inbox rows in one non-blocking call (coordinator batch drain).
+- **`[STATUS]` system broadcasts** — `broadcastSystemMessage` / `lib/messaging` skip `messages.jsonl` when content starts with `[STATUS]`; still append to `history.jsonl` so the dashboard and history APIs see liveness lines while agents do not.
+
 - **MR-3 (`init --acp` + docs)** — `npx neohive init --acp` creates `.neohive/` if needed and writes **`.zed/acp.json`** with `agent_servers.neohive` (`type: custom`, absolute Node `command`, `${workspaceFolder}` args/env). Idempotent merge preserves other `agent_servers` keys. **README**, **`docs/documentation.md`**, **`docs/reference/configuration.md`**, **`docs/reference/cli.md`**: Zed + ACP sections; **name collision** when `NEOHIVE_ACP_AGENT_NAME` unset + shared cwd; merge into `.zed/settings.json`; **`templates/acp-zed.json`** aligned with SPEC §7.1.
 - **MR-2 (`acp-agent.mjs`)** — ESM stdio ACP agent: `createRequire` → `core/hub.js`; agent name from `NEOHIVE_ACP_AGENT_NAME` or `acp-<basename(cwd)>`; prompt turns map to the five hub actions (+ help); replies via `sessionUpdate` `agent_message_chunk`; stderr banner on spawn; `setSessionMode` logs non-default modes. **`package.json`:** `@agentclientprotocol/sdk` moved to **dependencies**; `files` includes `acp-agent.mjs`; **`bin`** `neohive-acp`; script `npm run acp-agent`. No changes to `server.js`, `core/`, or `lib/` in this MR.
 - **MR-1 (hub core façade)** — `core/hub.js` exports `register`, `sendMessage`, `listAgents`, `getBriefing`, `listen` (CommonJS); delegates to `lib/agents` (`hubRegisterAgent`, `listAgentsMcpPayload`) and `lib/messaging` (`hubSendUserMessage`, `hubBuildBriefing`, `hubListenNext` + `lib/compact` consumed IDs). **No `server.js` changes** (MCP path unchanged). `core/` in npm `files` for MR-2.

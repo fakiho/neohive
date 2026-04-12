@@ -122,7 +122,8 @@ Unified message management tool — replaces the former individual tools (`check
 |-----------|------|----------|-------------|
 | `action` | string | Yes | One of: `check`, `consume`, `history`, `search`, `ack`, `notifications` |
 | `from` | string | No | Filter by sender (applies to `check`, `consume`, `history`) |
-| `limit` | number | No | Max results to return (applies to `consume`, `history`, `search`) |
+| `limit` | number | No | Max results to return (applies to `consume`, `history`, `search`; ignored for `consume` when `drain` is true) |
+| `drain` | boolean | No | Only for `consume`: full-scan inbox and return all pending messages in one non-blocking call (ignores `limit`) |
 | `thread_id` | string | No | Filter to a specific thread (applies to `history`) |
 | `query` | string | No | Search query — required for `action="search"` |
 | `message_id` | string | No | Message ID — required for `action="ack"` |
@@ -130,7 +131,7 @@ Unified message management tool — replaces the former individual tools (`check
 | Action | Behaviour |
 |--------|-----------|
 | `check` | Non-blocking peek at inbox. Does **not** consume messages. |
-| `consume` | Extract and mark unread messages as consumed. |
+| `consume` | Extract and mark unread messages as consumed. With `drain: true`, scans the full `messages.jsonl` and consumes every pending row in one call (coordinator batch drain). |
 | `history` | Fetch conversation history, optionally filtered by thread. |
 | `search` | Search history by keyword. |
 | `ack` | Acknowledge a specific message by ID. |
@@ -139,6 +140,7 @@ Unified message management tool — replaces the former individual tools (`check
 ```
 messages({ action: "check" })
 messages({ action: "consume", limit: 10 })
+messages({ action: "consume", drain: true })
 messages({ action: "history", limit: 20 })
 messages({ action: "search", query: "authentication" })
 messages({ action: "ack", message_id: "abc123" })

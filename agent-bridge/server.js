@@ -213,6 +213,11 @@ function sendSystemMessage(toAgent, content) {
   fs.appendFileSync(getHistoryFile(recipientBranch), JSON.stringify(msg) + '\n');
 }
 
+// Liveness [STATUS] lines are dashboard/history-only — skip messages.jsonl so agents never see them in listen/check/consume.
+function isHistoryOnlySystemStatus(content) {
+  return typeof content === 'string' && content.startsWith('[STATUS]');
+}
+
 // Send a system message to all registered agents
 function broadcastSystemMessage(content, excludeAgent = null) {
   // O(1) write: single __group__ system message instead of N individual writes
@@ -228,7 +233,10 @@ function broadcastSystemMessage(content, excludeAgent = null) {
   };
   if (excludeAgent) msg.exclude_agent = excludeAgent;
   ensureDataDir();
-  fs.appendFileSync(getMessagesFile(currentBranch), JSON.stringify(msg) + '\n');
+  const historyOnly = isHistoryOnlySystemStatus(content);
+  if (!historyOnly) {
+    fs.appendFileSync(getMessagesFile(currentBranch), JSON.stringify(msg) + '\n');
+  }
   fs.appendFileSync(getHistoryFile(currentBranch), JSON.stringify(msg) + '\n');
 }
 
@@ -550,6 +558,67 @@ function readNewMessagesFromFile(fromOffset, filePath) {
   return { messages, newOffset: stat.size };
 }
 
+/** @returns {number} clamped batch size 1–20 (default 1) */
+function parseListenN(n) {
+  if (n == null || n === '') return 1;
+  const x = Number(n);
+  if (!Number.isFinite(x)) return 1;
+  const i = Math.floor(x);
+  if (i < 1) return 1;
+  return Math.min(20, i);
+}
+
+// Build multi-message listen response (n > 1). Same pending/task semantics as buildMessageResponse.
+function buildBatchMessageResponse(msgs, consumedIds) {
+  let pendingCount = 0;
+  try {
+    const msgFile = getMessagesFile(currentBranch);
+    if (fs.existsSync(msgFile)) {
+      const { messages: all } = readJsonlFromOffset(msgFile, 0);
+      pendingCount = all.filter((m) => m.to === registeredName && !consumedIds.has(m.id)).length;
+    }
+  } catch (e) { log.debug('pending count failed:', e.message); }
+
+  const agents = getAgents();
+  const agentsOnline = Object.entries(agents).filter(([, info]) => isPidAlive(info.pid, info.last_activity)).length;
+
+  let taskReminder;
+  try {
+    const myTasks = getTasks().filter((t) => t.assignee === registeredName && (t.status === 'pending' || t.status === 'in_progress'));
+    if (myTasks.length > 0) {
+      taskReminder = {
+        pending: myTasks.filter((t) => t.status === 'pending').length,
+        in_progress: myTasks.filter((t) => t.status === 'in_progress').length,
+        tasks: myTasks.map((t) => ({ id: t.id, title: t.title, status: t.status })),
+      };
+    }
+  } catch (e) { log.debug('task reminder in listen failed:', e.message); }
+
+  for (const msg of msgs) {
+    if (msg.from === '__user__') pendingUserReply = true;
+  }
+
+  const formatted = msgs.map((msg) => ({
+    id: msg.id,
+    from: msg.from,
+    content: msg.content,
+    timestamp: msg.timestamp,
+    priority: classifyPriority(msg),
+    ...(msg.reply_to && { reply_to: msg.reply_to }),
+    ...(msg.thread_id && { thread_id: msg.thread_id }),
+  }));
+
+  return {
+    success: true,
+    next_action: 'Process these messages in order, then call listen().',
+    messages: formatted,
+    count: msgs.length,
+    pending_count: pendingCount,
+    agents_online: agentsOnline,
+    ...(taskReminder && { task_reminder: taskReminder }),
+  };
+}
+
 // Build a standard message delivery response with context
 function buildMessageResponse(msg, consumedIds) {
   // Count remaining unconsumed messages — scan from 0 to catch messages that arrived
@@ -779,7 +848,8 @@ function markAsRead(agentName, messageId) {
 }
 
 // Get unconsumed messages for an agent (full scan — used by check_messages and initial load)
-function getUnconsumedMessages(agentName, fromFilter = null) {
+function getUnconsumedMessages(agentName, fromFilter = null, opts = {}) {
+  const forceFullScan = opts.forceFullScan === true;
   // Optimization: read only new bytes since last offset for scalability (100+ agents)
   const msgFile = getMessagesFile(currentBranch);
   const { messages: newMessages } = readJsonlFromOffset(msgFile, lastReadOffset);
@@ -788,8 +858,12 @@ function getUnconsumedMessages(agentName, fromFilter = null) {
   // Full-scan fallback: when the watcher's checkMessages() advanced lastReadOffset past
   // a multi-message batch but only consumed the first, remaining messages sit before the
   // current offset. Scanning from 0 catches them; consumed IDs skip what's already delivered.
+  // forceFullScan: consume_messages drain — always read from 0 so nothing is missed.
   let messages;
-  if (newMessages.length > 0) {
+  if (forceFullScan) {
+    const { messages: all } = readJsonlFromOffset(msgFile, 0);
+    messages = all;
+  } else if (newMessages.length > 0) {
     messages = newMessages;
   } else if (lastReadOffset > 0) {
     const { messages: all } = readJsonlFromOffset(msgFile, 0);
@@ -2253,22 +2327,40 @@ async function toolListen(from = null, outcome = null, task_id = null, summary =
   // Check for existing unconsumed messages first
   const existing = getUnconsumedMessages(registeredName, from);
   if (existing.length > 0) {
-    const msg = existing[0];
     const consumed = getConsumedIds(registeredName);
-    consumed.add(msg.id);
+    if (batchN === 1) {
+      const msg = existing[0];
+      consumed.add(msg.id);
+      saveConsumedIds(registeredName, consumed);
+      markAsRead(registeredName, msg.id);
+      // Only advance offset to end-of-file if this is the LAST unconsumed message.
+      // Otherwise keep offset so next listen() call re-reads and finds remaining messages.
+      if (existing.length <= 1) {
+        const _mfL1 = getMessagesFile(currentBranch);
+        if (fs.existsSync(_mfL1)) {
+          lastReadOffset = fs.statSync(_mfL1).size;
+        }
+      }
+      touchActivity();
+      setListening(false);
+      return buildMessageResponse(msg, consumed);
+    }
+    const batch = existing.slice(0, batchN);
+    for (const msg of batch) {
+      consumed.add(msg.id);
+      markAsRead(registeredName, msg.id);
+    }
     saveConsumedIds(registeredName, consumed);
-    markAsRead(registeredName, msg.id);
-    // Only advance offset to end-of-file if this is the LAST unconsumed message.
-    // Otherwise keep offset so next listen() call re-reads and finds remaining messages.
-    if (existing.length <= 1) {
-      const _mfL1 = getMessagesFile(currentBranch);
-      if (fs.existsSync(_mfL1)) {
-        lastReadOffset = fs.statSync(_mfL1).size;
+    const stillQueued = getUnconsumedMessages(registeredName, from);
+    if (stillQueued.length === 0) {
+      const _mfL1b = getMessagesFile(currentBranch);
+      if (fs.existsSync(_mfL1b)) {
+        lastReadOffset = fs.statSync(_mfL1b).size;
       }
     }
     touchActivity();
     setListening(false);
-    return buildMessageResponse(msg, consumed);
+    return buildBatchMessageResponse(batch, consumed);
   }
 
   // Set offset to current file end
@@ -2300,20 +2392,41 @@ async function toolListen(from = null, outcome = null, task_id = null, summary =
     const checkMessages = () => {
       const { messages: newMsgs, newOffset } = readNewMessages(lastReadOffset);
       lastReadOffset = newOffset;
+      if (batchN === 1) {
+        for (const msg of newMsgs) {
+          if (consumed.has(msg.id)) continue;
+          if (msg.to !== registeredName && msg.to !== '__group__' && msg.to !== '__all__') continue;
+          if (msg.to === '__group__' && msg.from === registeredName) continue;
+          if (from && msg.from !== from && !msg.system) continue;
+          consumed.add(msg.id);
+          saveConsumedIds(registeredName, consumed);
+          markAsRead(registeredName, msg.id);
+          touchActivity();
+          setListening(false);
+          done(buildMessageResponse(msg, consumed));
+          return true;
+        }
+        return false;
+      }
+      const collected = [];
       for (const msg of newMsgs) {
         if (consumed.has(msg.id)) continue;
         if (msg.to !== registeredName && msg.to !== '__group__' && msg.to !== '__all__') continue;
         if (msg.to === '__group__' && msg.from === registeredName) continue;
         if (from && msg.from !== from && !msg.system) continue;
-        consumed.add(msg.id);
-        saveConsumedIds(registeredName, consumed);
-        markAsRead(registeredName, msg.id);
-        touchActivity();
-        setListening(false);
-        done(buildMessageResponse(msg, consumed));
-        return true;
+        collected.push(msg);
+        if (collected.length >= batchN) break;
       }
-      return false;
+      if (collected.length === 0) return false;
+      for (const msg of collected) {
+        consumed.add(msg.id);
+        markAsRead(registeredName, msg.id);
+      }
+      saveConsumedIds(registeredName, consumed);
+      touchActivity();
+      setListening(false);
+      done(buildBatchMessageResponse(collected, consumed));
+      return true;
     };
 
     // Auto-restart: instead of returning retry:true and hoping the agent
@@ -7354,6 +7467,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'string',
               description: 'Optional: brief summary of what was done or why it was blocked (used as task notes)',
             },
+            n: {
+              type: 'number',
+              description: 'Batch size: consume up to N messages in one call (default 1, max 20). When n=1, response shape is unchanged. When n>1, returns { messages, count, pending_count } instead of a single message.',
+            },
           },
           additionalProperties: false,
         },
@@ -7361,7 +7478,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       // --- Unified messages tool (consolidates check/consume/history/search/ack) ---
       {
         name: 'messages',
-        description: 'Unified message management. action="check" peeks at unconsumed messages, "consume" marks them read, "history" returns conversation history, "search" searches by keyword, "ack" acknowledges a message, "notifications" returns task/workflow/agent notifications.',
+        description: 'Unified message management. action="check" peeks at unconsumed messages, "consume" marks them read (use drain=true for a full-scan batch of all pending in one call), "history" returns conversation history, "search" searches by keyword, "ack" acknowledges a message, "notifications" returns task/workflow/agent notifications.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -7371,7 +7488,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Message action: check (peek), consume (mark read), history, search, ack, notifications',
             },
             from: { type: 'string', description: 'Filter by sender agent name (optional)' },
-            limit: { type: 'number', description: 'Max results (default varies by action)' },
+            limit: { type: 'number', description: 'Max results (default varies by action; ignored for consume when drain=true)' },
+            drain: { type: 'boolean', description: 'Only for action="consume": full-scan messages.jsonl and return all pending in one non-blocking call (ignores limit)' },
             query: { type: 'string', description: 'Search term — required for action="search"' },
             message_id: { type: 'string', description: 'Message ID — required for action="ack"' },
             thread_id: { type: 'string', description: 'Filter by thread ID (optional, action="history")' },
@@ -7710,7 +7828,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         result = toolBroadcast(args.content);
         break;
       case 'listen':
-        result = await toolListen(args?.from, args?.outcome, args?.task_id, args?.summary, args?.mode);
+        result = await toolListen(args?.from, args?.outcome, args?.task_id, args?.summary, args?.mode, args?.n);
         break;
       case 'messages': {
         // Unified message management — routes by action param
