@@ -452,6 +452,8 @@ function startStdinActivityTracker() {
       if (registeredName) touchHeartbeat(registeredName);
     }, 2000);
   });
+  // Exit when the MCP client (Claude Code) closes the pipe — prevents zombie processes
+  process.stdin.on('close', () => process.exit(0));
 }
 
 
@@ -8175,6 +8177,13 @@ process.on('exit', () => {
 });
 process.on('SIGTERM', () => process.exit(0));
 process.on('SIGINT', () => process.exit(0));
+
+// Orphan watchdog: exit if reparented to PID 1 (launchd/init) — means Claude Code exited
+// without closing stdin cleanly (crash, force-quit, --resume without teardown).
+const _originalPpid = process.ppid;
+setInterval(() => {
+  if (process.ppid !== _originalPpid) process.exit(0);
+}, 5000).unref();
 
 /**
  * Auto-reclaim a dead agent's identity on MCP process startup.
