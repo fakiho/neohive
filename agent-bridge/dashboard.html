@@ -4375,7 +4375,8 @@
       <div id="settings-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:6px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;z-index:300;min-width:180px;box-shadow:var(--shadow-lg)">
         <div id="settings-server-stat" style="padding:8px 14px;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
           <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="4" rx="1"/><rect x="1" y="10" width="14" height="4" rx="1"/><circle cx="13" cy="4" r="0.8" fill="currentColor" stroke="none"/><circle cx="13" cy="12" r="0.8" fill="currentColor" stroke="none"/></svg>
-          <span id="settings-server-count">— servers</span>
+          <span id="settings-server-count" style="flex:1">— servers</span>
+          <button id="settings-kill-btn" onclick="killOrphanedServers()" title="Kill orphaned servers (ppid=1)" style="display:none;padding:2px 7px;font-size:10px;border-radius:4px;border:1px solid var(--red);color:var(--red);background:transparent;cursor:pointer;line-height:1.4">Kill</button>
         </div>
         <div class="settings-item" onclick="toggleTheme();toggleSettingsMenu()"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="4"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/></svg> Theme</div>
         <div class="settings-item" id="settings-notif-item" onclick="toggleCombinedNotifications();"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6a4 4 0 018 0v3l2 2H2l2-2z"/><path d="M6 13a2 2 0 004 0"/></svg> <span id="settings-notif-label">Notifications</span></div>
@@ -10696,12 +10697,31 @@ function toggleSettingsMenu() {
 }
 function fetchServerProcessCount() {
   var el = document.getElementById('settings-server-count');
+  var btn = document.getElementById('settings-kill-btn');
   if (!el) return;
   el.textContent = '…';
   fetch('/api/server-processes')
     .then(function(r) { return r.json(); })
-    .then(function(d) { el.textContent = d.count + ' server' + (d.count === 1 ? '' : 's') + ' running'; })
+    .then(function(d) {
+      var label = d.count + ' server' + (d.count === 1 ? '' : 's');
+      if (d.orphans > 0) label += ' (' + d.orphans + ' orphaned)';
+      el.textContent = label;
+      if (btn) btn.style.display = d.orphans > 0 ? 'inline-block' : 'none';
+    })
     .catch(function() { el.textContent = '— servers'; });
+}
+function killOrphanedServers() {
+  var btn = document.getElementById('settings-kill-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  fetch('/api/server-processes', { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Kill'; }
+      setTimeout(fetchServerProcessCount, 800);
+    })
+    .catch(function() {
+      if (btn) { btn.disabled = false; btn.textContent = 'Kill'; }
+    });
 }
 // Close settings when clicking outside
 document.addEventListener('click', function(e) {

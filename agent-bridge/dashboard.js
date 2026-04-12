@@ -560,9 +560,34 @@ function apiServerProcesses() {
     const { execSync } = require('child_process');
     const out = execSync('pgrep -f "server.js" 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
     const pids = out.trim().split('\n').filter(p => p.trim()).map(Number).filter(Boolean);
-    return { count: pids.length, pids };
+    // Annotate each PID with its parent PID so the UI can show orphan count
+    const processes = pids.map(pid => {
+      try {
+        const ppid = parseInt(execSync(`ps -o ppid= -p ${pid} 2>/dev/null || echo 0`, { encoding: 'utf8', timeout: 1000 }).trim(), 10);
+        return { pid, ppid, orphan: ppid === 1 };
+      } catch { return { pid, ppid: 0, orphan: true }; }
+    });
+    return { count: pids.length, orphans: processes.filter(p => p.orphan).length, processes };
   } catch {
-    return { count: 0, pids: [] };
+    return { count: 0, orphans: 0, processes: [] };
+  }
+}
+
+function killOrphanedServerProcesses() {
+  try {
+    const { execSync } = require('child_process');
+    const out = execSync('pgrep -f "server.js" 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
+    const pids = out.trim().split('\n').filter(p => p.trim()).map(Number).filter(Boolean);
+    const killed = [];
+    for (const pid of pids) {
+      try {
+        const ppid = parseInt(execSync(`ps -o ppid= -p ${pid} 2>/dev/null || echo 0`, { encoding: 'utf8', timeout: 1000 }).trim(), 10);
+        if (ppid === 1) { process.kill(pid, 'SIGTERM'); killed.push(pid); }
+      } catch { /* already dead */ }
+    }
+    return { success: true, killed: killed.length };
+  } catch (e) {
+    return { success: false, error: e.message };
   }
 }
 
@@ -2266,7 +2291,8 @@ const ROUTE_TABLE = new Map([
   [routeKey('GET', '/api/channels'),        (req, res, url) => jsonOk(res, apiChannels(url.searchParams))],
   [routeKey('GET', '/api/decisions'),       (req, res, url) => jsonOk(res, readJson(filePath('decisions.json', url.searchParams.get('project') || null)) || [])],
   [routeKey('GET', '/api/status'),          (req, res, url) => jsonOk(res, apiStatus(url.searchParams))],
-  [routeKey('GET', '/api/server-processes'),(req, res) => jsonOk(res, apiServerProcesses())],
+  [routeKey('GET', '/api/server-processes'), (req, res) => jsonOk(res, apiServerProcesses())],
+  [routeKey('DELETE', '/api/server-processes'), (req, res) => jsonOk(res, killOrphanedServerProcesses())],
   [routeKey('GET', '/api/stats'),           (req, res, url) => jsonOk(res, apiStats(url.searchParams))],
   [routeKey('GET', '/api/token-usage'),     (req, res, url) => jsonOk(res, apiTokenUsage(url.searchParams))],
   [routeKey('GET', '/api/coordinator-mode'),(req, res, url) => {
