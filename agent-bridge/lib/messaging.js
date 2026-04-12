@@ -2,9 +2,14 @@
 
 const fs = require('fs');
 const state = require('./state');
-const { DATA_DIR, getMessagesFile, getHistoryFile, generateId, ensureDataDir } = require('./config');
-const { readJsonlFromOffset } = require('./file-io');
-const { getAgents, isPidAlive } = require('./agents');
+const config = require('./config');
+const {
+  getMessagesFile, getHistoryFile, generateId, ensureDataDir,
+  validateContentSize, TASKS_FILE, DECISIONS_FILE, KB_FILE, PROGRESS_FILE, LOCKS_FILE,
+} = config;
+const { readJsonFile, tailReadJsonl } = require('./file-io');
+const { getAgents, isPidAlive, getProfiles } = require('./agents');
+const compact = require('./compact');
 
 // Rate limiting constants
 const rateLimitWindow = 60000;
@@ -128,10 +133,129 @@ function adaptiveSleep(pollCount) {
   return sleep(2000);
 }
 
+function hubSendUserMessage(fromName, content, to, reply_to, _channel) {
+  const rateErr = checkRateLimit(content, to || '__broadcast__');
+  if (rateErr) return rateErr;
+  const sizeErr = validateContentSize(content);
+  if (sizeErr) return sizeErr;
+  if (!fromName || typeof fromName !== 'string') return { error: 'fromName is required' };
+  const branch = state.currentBranch || 'main';
+  state.messageSeq++;
+  const msg = {
+    id: generateId(),
+    seq: state.messageSeq,
+    from: fromName,
+    to: to || '__all__',
+    content,
+    timestamp: new Date().toISOString(),
+    ...(reply_to && { reply_to }),
+  };
+  ensureDataDir();
+  const mf = getMessagesFile(branch);
+  const hf = getHistoryFile(branch);
+  fs.appendFileSync(mf, JSON.stringify(msg) + '\n');
+  fs.appendFileSync(hf, JSON.stringify(msg) + '\n');
+  return { success: true, id: msg.id };
+}
+
+function messageVisibleToAgent(m, agentName) {
+  if (!m || !agentName) return false;
+  if (m.to === agentName || m.to === '__all__') return true;
+  if (m.to === '__group__') return m.from !== agentName;
+  return false;
+}
+
+function hubListenNext(agentName, opts = {}) {
+  if (!agentName || typeof agentName !== 'string') return { error: 'agentName is required' };
+  const branch = opts.branch || state.currentBranch || 'main';
+  const fromFilter = opts.from || null;
+  const mf = getMessagesFile(branch);
+  if (!fs.existsSync(mf)) return { success: true, message: null };
+  const consumed = compact.getConsumedIds(agentName);
+  const raw = fs.readFileSync(mf, 'utf8').trim();
+  if (!raw) return { success: true, message: null };
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let m;
+    try {
+      m = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (consumed.has(m.id)) continue;
+    if (!messageVisibleToAgent(m, agentName)) continue;
+    if (fromFilter && m.from !== fromFilter) continue;
+    consumed.add(m.id);
+    compact.saveConsumedIds(agentName, consumed);
+    return { success: true, message: m };
+  }
+  return { success: true, message: null };
+}
+
+function hubBuildBriefing(agentName) {
+  if (!agentName || typeof agentName !== 'string') return { error: 'agentName is required' };
+  const agents = getAgents();
+  const profiles = getProfiles();
+  const tasks = readJsonFile(TASKS_FILE) || [];
+  const decisions = readJsonFile(DECISIONS_FILE) || [];
+  const kb = readJsonFile(KB_FILE) || {};
+  const progress = readJsonFile(PROGRESS_FILE) || {};
+  const locks = readJsonFile(LOCKS_FILE) || {};
+  const cfg = config.getConfig();
+  const branch = state.currentBranch || 'main';
+  const history = tailReadJsonl(getHistoryFile(branch), 30);
+  const roster = {};
+  for (const [name, info] of Object.entries(agents)) {
+    const alive = isPidAlive(info.pid, info.last_activity);
+    const profile = profiles[name] || {};
+    roster[name] = {
+      status: !alive ? 'offline' : info.listening_since ? 'listening' : 'working',
+      role: profile.role || '',
+      provider: info.provider || 'unknown',
+    };
+  }
+  const recentMsgs = history.slice(-15).map((m) => ({
+    from: m.from,
+    to: m.to,
+    preview: (m.content || '').substring(0, 150),
+    timestamp: m.timestamp,
+  }));
+  const activeTasks = tasks.filter((t) => t.status !== 'done').map((t) => ({
+    id: t.id, title: t.title, status: t.status, assignee: t.assignee, created_by: t.created_by,
+  }));
+  const doneTasks = tasks.filter((t) => t.status === 'done').length;
+  const lockedFiles = {};
+  for (const [fp, lock] of Object.entries(locks)) {
+    lockedFiles[fp] = { locked_by: lock.agent, since: lock.since };
+  }
+  const myActiveTasks = tasks.filter((t) => t.status !== 'done' && t.assignee === agentName);
+  const myCompletedCount = tasks.filter((t) => t.status === 'done' && t.assignee === agentName).length;
+  return {
+    briefing: true,
+    conversation_mode: cfg.conversation_mode || 'direct',
+    agents: roster,
+    your_name: agentName,
+    recent_messages: recentMsgs,
+    tasks: { active: activeTasks, completed_count: doneTasks, total: tasks.length },
+    decisions: decisions.slice(-5).map((d) => ({ decision: d.decision, topic: d.topic })),
+    knowledge_base_keys: Object.keys(kb),
+    locked_files: lockedFiles,
+    progress,
+    your_tasks: myActiveTasks.map((t) => ({ id: t.id, title: t.title, status: t.status })),
+    your_completed: myCompletedCount,
+    next_action: myActiveTasks.length > 0
+      ? `You have ${myActiveTasks.length} active task(s). Continue working, then listen().`
+      : 'Call listen() to receive messages and start working.',
+  };
+}
+
 module.exports = {
   checkRateLimit,
   sendSystemMessage, broadcastSystemMessage,
   readNewMessages, readNewMessagesFromFile,
   buildMessageResponse,
   sleep, adaptiveSleep,
+  hubSendUserMessage,
+  hubListenNext,
+  hubBuildBriefing,
 };

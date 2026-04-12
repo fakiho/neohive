@@ -209,14 +209,14 @@ Day-one Neohive operations exposed through the ACP bridge (aligned with **§12.2
 1. **`agent-bridge/core/` is CommonJS** (`.js`, `require`/`module.exports`). **Do not** introduce ESM in MR-1 — the **CJS/ESM boundary** belongs in **MR-2** (`acp-agent.mjs` + SDK), not here.
 2. **Delegate to existing `lib/`** — `lib/messaging.js`, `lib/agents.js`, `lib/file-io.js`, `lib/config.js`, `lib/state.js` (and closely related helpers they already use). **No re-implementing** the disk protocol in `core/`.
 3. **Five thin exports only** (MVP hub actions from **§12.2** / **§10**): one function each for the operational equivalents of `register`, `send_message`, `list_agents`, `get_briefing`, `listen`. Target **~10–20 lines per function**; if a `core/` file grows large, it is probably **duplicating `lib/`** — stop and refactor.
-4. **`server.js` changes** are **minimal** — only where MCP tools must call into `core/` (or `core/` re-exports the same code paths the tools already used). **No** new MCP tools in MR-1.
+4. **`server.js` changes** for MR-1 are **optional / follow-up** — the hub façade can ship **without** MCP rewiring so ACP (`acp-agent.mjs`) is the first consumer. **No** new MCP tools in MR-1.
 5. **Scope / timing:** Recent **push-delivery and hooks** work (e.g. commits `f78f582`, `53a9f2e`, `2b88f0c`) already mitigates the **listen-loop** pain for MCP users. **No pressure** to rush or **expand** MR-1 beyond the five actions.
 
 | Step | Action |
 |------|--------|
 | 1.1 | Map each MVP action to **existing** `lib/*` entry points; list gaps (if any) before coding. |
 | 1.2 | Add **`agent-bridge/core/hub.js`** (or a few small files) with the **five** thin wrappers — **call `lib/`**, do not copy disk logic. |
-| 1.3 | Wire **`server.js`** MCP handlers to use `core/` where the duplication win is clear; keep diff reviewable. |
+| 1.3 | *(Optional follow-up)* Wire **`server.js`** MCP handlers to `core/hub.js` if the team wants one code path for MCP + ACP. |
 | 1.4 | Optional: manual or script smoke test; **no** new test framework required. |
 
 **Gate:** **Do not start MR-1** until **MR-0** is **complete** (Lead Zed smoke + merge + **“approve MR-1”**).
@@ -338,8 +338,8 @@ Implementation proceeds under **§14** — **wait for explicit MR approval** bef
 | MR | Title | Scope (what ships) | Review checklist | Depends on |
 |----|-------|-------------------|------------------|------------|
 | **MR-0** | ACP Phase 0 spike | **Shipped:** `agent-bridge/package.json` devDependency `@agentclientprotocol/sdk`; **`agent-bridge/scripts/acp-spike.mjs`** (stdio **AgentSideConnection** + echo `prompt`); **`agent-bridge/docs/acp-mr0-zed-smoke.md`**; `npm run acp-spike`. **CJS/ESM:** spike is pure **ESM**; main Neohive stays **CJS**. **No** `acp-agent.mjs` yet. | Dependency license/size OK; `node --check` passes; stderr banner on spawn; **you** run Zed smoke per doc; zero MCP changes to `server.js`. | SPEC v0.2 + Lead approval to start MR-0 |
-| **MR-1** | Hub core wrappers (MVP 5) | **`agent-bridge/core/*.js` (CommonJS only).** **Five** exported thin functions (~10–20 lines each) that **delegate to `lib/`** (`messaging`, `agents`, `file-io`, `config`, `state` — no reinventing disk protocol). Minimal `server.js` rewiring to use `core/`; **no** ACP SDK; **no** new MCP tools. **Hold** until MR-0 fully done (Zed smoke + merge). | Each wrapper is obviously a `lib/` call; no bloated `core/`; behavior parity with pre-MR-1 MCP; small diff. | MR-0 **merged** + Lead **“approve MR-1”** |
-| **MR-2** | `acp-agent.mjs` MVP | Ship **`acp-agent.mjs`** using SDK; uses **MR-1** core; implements **§12.2**; naming per **§12.3**; `package.json` **`files` / `bin`** so npm exposes entry path from **§7.1**. Handle **`setSessionMode`** for non-default mode selectors if Zed sends them (MR-0 spike used an empty stub). | Zed end-to-end: connect, register, send, receive; dashboard shows agent; docs snippet in MR. | MR-1 merged + Lead approval |
+| **MR-1** | Hub core wrappers (MVP 5) | **`core/hub.js` (CommonJS):** `register`, `sendMessage`, `listAgents`, `getBriefing`, `listen` → **`lib/agents`**, **`lib/messaging`**, **`lib/compact`** (consumed IDs). May ship **without** `server.js` edits; MCP unchanged until a later optional wiring MR. **No** ACP SDK. | Wrappers stay thin; disk logic lives in `lib/`; `server.js` diff may be **zero**. | MR-0 **merged** + Lead **“approve MR-1”** |
+| **MR-2** | `acp-agent.mjs` MVP | Ship **`acp-agent.mjs`** using SDK; uses **MR-1** `core/hub.js`; implements **§12.2**; naming per **§12.3**; `package.json` **`files` / `bin`** so npm exposes entry path from **§7.1**. Handle **`setSessionMode`** for non-default mode selectors if Zed sends them (MR-0 spike used an empty stub). **Wire format:** ACP JSON-RPC methods are **namespaced** (e.g. `session/new`, `session/prompt`, `session/update`) — not camelCase; map prompt turns to hub actions accordingly. | Zed end-to-end: connect, register, send, receive; dashboard shows agent; docs snippet in MR. | MR-1 merged + Lead approval |
 | **MR-3** | `init --acp` + docs | `cli.js` **`init --acp`**; template under **`templates/`**; **README** + **`docs/documentation.md`** ACP/Zed section; **§7.1** static-fallback documented. | Init idempotent; paths work for published layout; docs accurate. | MR-2 merged + Lead approval |
 | **MR-4** | ACP Registry (parallel) | **Separate repo PR** to `agentclientprotocol/registry` + cross-link in Neohive README. | Registry maintainers’ requirements met; icon optional. | MR-2 or MR-3 merged (Lead decides) + Lead approval |
 | **MR-5** (future) | Tasks / workflows via ACP | Elicitation, plans, task tools — **out of MVP**. | TBD when Phase 2 is scheduled. | MR-3 + product priority |
@@ -347,7 +347,7 @@ Implementation proceeds under **§14** — **wait for explicit MR approval** bef
 
 **MR-0:** Code review **passed** (wiring, lifecycle, stderr/stdout split, devDependency placement, docs). **Pending:** Lead runs **Zed smoke** per `agent-bridge/docs/acp-mr0-zed-smoke.md` and merges when satisfied. Reply **“approve MR-1”** after merge + successful Zed check (or document blocker).
 
-**MR-1:** **Held** until MR-0 is complete. Implementation must follow **§10 Phase 1** rules (`lib/` delegation, CJS `core/`, five actions only).
+**MR-1:** **Implemented (lib + `core/hub.js` only)** — five hub exports delegate to `lib/`; **`server.js` not modified** in this pass. **Next:** Lead review, then **`approve MR-2`** to wire `acp-agent.mjs` via `createRequire('./core/hub')` (or optional future MR to route MCP through hub).
 
 ---
 

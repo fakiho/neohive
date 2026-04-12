@@ -27,6 +27,7 @@
     "cli.js",
     "neohive-plugin/",
     "lib/",
+    "core/",
     "tools/",
     "templates/",
     "conversation-templates/",

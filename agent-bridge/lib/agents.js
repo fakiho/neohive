@@ -2,8 +2,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const { DATA_DIR, AGENTS_FILE, PROFILES_FILE, ACKS_FILE } = require('./config');
-const { cachedRead, invalidateCache, lockAgentsFile, unlockAgentsFile, withFileLock, readJsonFile } = require('./file-io');
+const {
+  DATA_DIR, AGENTS_FILE, PROFILES_FILE, ACKS_FILE,
+  sanitizeName, generateToken, ensureDataDir,
+} = require('./config');
+const { cachedRead, invalidateCache, lockAgentsFile, unlockAgentsFile, withFileLock, readJsonFile, writeJsonFile } = require('./file-io');
 
 // Cache for isPidAlive results
 const _pidAliveCache = {};
@@ -117,11 +120,112 @@ function saveProfiles(profiles) {
   });
 }
 
+/**
+ * MCP `list_agents` payload — disk/agent state via this module + profiles.
+ * Optional enrichRow(name, row) for server-only hints (workspace, IDE activity).
+ */
+function listAgentsMcpPayload(enrichRow) {
+  const all = getAgents();
+  const profiles = getProfiles();
+  const result = {};
+  for (const [name, info] of Object.entries(all)) {
+    const alive = isPidAlive(info.pid, info.last_activity);
+    const lastActivity = info.last_activity || info.timestamp;
+    const idleSeconds = Math.floor((Date.now() - new Date(lastActivity).getTime()) / 1000);
+    const hasHeartbeat = fs.existsSync(heartbeatFile(name));
+    const profile = profiles[name] || {};
+    let status;
+    if (alive) {
+      status = info.listening_since ? 'listening' : idleSeconds > 30 ? 'idle' : 'working';
+    } else if (!hasHeartbeat) {
+      status = 'unknown';
+    } else if (idleSeconds <= 120) {
+      status = 'stale';
+    } else {
+      status = 'offline';
+    }
+    result[name] = {
+      alive,
+      registered_at: info.timestamp,
+      last_activity: lastActivity,
+      idle_seconds: alive ? idleSeconds : null,
+      status,
+      listening_since: info.listening_since || null,
+      is_listening: !!(info.listening_since && alive),
+      last_listened_at: info.last_listened_at || null,
+      provider: info.provider || 'unknown',
+      branch: info.branch || 'main',
+      display_name: profile.display_name || name,
+      avatar: profile.avatar || '',
+      role: profile.role || '',
+      bio: profile.bio || '',
+    };
+    if (typeof enrichRow === 'function') {
+      try {
+        enrichRow(name, result[name]);
+      } catch (_) { /* best-effort */ }
+    }
+  }
+  return { agents: result };
+}
+
+/**
+ * Hub / ACP path: persist registration to agents.json + profile + agent-cards (no MCP heartbeat timer).
+ * Disk protocol only — callers manage process-local session state separately.
+ */
+function hubRegisterAgent(name, provider = null, skills = null) {
+  ensureDataDir();
+  sanitizeName(name);
+  lockAgentsFile();
+  try {
+    const all = getAgents(true);
+    if (all[name] && all[name].pid !== process.pid && isPidAlive(all[name].pid, all[name].last_activity)) {
+      return { error: `Agent "${name}" is already registered by a live process. Choose a different name.` };
+    }
+    const now = new Date().toISOString();
+    const token = generateToken();
+    all[name] = {
+      pid: process.pid,
+      ppid: process.ppid,
+      timestamp: now,
+      last_activity: now,
+      last_listened_at: now,
+      provider: provider || 'unknown',
+      branch: 'main',
+      token,
+      started_at: now,
+    };
+    saveAgents(all);
+    const profiles = getProfiles();
+    if (!profiles[name]) {
+      profiles[name] = { display_name: name, avatar: '', bio: '', role: '', created_at: now };
+      saveProfiles(profiles);
+    }
+    touchHeartbeat(name);
+    const cardsPath = path.join(DATA_DIR, 'agent-cards.json');
+    const cards = readJsonFile(cardsPath) || {};
+    const explicitSkills = Array.isArray(skills) ? skills.map((s) => String(s).toLowerCase().substring(0, 30)).slice(0, 20) : [];
+    cards[name] = {
+      name,
+      provider: provider || 'unknown',
+      skills: explicitSkills,
+      platform_skills: [],
+      registered_at: now,
+    };
+    writeJsonFile(cardsPath, cards);
+    return { success: true, name, token };
+  } finally {
+    unlockAgentsFile();
+  }
+}
+
 module.exports = {
   isPidAlive, setAutonomousModeCheck,
   getAgents, saveAgents,
   heartbeatFile, touchHeartbeat,
   getAcks,
   getProfiles, saveProfiles,
+  listAgentsMcpPayload,
+  hubRegisterAgent,
   lockAgentsFile, unlockAgentsFile,
 };
