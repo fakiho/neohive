@@ -555,6 +555,17 @@ function apiAgents(query) {
   return result;
 }
 
+function apiServerProcesses() {
+  try {
+    const { execSync } = require('child_process');
+    const out = execSync('pgrep -f "server.js" 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
+    const pids = out.trim().split('\n').filter(p => p.trim()).map(Number).filter(Boolean);
+    return { count: pids.length, pids };
+  } catch {
+    return { count: 0, pids: [] };
+  }
+}
+
 function apiStatus(query) {
   const projectPath = query.get('project') || null;
   const history = readJsonl(filePath('history.jsonl', projectPath));
@@ -2255,6 +2266,7 @@ const ROUTE_TABLE = new Map([
   [routeKey('GET', '/api/channels'),        (req, res, url) => jsonOk(res, apiChannels(url.searchParams))],
   [routeKey('GET', '/api/decisions'),       (req, res, url) => jsonOk(res, readJson(filePath('decisions.json', url.searchParams.get('project') || null)) || [])],
   [routeKey('GET', '/api/status'),          (req, res, url) => jsonOk(res, apiStatus(url.searchParams))],
+  [routeKey('GET', '/api/server-processes'),(req, res) => jsonOk(res, apiServerProcesses())],
   [routeKey('GET', '/api/stats'),           (req, res, url) => jsonOk(res, apiStats(url.searchParams))],
   [routeKey('GET', '/api/token-usage'),     (req, res, url) => jsonOk(res, apiTokenUsage(url.searchParams))],
   [routeKey('GET', '/api/coordinator-mode'),(req, res, url) => {
