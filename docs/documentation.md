@@ -11,6 +11,7 @@
 - [Overview](#overview)
 - [Getting Started](#getting-started)
   - [Recommended Setup](#recommended-setup)
+  - [Zed and ACP](#zed-and-acp-agent-client-protocol)
   - [Troubleshooting](#troubleshooting)
 - [Essentials](#essentials)
 - [Reference library](#reference-library) — split deep dives under [`docs/reference/`](reference/)
@@ -55,6 +56,9 @@ AI CLI tools like Claude Code, Gemini CLI, and Codex CLI are powerful individual
 - **VS Code + Copilot** — GitHub Copilot agent mode
 - **Antigravity** — Gemini-powered coding IDE
 
+**ACP (Agent Client Protocol):**
+- **Zed** — use `npx neohive init --acp` for a `.zed/acp.json` fragment and merge into Zed project settings; see [Zed and ACP](#zed-and-acp-agent-client-protocol) and [SPEC.md](../SPEC.md) §7.1 / §12.
+
 **VS Code Extension:**
 - **[Neohive Extension](https://marketplace.visualstudio.com/items?itemName=alionix.neohive)** (v0.5.0) — Monitor agents and workflows directly in your editor's sidebar. Provides real-time agent liveness, task board, workflow viewer, `@neohive` chat participant, and automatic MCP + hooks setup on activation.
 
@@ -80,7 +84,39 @@ npx neohive init --gemini    # Gemini CLI only
 npx neohive init --codex     # Codex CLI only
 npx neohive init --all       # All detected CLIs
 npx neohive init --ollama    # Ollama local LLM bridge
+npx neohive init --acp       # Zed ACP: .zed/acp.json + .neohive/
 ```
+
+### Zed and ACP (Agent Client Protocol)
+
+Neohive’s ACP entrypoint is **`acp-agent.mjs`** (npm package **`neohive`**). It talks to the same **`.neohive/`** hub as the MCP server, using the protocol described at [agentclientprotocol.com](https://agentclientprotocol.com/).
+
+```bash
+npx neohive init --acp
+```
+
+**What it writes**
+
+- **`.neohive/`** — created if missing (shared data directory).
+- **`.zed/acp.json`** — JSON with an **`agent_servers.neohive`** object suitable for Zed’s [custom external agents](https://zed.dev/docs/ai/external-agents.html) docs (`type: "custom"`, `command`, `args`, `env`).
+
+**Wire-up in Zed**
+
+Many Zed versions expect **`agent_servers`** inside **`.zed/settings.json`** (or user settings). Open **`zed: open project settings`**, then merge the **`agent_servers`** key from `.zed/acp.json` into that file if Zed does not consume `acp.json` automatically.
+
+**Dependencies**
+
+- Run **`npm install neohive`** in the project so `node_modules/neohive/acp-agent.mjs` exists (the fragment uses `${workspaceFolder}/node_modules/...`).
+
+**Agent naming and collisions**
+
+- The generated `env` uses **`NEOHIVE_ACP_AGENT_NAME`: `acp-${workspaceName}`** when Zed expands `${workspaceName}` (see [SPEC.md](../SPEC.md) §7.1).
+- **Collision:** If **`NEOHIVE_ACP_AGENT_NAME` is unset** at runtime and **two ACP sessions share the same cwd**, the bridge’s default name can match and both sessions fight for one Neohive identity. **Set `NEOHIVE_ACP_AGENT_NAME` explicitly** in `env` to a unique value per session (or per developer) when running multiple agents against one workspace.
+- **Unexpanded variables:** If the editor passes a literal string like `acp-${workspaceName}`, name validation may fail — use a **static** value (e.g. `acp-backend`) for simple copy-paste configs.
+
+**Reference template**
+
+Registry-oriented JSON (not identical to `.zed/acp.json`) lives at **`agent-bridge/templates/acp-zed.json`** for comparisons and future registry work.
 
 ### Recommended Setup
 

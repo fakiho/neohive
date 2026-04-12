@@ -37,7 +37,7 @@ function printUsage() {
     npx neohive mcp                 Start MCP stdio server (used internally by IDE configs)
     npx neohive init --ollama       Setup Ollama local LLM bridge
     npx neohive init --template T   Initialize with a team template
-    npx neohive init --acp         ACP bridge config (stub until MR-3)
+    npx neohive init --acp         Zed ACP: write .zed/acp.json (+ .neohive/)
     npx neohive serve               Run MCP server in HTTP mode (port 4321)
     npx neohive serve --port 8080   Custom port for HTTP server
     npx neohive dashboard           Launch web dashboard (http://localhost:3000)
@@ -672,6 +672,56 @@ function setupCursor(serverPath, cwd) {
   installSkillsForCursor(cwd);
 }
 
+// Zed — ACP custom agent fragment: .zed/acp.json (`agent_servers` block for settings merge).
+// See SPEC.md §7.1, README “Zed + ACP”.
+function buildZedAcpNeohiveEntry() {
+  return {
+    type: 'custom',
+    command: mcpNodeCommand().replace(/\\/g, '/'),
+    args: ['${workspaceFolder}/node_modules/neohive/acp-agent.mjs'],
+    env: {
+      NEOHIVE_DATA_DIR: '${workspaceFolder}/.neohive',
+      NEOHIVE_ACP_AGENT_NAME: 'acp-${workspaceName}',
+    },
+  };
+}
+
+function setupZedAcp(cwd) {
+  const zedDir = path.join(cwd, '.zed');
+  const acpPath = path.join(zedDir, 'acp.json');
+  fs.mkdirSync(zedDir, { recursive: true });
+
+  const neohiveEntry = buildZedAcpNeohiveEntry();
+  let outObj = {
+    agent_servers: {
+      neohive: neohiveEntry,
+    },
+  };
+
+  if (fs.existsSync(acpPath)) {
+    try {
+      const existing = JSON.parse(fs.readFileSync(acpPath, 'utf8'));
+      if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+        outObj = { ...existing };
+        const prevServers = outObj.agent_servers;
+        outObj.agent_servers = {
+          ...(prevServers && typeof prevServers === 'object' && !Array.isArray(prevServers) ? prevServers : {}),
+          neohive: neohiveEntry,
+        };
+      }
+    } catch {
+      const backup = acpPath + '.backup';
+      fs.copyFileSync(acpPath, backup);
+      console.log('  [warn] Existing .zed/acp.json was invalid — backed up to .zed/acp.json.backup');
+    }
+  }
+
+  const tmpPath = acpPath + '.tmp.' + process.pid;
+  fs.writeFileSync(tmpPath, JSON.stringify(outObj, null, 2) + '\n');
+  fs.renameSync(tmpPath, acpPath);
+  console.log('  [ok] Zed ACP: .zed/acp.json (agent_servers.neohive)');
+}
+
 // Setup Ollama agent bridge script
 function setupOllama(serverPath, cwd) {
   const dir = dataDir(cwd);
@@ -814,7 +864,16 @@ function init() {
   let targets = [];
 
   if (flag === '--acp') {
-    console.log('ACP configuration coming in MR-3 — flag registered.');
+    const neohiveDir = dataDir(cwd);
+    if (!fs.existsSync(neohiveDir)) {
+      fs.mkdirSync(neohiveDir, { recursive: true, mode: 0o700 });
+      console.log('  [ok] Created ' + path.basename(neohiveDir) + '/');
+    }
+    setupZedAcp(cwd);
+    console.log('');
+    console.log('  Merge `agent_servers` from .zed/acp.json into Zed project settings if needed');
+    console.log('  (`zed: open project settings` → .zed/settings.json). See README “Zed + ACP”.');
+    console.log('  Requires: npm install neohive (path uses node_modules/neohive/acp-agent.mjs).');
     console.log('');
     return;
   }

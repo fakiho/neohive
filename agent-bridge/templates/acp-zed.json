@@ -1,13 +1,14 @@
 {
-    "name": "neohive",
-    "description": "Multi-agent collaboration hub — ACP bridge to .neohive/",
-    "command": "node",
-    "args": ["${workspaceFolder}/node_modules/neohive/acp-agent.mjs"],
-    "env": {
-      "NEOHIVE_DATA_DIR": "${workspaceFolder}/.neohive",
-      "NEOHIVE_ACP_AGENT_NAME": "acp-myproject"
-    },
-    "capabilities": {
-      "mcpBridge": true
-    }
+  "name": "neohive",
+  "version": "6.4.2",
+  "description": "Multi-agent collaboration hub — ACP bridge to shared .neohive/",
+  "command": "node",
+  "args": ["${workspaceFolder}/node_modules/neohive/acp-agent.mjs"],
+  "env": {
+    "NEOHIVE_DATA_DIR": "${workspaceFolder}/.neohive",
+    "NEOHIVE_ACP_AGENT_NAME": "acp-${workspaceName}"
+  },
+  "capabilities": {
+    "mcpBridge": true
+  }
 }

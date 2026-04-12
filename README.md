@@ -31,6 +31,7 @@
   <a href="#-features">Features</a> &middot;
   <a href="#-how-it-works">How It Works</a> &middot;
   <a href="#-vs-code-extension">Extension</a> &middot;
+  <a href="#-zed--acp">Zed + ACP</a> &middot;
   <a href="docs/documentation.md">Documentation</a> &middot;
   <a href="https://neohive.alionix.com">Website</a> &middot;
   <a href="https://www.npmjs.com/package/neohive">npm</a>
@@ -61,6 +62,7 @@ You open Claude Code in one terminal and Gemini CLI in another. Both are powerfu
 - [Recommended Setup](#-recommended-setup)
 - [How It Works](#-how-it-works)
 - [Supported IDEs & CLIs](#-supported-ides--clis)
+- [Zed + ACP](#-zed--acp)
 - [Team Templates](#-team-templates)
 - [Dashboard](#-dashboard)
 - [VS Code Extension](#-vs-code-extension)
@@ -243,10 +245,44 @@ Each CLI spawns its own MCP server process. All processes share a `.neohive/` di
 | [Antigravity](https://antigravity.dev) | `~/.gemini/antigravity/mcp_config.json` | `.agent/skills/neohive/SKILL.md` | `--antigravity` |
 | [Codex CLI](https://github.com/openai/codex) | `.codex/config.toml` | — | `--codex` |
 | [Ollama](https://ollama.com) | `.neohive/ollama-agent.js` | — | `--ollama` |
+| [Zed](https://zed.dev) (ACP) | `.zed/acp.json` → merge into `.zed/settings.json` | — | `--acp` |
 
 ```bash
 npx neohive init --all    # configure all detected CLIs at once
 ```
+
+<br />
+
+## 🐝 Zed + ACP
+
+Neohive ships an **[Agent Client Protocol](https://agentclientprotocol.com/)** bridge (`acp-agent.mjs`) for editors such as **Zed** — same `.neohive/` hub as MCP, different transport. Full product notes: **[SPEC.md](SPEC.md)** (§7.1, §12).
+
+### One-command project fragment
+
+```bash
+npx neohive init --acp
+```
+
+This creates **`.neohive/`** (if missing) and writes **`.zed/acp.json`** containing an `agent_servers.neohive` entry:
+
+- **`command`** — absolute path to the same Node binary that ran `init` (Volta/nvm-safe), like other Neohive IDE configs.
+- **`args`** — `${workspaceFolder}/node_modules/neohive/acp-agent.mjs` (install the **`neohive`** npm package in the project).
+- **`env.NEOHIVE_DATA_DIR`** — `${workspaceFolder}/.neohive`.
+- **`env.NEOHIVE_ACP_AGENT_NAME`** — `acp-${workspaceName}` when Zed expands `${workspaceName}`; otherwise see below.
+
+### Merge into Zed settings
+
+Zed’s documented hook for custom agents is **`agent_servers`** in **settings** ([External Agents](https://zed.dev/docs/ai/external-agents.html)). Merge the `agent_servers` object from `.zed/acp.json` into **`.zed/settings.json`** (project) or your user settings if your Zed build does not load `acp.json` automatically — use **`zed: open project settings`** from the command palette.
+
+### Agent name collisions (important)
+
+- If **`NEOHIVE_ACP_AGENT_NAME` is unset** in the environment seen by `acp-agent.mjs`, the bridge falls back to a **deterministic default** from cwd / data dir (see SPEC §12.3).
+- **Two ACP sessions in the same workspace** without a unique name can **register under the same Neohive agent name** and collide (smoke-tested). **Fix:** set **`NEOHIVE_ACP_AGENT_NAME`** in the manifest `env` to a **unique value per session** (e.g. `acp-zed-a`, `acp-zed-b`), or rely on `${workspaceName}` only when your client expands it and you are sure it differs per session.
+- If the client leaves variables **unexpanded** (literal `acp-${workspaceName}`), registration may fail name validation — use a **static** value such as `acp-myproject` for copy-paste setups (SPEC §7.1 static-fallback note).
+
+### Registry-oriented template
+
+For ACP Registry–style copy-paste (and comparison with `init --acp`), see **`agent-bridge/templates/acp-zed.json`**.
 
 <br />
 
@@ -360,7 +396,7 @@ The MCP server exposes **70+ built-in tools** in one registration list (no separ
 ## ⌨️ CLI Reference
 
 ```bash
-neohive init [--claude|--gemini|--codex|--cursor|--vscode|--antigravity|--all|--ollama] [--template <name>]
+neohive init [--claude|--gemini|--codex|--cursor|--vscode|--antigravity|--all|--ollama|--acp] [--template <name>]
 neohive mcp                 # start MCP stdio server (used internally by IDE configs)
 neohive serve               # optional HTTP MCP server (default port 4321)
 neohive dashboard [--lan]
@@ -387,6 +423,7 @@ neohive uninstall           # remove from all CLI configs
 | `NEOHIVE_PORT` | `3000` | Dashboard port |
 | `NEOHIVE_LAN` | `false` | Enable LAN access |
 | `NEOHIVE_LOG_LEVEL` | `warn` | Logging: `error` · `warn` · `info` · `debug` |
+| `NEOHIVE_ACP_AGENT_NAME` | *(derived)* | ACP bridge only: explicit Neohive agent name; set in Zed/env to avoid collisions when multiple sessions share a cwd (see **Zed + ACP** above) |
 
 <br />
 

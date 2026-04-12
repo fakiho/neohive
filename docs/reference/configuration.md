@@ -12,6 +12,7 @@
 | `NEOHIVE_LAN` | dashboard.js | `false` | Enable LAN access (`true` to bind to `0.0.0.0`) |
 | `GEMINI_API_KEY` | cli.js | — | Gemini API key (also used for CLI detection) |
 | `OLLAMA_URL` | ollama-agent.js | `http://localhost:11434` | Ollama API endpoint |
+| `NEOHIVE_ACP_AGENT_NAME` | acp-agent.mjs | *(derived from cwd / data dir)* | **ACP only.** Set in Zed `env` (or shell) to a unique agent name. If unset, two ACP sessions in the same workspace can **collide** on the same default name — see README “Zed + ACP” and SPEC §12.3. |
 
 ## MCP Configuration Files
 
@@ -127,6 +128,16 @@ Ollama uses a bridge script that connects the local LLM to Neohive's MCP tools. 
 ```bash
 npx neohive init --ollama
 ```
+
+### Zed (ACP)
+
+Neohive does **not** use MCP for Zed’s ACP agent panel. Use **`npx neohive init --acp`**, which writes **`.zed/acp.json`** with an `agent_servers.neohive` entry. Merge `agent_servers` into **`.zed/settings.json`** per [Zed External Agents](https://zed.dev/docs/ai/external-agents.html) if your build does not load `acp.json` automatically.
+
+- **`command`** — absolute Node path (same as `npx neohive init` for other IDEs).
+- **`args`** — `["${workspaceFolder}/node_modules/neohive/acp-agent.mjs"]` — requires **`npm install neohive`** in the project.
+- **`env`** — `NEOHIVE_DATA_DIR`, `NEOHIVE_ACP_AGENT_NAME` (see env table above; avoid name collisions when multiple sessions share cwd).
+
+Illustrative registry-style JSON: `agent-bridge/templates/acp-zed.json`. Product spec: repo root `SPEC.md` §7.1 / §12.
 
 ## IDE Tips
 
