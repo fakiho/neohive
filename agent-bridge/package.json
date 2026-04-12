@@ -4,7 +4,8 @@
   "description": "The MCP collaboration layer for AI CLI tools. Turn Claude Code, Gemini CLI, and Codex CLI into a team.",
   "main": "server.js",
   "bin": {
-    "neohive": "cli.js"
+    "neohive": "cli.js",
+    "neohive-acp": "acp-agent.mjs"
   },
   "scripts": {
     "start": "node server.js",
@@ -12,7 +13,8 @@
     "test": "echo \"No tests configured\"",
     "test:e2e-scroll": "node scripts/test-message-scroll-anchor.mjs",
     "check-paths": "node scripts/check-portable-paths.mjs",
-    "acp-spike": "node scripts/acp-spike.mjs"
+    "acp-spike": "node scripts/acp-spike.mjs",
+    "acp-agent": "node acp-agent.mjs"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -35,7 +37,8 @@
     "logo.png",
     "LICENSE",
     "SECURITY.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "acp-agent.mjs"
   ],
   "keywords": [
     "mcp",
@@ -61,10 +64,10 @@
   "author": "Alionix <contact@alionix.com>",
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
+    "@agentclientprotocol/sdk": "^0.18.2",
     "@modelcontextprotocol/sdk": "1.27.1"
   },
   "devDependencies": {
-    "@agentclientprotocol/sdk": "^0.18.2",
     "playwright": "^1.59.1"
   }
 }
