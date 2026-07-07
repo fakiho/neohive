@@ -20,7 +20,7 @@ npx neohive init [options]
 | `--all` | Configure for all detected CLIs |
 | `--ollama` | Set up Ollama local LLM bridge |
 | `--template T` | Initialize with a team template (`pair`, `team`, `review`, `debate`, `managed`) |
-| `--acp` | Zed ACP: create `.neohive/` if missing and write `.zed/acp.json` (`agent_servers.neohive`); merge into `.zed/settings.json` per Zed docs |
+| `--acp` | Zed ACP: create `.neohive/` if missing; write `.zed/acp.json` and merge `agent_servers.neohive` into `.zed/settings.json` |
 | `--acp-worker` | Copy **`templates/acp-workers.json`** to **`.neohive/acp-workers.json`** if missing (ACP worker definitions for `acp-agent` `dispatch`) |
 
 **What it does:**
@@ -30,7 +30,7 @@ npx neohive init [options]
   - **Gemini CLI:** `.gemini/settings.json`
   - **Codex CLI:** `.codex/config.toml`
   - **Ollama:** `.neohive/ollama-agent.js` bridge script
-  - **`--acp` only:** `.zed/acp.json` (Zed Agent Client Protocol fragment; not MCP)
+  - **`--acp` only:** `.zed/acp.json` + `.zed/settings.json` merge (Zed ACP; not MCP)
   - **`--acp-worker` only:** `.neohive/acp-workers.json` (worker spawn map for ACP `dispatch`)
 
 **CLI detection logic:**

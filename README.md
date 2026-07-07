@@ -245,7 +245,7 @@ Each CLI spawns its own MCP server process. All processes share a `.neohive/` di
 | [Antigravity](https://antigravity.dev) | `~/.gemini/antigravity/mcp_config.json` | `.agent/skills/neohive/SKILL.md` | `--antigravity` |
 | [Codex CLI](https://github.com/openai/codex) | `.codex/config.toml` | — | `--codex` |
 | [Ollama](https://ollama.com) | `.neohive/ollama-agent.js` | — | `--ollama` |
-| [Zed](https://zed.dev) (ACP) | `.zed/acp.json` → merge into `.zed/settings.json` | — | `--acp` |
+| [Zed](https://zed.dev) (ACP) | `.zed/acp.json` + `.zed/settings.json` (merged) | — | `--acp` |
 
 ```bash
 npx neohive init --all    # configure all detected CLIs at once
@@ -263,16 +263,16 @@ Neohive ships an **[Agent Client Protocol](https://agentclientprotocol.com/)** b
 npx neohive init --acp
 ```
 
-This creates **`.neohive/`** (if missing) and writes **`.zed/acp.json`** containing an `agent_servers.neohive` entry:
+This creates **`.neohive/`** (if missing) and writes **`.zed/acp.json`** (and merges **`.zed/settings.json`**) with an `agent_servers.neohive` entry:
 
 - **`command`** — absolute path to the same Node binary that ran `init` (Volta/nvm-safe), like other Neohive IDE configs.
-- **`args`** — `${workspaceFolder}/node_modules/neohive/acp-agent.mjs` (install the **`neohive`** npm package in the project).
+- **`args`** — **`${workspaceFolder}/node_modules/neohive/acp-agent.mjs`** in a normal app after **`npm install neohive`**; **`${workspaceFolder}/agent-bridge/acp-agent.mjs`** when `init --acp` is run from the **Neohive git repo root** (open the whole repo in Zed); **`${workspaceFolder}/acp-agent.mjs`** when the workspace is the **`agent-bridge/`** package folder only.
 - **`env.NEOHIVE_DATA_DIR`** — `${workspaceFolder}/.neohive`.
 - **`env.NEOHIVE_ACP_AGENT_NAME`** — `acp-${workspaceName}` when Zed expands `${workspaceName}`; otherwise see below.
 
 ### Merge into Zed settings
 
-Zed’s documented hook for custom agents is **`agent_servers`** in **settings** ([External Agents](https://zed.dev/docs/ai/external-agents.html)). Merge the `agent_servers` object from `.zed/acp.json` into **`.zed/settings.json`** (project) or your user settings if your Zed build does not load `acp.json` automatically — use **`zed: open project settings`** from the command palette.
+Zed’s documented hook for custom agents is **`agent_servers`** in **settings** ([External Agents](https://zed.dev/docs/ai/external-agents.html)). **`init --acp`** merges **`agent_servers.neohive`** into **`.zed/settings.json`** for you; use **`zed: open project settings`** if you want to inspect or extend it.
 
 ### Agent name collisions (important)
 

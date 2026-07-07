@@ -97,6 +97,11 @@
         "command": "neohive.openChat",
         "title": "Neohive: Open Team Chat",
         "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "neohive.wakeAgent",
+        "title": "Neohive: Wake Agent",
+        "icon": "$(bell)"
       }
     ],
     "menus": {
@@ -171,6 +176,11 @@
           "type": "boolean",
           "default": false,
           "description": "When enabled, MCP setup uses local server.js instead of the published npm package. Also activates when a .neohive-dev file exists in the workspace root."
+        },
+        "neohive.autoWakeAgent": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically inject a wake prompt into the agent's terminal when a new message arrives. When false, shows a notification with a manual 'Wake agent' button instead."
         }
       }
     }

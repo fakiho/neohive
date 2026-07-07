@@ -54,6 +54,10 @@ agent-bridge/.cursor/
 # Internal maintenance docs
 docs/documentation-audit.md
 
+# Personal / local-only (not versioned)
+SPEC.md
+docs/personal-stack.md
+
 # wrangler files
 .wrangler
 .dev.vars*

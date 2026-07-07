@@ -4,6 +4,8 @@
 
 ### Added
 
+- **`init --acp` Zed UX** — Detects **neohive package dev root** (`package.json` name `neohive` + `acp-agent.mjs`) → **`${workspaceFolder}/acp-agent.mjs`**; **monorepo / git checkout root** with **`agent-bridge/`** → **`${workspaceFolder}/agent-bridge/acp-agent.mjs`** and **`${workspaceFolder}/.neohive`**. Otherwise **`node_modules/neohive/...`**. Merges **`agent_servers.neohive`** into **`.zed/settings.json`** idempotently.
+
 - **ACP dual-node router** — `acp-orchestrator.mjs` (`WorkerSession`, `ClientSideConnection` to headless ACP workers): forwards `sessionUpdate` / `requestPermission` (with MVP fallback) and optional `readTextFile` / `writeTextFile` to Zed; hub poll via `setTimeout` chain + in-flight guard; PID-safe **`hub.unregister`** / **`hubUnregisterAgent`**. **`acp-agent.mjs`**: `dispatch worker=<id> cwd=<path>` (+ JSON `action: dispatch`), session **`allowedRoots`**, teardown on cancel / connection abort; **`npx neohive init --acp-worker`** + **`templates/acp-workers.json`**. **Docs:** `docs/acp-registry/` draft for upstream registry PR; README / `docs/documentation.md` / `docs/reference/cli.md` updates. **`package.json` `files`:** `acp-orchestrator.mjs`.
 
 - **`messages(action="consume", drain=true)`** — full-scan `messages.jsonl` from offset 0, ignore `limit`, return and mark consumed all pending inbox rows in one non-blocking call (coordinator batch drain).

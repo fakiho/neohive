@@ -1700,7 +1700,25 @@ function activate(context) {
     }),
     vscode.commands.registerCommand('neohive.bindAgentTerminal', () => terminalBridge.bindAgentTerminal()),
     vscode.commands.registerCommand('neohive.testTerminalBridge', () => terminalBridge.testTerminalBridge()),
-    vscode.commands.registerCommand('neohive.openChat', () => NeohiveChatPanel.createOrShow(context.extensionUri))
+    vscode.commands.registerCommand('neohive.openChat', () => NeohiveChatPanel.createOrShow(context.extensionUri)),
+    vscode.commands.registerCommand('neohive.wakeAgent', async () => {
+      const agentName = getEffectiveAgentName();
+      if (!agentName) {
+        vscode.window.showWarningMessage('Neohive: No agent name configured. Run "Neohive: Configure Agent Name" first.');
+        return;
+      }
+      const terminal = vscode.window.terminals.find(t => isLikelyAgentTerminal(t, agentName));
+      if (!terminal) {
+        vscode.window.showWarningMessage(`Neohive: No terminal found for agent "${agentName}".`);
+        return;
+      }
+      terminal.sendText(
+        'You have pending Neohive messages. Call listen() to retrieve them.',
+        true
+      );
+      terminal.show(false);
+      vscode.window.showInformationMessage(`Neohive: Sent wake signal to ${agentName}`);
+    })
   );
 
   // Auto-configure Claude Code hooks on every activate (idempotent merge)
@@ -1717,6 +1735,8 @@ function activate(context) {
   // Polling loop
   let connected = false;
 
+  let lastPolledAgents = {};
+
   async function pollData() {
     try {
       const [agentsRes, workflows, tasksRes, profilesRes] = await Promise.all([
@@ -1730,6 +1750,7 @@ function activate(context) {
       const tasks = Array.isArray(tasksRes) ? tasksRes : (tasksRes.tasks || []);
       const profiles = profilesRes.profiles || profilesRes;
 
+      lastPolledAgents = agents;
       try { terminalBridge.onAgentsUpdate(agents); } catch (_) {}
       agentProvider.setAgents(agents);
       workflowProvider.setWorkflows(Array.isArray(workflows) ? workflows : []);
@@ -1791,20 +1812,64 @@ function activate(context) {
               if (msg.to !== agentName && msg.to !== '__group__' && msg.to !== '__all__') continue;
               // Re-poll data to refresh sidebar
               pollData();
-              // Find the agent's terminal and wake it by injecting a newline
-              // so Claude Code's idle loop picks up the pending message via listen()
+
               const agentTerminal = vscode.window.terminals.find(
                 t => isLikelyAgentTerminal(t, agentName)
               );
+              const preview = (msg.preview || '').slice(0, 120);
+              const fromLabel = msg.from || 'unknown';
+
               if (agentTerminal) {
-                // Show a VS Code notification with message preview
-                const preview = (msg.preview || '').slice(0, 120);
-                const fromLabel = msg.from || 'unknown';
-                vscode.window.showInformationMessage(
-                  `📨 Neohive: message from ${fromLabel} → ${agentName}: ${preview}`,
-                  'Wake agent'
+                const autoWake = vscode.workspace.getConfiguration('neohive').get('autoWakeAgent', true);
+                if (autoWake) {
+                  const agentInfo = lastPolledAgents && lastPolledAgents[agentName];
+                  const lastAct = agentInfo?.last_activity ? new Date(agentInfo.last_activity).getTime() : 0;
+                  const isIdle = agentInfo?.is_listening || (Date.now() - lastAct > 30000);
+
+                  if (isIdle) {
+                    agentTerminal.sendText(
+                      `You have a new Neohive message from ${fromLabel}. Call listen() to retrieve it.`,
+                      true
+                    );
+                    vscode.window.showInformationMessage(
+                      `📨 Neohive: woke ${agentName} — message from ${fromLabel}: ${preview}`
+                    );
+                  } else {
+                    vscode.window.showInformationMessage(
+                      `📨 Neohive: message from ${fromLabel} queued — ${agentName} is busy`,
+                      'Wake anyway'
+                    ).then(action => {
+                      if (action === 'Wake anyway') {
+                        agentTerminal.sendText(
+                          `You have a new Neohive message from ${fromLabel}. Call listen() to retrieve it.`,
+                          true
+                        );
+                      }
+                    });
+                  }
+                } else {
+                  vscode.window.showInformationMessage(
+                    `📨 Neohive: message from ${fromLabel} → ${agentName}: ${preview}`,
+                    'Wake agent'
+                  ).then(action => {
+                    if (action === 'Wake agent') {
+                      agentTerminal.sendText(
+                        `You have a new Neohive message from ${fromLabel}. Call listen() to retrieve it.`,
+                        true
+                      );
+                      agentTerminal.show(false);
+                    }
+                  });
+                }
+              } else {
+                // No terminal found — show notification so human can act
+                vscode.window.showWarningMessage(
+                  `📨 Neohive: message from ${fromLabel} → ${agentName}: ${preview} (no agent terminal found)`,
+                  'Open terminal'
                 ).then(action => {
-                  if (action === 'Wake agent') agentTerminal.show(false);
+                  if (action === 'Open terminal') {
+                    vscode.commands.executeCommand('workbench.action.terminal.new');
+                  }
                 });
               }
             } catch {}

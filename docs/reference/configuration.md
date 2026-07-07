@@ -131,7 +131,7 @@ npx neohive init --ollama
 
 ### Zed (ACP)
 
-Neohive does **not** use MCP for Zed’s ACP agent panel. Use **`npx neohive init --acp`**, which writes **`.zed/acp.json`** with an `agent_servers.neohive` entry. Merge `agent_servers` into **`.zed/settings.json`** per [Zed External Agents](https://zed.dev/docs/ai/external-agents.html) if your build does not load `acp.json` automatically.
+Neohive does **not** use MCP for Zed’s ACP agent panel. Use **`npx neohive init --acp`**, which writes **`.zed/acp.json`** and merges **`agent_servers.neohive`** into **`.zed/settings.json`** idempotently. See [Zed External Agents](https://zed.dev/docs/ai/external-agents.html).
 
 - **`command`** — absolute Node path (same as `npx neohive init` for other IDEs).
 - **`args`** — `["${workspaceFolder}/node_modules/neohive/acp-agent.mjs"]` — requires **`npm install neohive`** in the project.

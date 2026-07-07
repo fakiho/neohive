@@ -149,10 +149,13 @@ function createTerminalBridge(context, log) {
       const isIdle = !agent.is_listening && idleMs > 60000;
 
       if (isIdle) {
-        // sendText with false = don't auto-execute (no Enter), agent's next prompt picks it up
-        terminal.sendText('listen()', false);
+        const autoWake = vscode.workspace.getConfiguration('neohive').get('autoWakeAgent', true);
+        terminal.sendText(
+          'You have pending Neohive messages. Call listen() to retrieve them.',
+          autoWake // true = execute (inject + Enter), false = prefill only
+        );
         info.lastNudge = now;
-        log.info(`[terminal-bridge] Nudged "${agentName}" with listen() (idle ${Math.round(idleMs / 1000)}s)`);
+        log.info(`[terminal-bridge] Nudged "${agentName}" (idle ${Math.round(idleMs / 1000)}s, autoWake=${autoWake})`);
       }
     }
   }

@@ -100,14 +100,17 @@ npx neohive init --acp
 
 - **`.neohive/`** — created if missing (shared data directory).
 - **`.zed/acp.json`** — JSON with an **`agent_servers.neohive`** object suitable for Zed’s [custom external agents](https://zed.dev/docs/ai/external-agents.html) docs (`type: "custom"`, `command`, `args`, `env`).
+- **`.zed/settings.json`** — **`agent_servers.neohive`** is **merged** idempotently so Zed loads the agent from project settings without a manual copy step.
 
 **Wire-up in Zed**
 
-Many Zed versions expect **`agent_servers`** inside **`.zed/settings.json`** (or user settings). Open **`zed: open project settings`**, then merge the **`agent_servers`** key from `.zed/acp.json` into that file if Zed does not consume `acp.json` automatically.
+Reload or restart Zed, open this folder as the **workspace root**, then start the external ACP agent named **`neohive`**. If you use only **`.zed/acp.json`** from an older flow, you can still merge **`agent_servers`** into **`.zed/settings.json`** by hand.
 
 **Dependencies**
 
-- Run **`npm install neohive`** in the project so `node_modules/neohive/acp-agent.mjs` exists (the fragment uses `${workspaceFolder}/node_modules/...`).
+- **Consumer projects:** run **`npm install neohive`** so `node_modules/neohive/acp-agent.mjs` exists (default `args` path).
+- **Developing the `neohive` package in `agent-bridge/`** (that folder is the cwd, with `acp-agent.mjs` next to `package.json`): `init --acp` uses **`${workspaceFolder}/acp-agent.mjs`**.
+- **Developing the full Neohive git repo** (workspace root contains **`agent-bridge/`** with the published package): `init --acp` uses **`${workspaceFolder}/agent-bridge/acp-agent.mjs`** and **`${workspaceFolder}/.neohive`** — open the **repository root** in Zed, not only `agent-bridge/`.
 
 **Agent naming and collisions**
 

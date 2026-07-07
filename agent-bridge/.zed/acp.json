@@ -1,0 +1,15 @@
+{
+  "agent_servers": {
+    "neohive": {
+      "type": "custom",
+      "command": "/Users/alifakih/.volta/tools/image/node/24.14.0/bin/node",
+      "args": [
+        "${workspaceFolder}/acp-agent.mjs"
+      ],
+      "env": {
+        "NEOHIVE_DATA_DIR": "${workspaceFolder}/.neohive",
+        "NEOHIVE_ACP_AGENT_NAME": "acp-${workspaceName}"
+      }
+    }
+  }
+}

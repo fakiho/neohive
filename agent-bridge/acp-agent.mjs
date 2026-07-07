@@ -335,20 +335,28 @@ class NeohiveAcpAgent {
     /** @type {string | null} */
     this.agentName = null;
     this.initError = null;
-
-    connection.signal.addEventListener('abort', () => {
-      for (const [, ses] of this.sessions) {
-        try {
-          ses.worker?.destroy();
-        } catch {
-          /* ignore */
-        }
-        ses.worker = null;
-      }
-    });
+    // NOTE: connection.signal must NOT be accessed here — the SDK assigns
+    // this.#connection after calling toAgent(this), so signal is unavailable
+    // in the constructor. The abort listener is registered in initialize().
   }
 
   async initialize(_params) {
+    // Register abort listener now that #connection is fully assigned by the SDK.
+    try {
+      this.connection.signal.addEventListener('abort', () => {
+        for (const [, ses] of this.sessions) {
+          try {
+            ses.worker?.destroy();
+          } catch {
+            /* ignore */
+          }
+          ses.worker = null;
+        }
+      });
+    } catch {
+      /* signal not available on this SDK version — skip */
+    }
+
     try {
       const r = hub.register(this.defaultName, 'ACP', ['acp', 'messaging']);
       if (r.error) {

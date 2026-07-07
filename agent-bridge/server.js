@@ -2291,10 +2291,16 @@ function toolAckMessage(messageId) {
 }
 
 // Listen indefinitely — loops wait_for_reply in 5-min chunks until a message arrives
-async function toolListen(from = null, outcome = null, task_id = null, summary = null, mode = null) {
+async function toolListen(from = null, outcome = null, task_id = null, summary = null, mode = null, n = null) {
   if (!registeredName) {
     return { error: 'You must call register() first' };
   }
+
+  const batchN = (() => {
+    const raw = Number(n);
+    if (!Number.isFinite(raw) || raw < 1) return 1;
+    return Math.min(20, Math.floor(raw));
+  })();
 
   // Mode-based dispatch: explicit mode overrides auto-detection
   if (mode === 'codex') return toolListenCodex(from, outcome, task_id, summary);

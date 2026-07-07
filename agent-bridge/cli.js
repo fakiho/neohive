@@ -51,6 +51,7 @@ function printUsage() {
     npx neohive hooks               Install listen-enforcement hooks for all detected IDEs (Claude + Cursor)
     npx neohive cursor-hooks        Install listen-enforcement hooks into .cursor/hooks.json only
     npx neohive skills              Install neohive skills & agents for all detected IDEs
+    npx neohive run --name N --cmd C  Wrap a CLI agent with event-driven message injection
     npx neohive uninstall           Remove from all CLI configs
     npx neohive help                Show this help
 
@@ -675,11 +676,57 @@ function setupCursor(serverPath, cwd) {
 
 // Zed — ACP custom agent fragment: .zed/acp.json (`agent_servers` block for settings merge).
 // See SPEC.md §7.1, README “Zed + ACP”.
-function buildZedAcpNeohiveEntry() {
+/** True when cwd is the neohive npm package root (developing this repo), not a consumer app. */
+function isNeohivePackageDevRoot(cwd) {
+  const pkgPath = path.join(cwd, 'package.json');
+  const acpPath = path.join(cwd, 'acp-agent.mjs');
+  if (!fs.existsSync(pkgPath) || !fs.existsSync(acpPath)) return false;
+  try {
+    const p = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    return !!(p && p.name === 'neohive');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve acp-agent.mjs path token for Zed (${workspaceFolder}/...).
+ * Order: package dev cwd → monorepo root with agent-bridge/ → npm consumer.
+ */
+function resolveZedNeohiveAcpScript(cwd) {
+  if (isNeohivePackageDevRoot(cwd)) {
+    return {
+      scriptArg: '${workspaceFolder}/acp-agent.mjs',
+      hint: 'neohive package dev root',
+    };
+  }
+  const bridgePkg = path.join(cwd, 'agent-bridge', 'package.json');
+  const bridgeAcp = path.join(cwd, 'agent-bridge', 'acp-agent.mjs');
+  if (fs.existsSync(bridgeAcp) && fs.existsSync(bridgePkg)) {
+    try {
+      const p = JSON.parse(fs.readFileSync(bridgePkg, 'utf8'));
+      if (p && p.name === 'neohive') {
+        return {
+          scriptArg: '${workspaceFolder}/agent-bridge/acp-agent.mjs',
+          hint: 'neohive repo root (open whole folder in Zed)',
+        };
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  return {
+    scriptArg: '${workspaceFolder}/node_modules/neohive/acp-agent.mjs',
+    hint: null,
+  };
+}
+
+function buildZedAcpNeohiveEntry(cwd) {
+  const { scriptArg } = resolveZedNeohiveAcpScript(cwd);
   return {
     type: 'custom',
     command: mcpNodeCommand().replace(/\\/g, '/'),
-    args: ['${workspaceFolder}/node_modules/neohive/acp-agent.mjs'],
+    args: [scriptArg],
     env: {
       NEOHIVE_DATA_DIR: '${workspaceFolder}/.neohive',
       NEOHIVE_ACP_AGENT_NAME: 'acp-${workspaceName}',
@@ -687,12 +734,24 @@ function buildZedAcpNeohiveEntry() {
   };
 }
 
+function writeZedDirJsonAtomic(zedDir, baseName, obj) {
+  const p = path.join(zedDir, baseName);
+  const tmpPath = p + '.tmp.' + process.pid;
+  fs.writeFileSync(tmpPath, JSON.stringify(obj, null, 2) + '\n');
+  fs.renameSync(tmpPath, p);
+}
+
 function setupZedAcp(cwd) {
   const zedDir = path.join(cwd, '.zed');
   const acpPath = path.join(zedDir, 'acp.json');
+  const settingsPath = path.join(zedDir, 'settings.json');
   fs.mkdirSync(zedDir, { recursive: true });
 
-  const neohiveEntry = buildZedAcpNeohiveEntry();
+  const resolvedScript = resolveZedNeohiveAcpScript(cwd);
+  if (resolvedScript.hint) {
+    console.log(`  [info] Zed ACP: using ${resolvedScript.scriptArg} (${resolvedScript.hint})`);
+  }
+  const neohiveEntry = buildZedAcpNeohiveEntry(cwd);
   let outObj = {
     agent_servers: {
       neohive: neohiveEntry,
@@ -717,10 +776,27 @@ function setupZedAcp(cwd) {
     }
   }
 
-  const tmpPath = acpPath + '.tmp.' + process.pid;
-  fs.writeFileSync(tmpPath, JSON.stringify(outObj, null, 2) + '\n');
-  fs.renameSync(tmpPath, acpPath);
+  writeZedDirJsonAtomic(zedDir, 'acp.json', outObj);
   console.log('  [ok] Zed ACP: .zed/acp.json (agent_servers.neohive)');
+
+  let settings = {};
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const existing = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      if (existing && typeof existing === 'object' && !Array.isArray(existing)) settings = existing;
+    } catch {
+      const backup = settingsPath + '.backup';
+      fs.copyFileSync(settingsPath, backup);
+      console.log('  [warn] Existing .zed/settings.json was invalid — backed up to .zed/settings.json.backup');
+    }
+  }
+  const prevServers = settings.agent_servers;
+  settings.agent_servers = {
+    ...(prevServers && typeof prevServers === 'object' && !Array.isArray(prevServers) ? prevServers : {}),
+    neohive: neohiveEntry,
+  };
+  writeZedDirJsonAtomic(zedDir, 'settings.json', settings);
+  console.log('  [ok] Zed: .zed/settings.json (merged agent_servers.neohive)');
 }
 
 // Headless ACP worker definitions for acp-agent dispatch (dual-node router).
@@ -889,9 +965,9 @@ function init() {
     }
     setupZedAcp(cwd);
     console.log('');
-    console.log('  Merge `agent_servers` from .zed/acp.json into Zed project settings if needed');
-    console.log('  (`zed: open project settings` → .zed/settings.json). See README “Zed + ACP”.');
-    console.log('  Requires: npm install neohive (path uses node_modules/neohive/acp-agent.mjs).');
+    console.log('  In Zed: open this folder as the project root, reload, then start the external ACP agent “neohive”.');
+    console.log('  Consumer apps: run `npm install neohive` so node_modules/neohive/acp-agent.mjs exists (skipped for neohive dev / monorepo layouts).');
+    console.log('  See README “Zed + ACP”.');
     console.log('');
     return;
   }
@@ -1781,6 +1857,15 @@ switch (command) {
   case 'uninstall':
   case 'remove':
     uninstall();
+    break;
+  case 'run':
+  case 'wrap':
+    // Delegate to agent-runner.js, passing remaining args through
+    require('child_process').execFileSync(
+      process.execPath,
+      [path.join(__dirname, 'scripts', 'agent-runner.js'), ...process.argv.slice(3)],
+      { stdio: 'inherit', env: process.env }
+    );
     break;
   case 'plugin':
   case 'plugins':
