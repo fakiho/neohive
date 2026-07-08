@@ -2296,6 +2296,22 @@ function toolAckMessage(messageId) {
   return { success: true, message: `Message ${messageId} acknowledged` };
 }
 
+// How long this call to listen() may block before returning retry:true.
+// Tmux-mapped agents get a longer backstop interval (see tmux-agent-state.js) —
+// dashboard/agent messages still arrive instantly either way via fs.watch below,
+// this only reduces how often an idle agent has to re-invoke listen() at all.
+function getListenTimeoutMs() {
+  const baseMs = (getConfig().listen_poll_interval || 120) * 1000;
+  try {
+    const me = getAgents()[registeredName];
+    if (me && me.tmux && me.tmux.mapped) {
+      const backstopSeconds = tmuxAgentState.getTmuxStateConfig().listen_backstop_seconds;
+      if (backstopSeconds) return Math.max(baseMs, backstopSeconds * 1000);
+    }
+  } catch { /* fall through to the default interval */ }
+  return baseMs;
+}
+
 // Listen indefinitely — loops wait_for_reply in 5-min chunks until a message arrives
 async function toolListen(from = null, outcome = null, task_id = null, summary = null, mode = null, n = null) {
   if (!registeredName) {
@@ -2472,7 +2488,7 @@ async function toolListen(from = null, outcome = null, task_id = null, summary =
 
       heartbeatTimer = setInterval(() => { touchHeartbeat(registeredName); }, 15000);
 
-      const listenTimeoutMs = (getConfig().listen_poll_interval || 120) * 1000;
+      const listenTimeoutMs = getListenTimeoutMs();
       timer = setTimeout(() => {
         touchActivity();
         autoCompact();
