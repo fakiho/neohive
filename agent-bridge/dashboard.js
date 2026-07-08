@@ -8,6 +8,8 @@ const { upsertNeohiveMcpInToml } = require('./lib/codex-neohive-toml');
 const pkg = require(path.join(__dirname, 'package.json'));
 const { readIdeActivity, applyIdeActivityHint } = require('./lib/ide-activity');
 const _audit = require('./lib/audit');
+const { WebSocketServer } = require('ws');
+const terminalWs = require('./lib/terminal-ws');
 
 function findCursorProjectRootWithNeohive(startDir) {
   let dir = path.resolve(startDir);
@@ -538,6 +540,7 @@ function apiAgents(query) {
       is_remote: !isLocal && alive,
       platform_skills: (cards && cards[name] && cards[name].platform_skills) || [],
       skills: (cards && cards[name] && cards[name].skills) || [],
+      tmux: info.tmux || { mapped: false, state: 'unknown', confidence: 'none' },
     };
     // Include workspace status for agent intent board
     try {
@@ -4144,6 +4147,48 @@ setInterval(() => {
     _lastWatcherRestart = Date.now();
   }
 }, 5000).unref();
+
+// --- Interactive terminal WebSocket ---
+// Upgrade events bypass the normal request listener entirely, so auth is
+// re-checked here rather than reused from it: Origin must be trusted
+// (unconditionally — there's no legitimate non-browser caller of this
+// endpoint, unlike the HTTP path's "absent origin = local CLI" allowance)
+// and, in LAN mode, the same LAN token used everywhere else in this file.
+const terminalWss = new WebSocketServer({ noServer: true });
+server.on('upgrade', (req, socket, head) => {
+  const url = new URL(req.url, 'http://localhost:' + PORT);
+  if (url.pathname !== '/api/terminal') {
+    socket.destroy();
+    return;
+  }
+
+  const reqOrigin = req.headers.origin;
+  const lanIP = getLanIP();
+  const trustedOrigins = [`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`];
+  if (LAN_MODE && lanIP) trustedOrigins.push(`http://${lanIP}:${PORT}`);
+  if (!reqOrigin || !trustedOrigins.includes(reqOrigin)) {
+    socket.destroy();
+    return;
+  }
+
+  if (LAN_MODE) {
+    const host = (req.headers.host || '').replace(/:\d+$/, '');
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1';
+    if (!isLocalhost) {
+      const providedToken = url.searchParams.get('token');
+      const crypto = require('crypto');
+      if (!providedToken || providedToken.length !== LAN_TOKEN.length || !crypto.timingSafeEqual(Buffer.from(providedToken), Buffer.from(LAN_TOKEN))) {
+        socket.destroy();
+        return;
+      }
+    }
+  }
+
+  terminalWss.handleUpgrade(req, socket, head, (ws) => {
+    const { sessionName } = terminalWs.getTerminalConfig();
+    terminalWs.attachTerminal(ws, { sessionName });
+  });
+});
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {

@@ -55,6 +55,10 @@ const HISTORY_FILE = path.join(DATA_DIR, 'history.jsonl');
 const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
 const ACKS_FILE = path.join(DATA_DIR, 'acks.json');
 const TASKS_FILE = path.join(DATA_DIR, 'tasks.json');
+const tmuxAgentState = require('./lib/tmux-agent-state')({
+  DATA_DIR,
+  helpers: { getAgents, saveAgents, broadcastSystemMessage },
+});
 const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
 const WORKFLOWS_FILE = path.join(DATA_DIR, 'workflows.json');
 const WORKSPACES_DIR = path.join(DATA_DIR, 'workspaces');
@@ -1581,6 +1585,8 @@ function toolRegister(name, provider = null, skills = null) {
         escalateBlockedTasks();
         // Stand-up meetings: periodic team check-ins
         triggerStandupIfDue();
+        // Advisory tmux pane-state signal: on by default, self-throttled across processes
+        tmuxAgentState.pollIfDue();
         // Auto-reassign stuck workflow steps from dead agents
         checkStuckWorkflowSteps();
         // Stale task detection: warn about tasks in_progress for >30 minutes without update
@@ -4806,10 +4812,21 @@ function watchdogCheck() {
   const agents = getAgents();
   const now = Date.now();
   let agentsChanged = false;
+  const tmuxSuppressWindowMs = tmuxAgentState.getTmuxStateConfig().suppress_nudge_window_seconds * 1000;
 
   for (const [name, agent] of Object.entries(agents)) {
     if (name === registeredName) continue;
     if (!isPidAlive(agent.pid, agent.last_activity)) continue;
+
+    // Advisory tmux signal: skip nudges this cycle if the agent's mapped pane
+    // produced fresh output very recently — probably legitimately busy (e.g.
+    // stuck at a permission prompt it can't call listen() from), not stuck.
+    // Read-only guard: only ever skips an escalation that would otherwise
+    // fire, never adds a new one. Never touches selfHealingWatchdog().
+    if (agent.tmux && agent.tmux.mapped && agent.tmux.last_output_at) {
+      const outputAgeMs = now - new Date(agent.tmux.last_output_at).getTime();
+      if (outputAgeMs < tmuxSuppressWindowMs) continue;
+    }
 
     const idleTime = now - new Date(agent.last_activity).getTime();
 
