@@ -78,6 +78,14 @@ module.exports = function (ctx) {
       enabled: config.enabled !== false, // absent key = on (unlike github_issue_sync, which defaults off)
       poll_interval_seconds: config.poll_interval_seconds || 20,
       suppress_nudge_window_seconds: config.suppress_nudge_window_seconds || 90,
+      // How long a tmux-mapped agent's listen() call is allowed to block before
+      // returning retry:true — longer than the default listen_poll_interval, to
+      // cut the number of idle re-poll round-trips (and the context they add)
+      // for agents we know are reachable. Capped well under neohive's default
+      // 300s MCP client tool-timeout (CLI_CONFIG.MCP_TOOL_TIMEOUT_S in cli.js) —
+      // block longer than the client's own timeout and the call errors instead
+      // of returning cleanly. 0/false disables (falls back to listen_poll_interval).
+      listen_backstop_seconds: config.listen_backstop_seconds === undefined ? 240 : config.listen_backstop_seconds,
     };
   }
 
