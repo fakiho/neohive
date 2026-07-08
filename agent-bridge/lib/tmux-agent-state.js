@@ -146,7 +146,13 @@ module.exports = function (ctx) {
 
   function matchPromptPatterns(text) {
     if (!text) return { matched: false, pattern_id: null };
-    const recentLines = text.split('\n').slice(-MATCH_LINES).join('\n');
+    // tmux capture-pane returns the full pane height, padded with blank lines
+    // below wherever the cursor currently sits — e.g. a 50-row pane with content
+    // ending at row 30 yields 20 trailing blank lines. Trim those first, or
+    // "last N lines" grabs blank padding instead of the actual last output.
+    const lines = text.split('\n');
+    while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+    const recentLines = lines.slice(-MATCH_LINES).join('\n');
     for (const p of PROMPT_PATTERNS) {
       if (p.regex.test(recentLines)) {
         return { matched: true, pattern_id: p.id };
