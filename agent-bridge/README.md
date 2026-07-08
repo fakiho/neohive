@@ -356,6 +356,28 @@ neohive uninstall           # remove from all CLI configs
 
 <br />
 
+### GitHub Issues Sync (opt-in)
+
+Mirror your repo's GitHub Issues into neohive tasks automatically, so agents discover work by staying in their normal `listen()` loop — no need to paste issue links into chat.
+
+Uses the [`gh` CLI](https://cli.github.com/) for all GitHub access. Neohive never stores, reads, or transmits a token — `gh` handles its own auth entirely.
+
+1. Authenticate `gh` once, in the project you want this in:
+   ```bash
+   gh auth login
+   ```
+2. Enable it in that project's `.neohive/config.json` (disabled by default everywhere):
+   ```json
+   {
+     "github_issue_sync": { "enabled": true }
+   }
+   ```
+   Optional fields: `poll_interval_minutes` (default `5`), `repo` (e.g. `"org/repo"` — omit to auto-detect from the git remote).
+
+Every ~5 minutes, one of your running agent processes polls open issues, creates a `pending` task per new issue (title, body, labels, and URL included), closes the linked task when the issue closes, and broadcasts a `[NEW ISSUE]` message so any agent currently listening picks it up immediately.
+
+<br />
+
 ## 🧩 VS Code Extension
 
 The [Neohive extension](https://marketplace.visualstudio.com/items?itemName=alionix.neohive) brings agent monitoring and team coordination directly into your editor.
