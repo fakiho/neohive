@@ -466,6 +466,17 @@
   .agent-state-pill.working   { background: rgba(74,222,128,0.12); color: #4ade80; }
   .agent-current-tool { font-size: 10px; color: var(--nh-text-muted, #6b7280); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
 
+  .agent-tmux-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 9px; padding: 1px 5px; border-radius: 3px;
+    margin-left: 4px; flex-shrink: 0; font-weight: 600;
+  }
+  .agent-tmux-badge.blocked_on_prompt { background: rgba(239,68,68,0.18); color: #ef4444; }
+  .agent-tmux-badge.mapped-low { background: rgba(156,163,175,0.14); color: #9ca3af; }
+  .agent-tmux-badge.unmapped { background: rgba(156,163,175,0.08); color: #6b7280; opacity: 0.6; }
+  .agent-tmux-badge:empty { display: none; }
+  .tmux-mapped-summary { font-size: 10px; color: var(--nh-text-muted); font-weight: 400; margin-left: 4px; }
+
   .agent-card.stuck { border-color: rgba(239, 68, 68, 0.3); }
   .agent-card.unresponsive { border-color: rgba(249, 115, 22, 0.3); }
 
@@ -2374,6 +2385,47 @@
     justify-content: center;
   }
   .phone-modal-overlay.open { display: flex; }
+  .shortcuts-search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 12px;
+    margin: 12px 0;
+    border-radius: 8px;
+    border: 1px solid var(--nh-border);
+    background: var(--nh-bg, #0b0e14);
+    color: var(--nh-text);
+    font-size: 13px;
+  }
+  .shortcuts-list { max-height: 55vh; overflow-y: auto; }
+  .shortcuts-category {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--nh-text-muted);
+    margin: 14px 0 6px;
+  }
+  .shortcuts-category:first-child { margin-top: 0; }
+  .shortcut-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--nh-divider, rgba(255,255,255,0.06));
+  }
+  .shortcut-desc { font-size: 13px; color: var(--nh-text); }
+  .shortcut-keys {
+    font-family: Menlo, Monaco, "Courier New", monospace;
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--nh-border);
+    border-radius: 5px;
+    padding: 2px 7px;
+    white-space: nowrap;
+    color: var(--nh-text-muted);
+  }
+  .shortcuts-empty { color: var(--nh-text-muted); font-size: 13px; padding: 16px 0; text-align: center; }
 
   .phone-modal {
     background: var(--surface);
@@ -3344,13 +3396,12 @@
     background: #000;
     border-radius: var(--nh-radius-md);
     padding: 10px;
-    margin-top: 8px;
-    height: 320px;
+    flex: 1;
     position: relative;
     overflow: hidden;
     border: 1px solid var(--nh-border);
   }
-  #pp-terminal-container {
+  #terminal-container {
     width: 100%;
     height: 100%;
   }
@@ -3666,6 +3717,48 @@
     display: none;
   }
   .launch-area.visible { display: block; }
+  .terminal-area {
+    flex: 1;
+    overflow: hidden;
+    padding: 20px 24px;
+    display: none;
+    flex-direction: column;
+  }
+  .terminal-area.visible { display: flex; }
+  .terminal-area.fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: var(--nh-bg, #0b0e14);
+    padding: 12px 16px;
+  }
+  .terminal-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+  }
+  .terminal-toolbar-title {
+    font-weight: 600;
+    color: var(--nh-text-muted);
+    font-size: 13px;
+  }
+  .terminal-toolbar-actions { display: flex; gap: 6px; }
+  .terminal-toolbar-btn {
+    background: var(--surface);
+    border: 1px solid var(--nh-border);
+    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--nh-text-muted);
+    font-size: 15px;
+  }
+  .terminal-toolbar-btn:hover { background: var(--nh-hover, rgba(255,255,255,0.06)); color: var(--nh-text); }
   .launch-section {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
     padding: 20px; margin-bottom: 20px;
@@ -4424,6 +4517,16 @@
   </div>
 </div>
 
+<div class="phone-modal-overlay" id="shortcuts-modal-overlay" onclick="if(event.target===this)closeShortcutsModal()">
+  <div class="phone-modal" style="max-width:560px;width:90vw">
+    <button class="phone-modal-close" onclick="closeShortcutsModal()">&times;</button>
+    <h3>Terminal Shortcuts</h3>
+    <div class="phone-modal-sub">tmux keybindings — search by action, e.g. "resize", "split", "copy"</div>
+    <input type="text" class="shortcuts-search" id="shortcuts-search" placeholder="Search shortcuts..." oninput="renderShortcuts()">
+    <div class="shortcuts-list" id="shortcuts-list"></div>
+  </div>
+</div>
+
 <!-- v3.4: EDIT MESSAGE MODAL -->
 <div class="phone-modal-overlay" id="edit-modal-overlay" onclick="if(event.target===this)closeEditModal()">
   <div class="phone-modal" style="width:500px;text-align:left">
@@ -4468,11 +4571,14 @@
       <div class="nav-item" data-view="launch" onclick="switchView('launch')">
         <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v12M2 8h12"/></svg></span><span class="nav-text">Launch</span>
       </div>
+      <div class="nav-item" data-view="terminal" onclick="switchView('terminal')">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4l4 4-4 4M9 12h4"/></svg></span><span class="nav-text">Terminal</span>
+      </div>
     </div>
     <div class="nav-sidebar-divider"></div>
     <!-- Agents -->
     <div class="nav-sidebar-section nav-sidebar-agents">
-      <div class="nav-sidebar-label">AGENTS</div>
+      <div class="nav-sidebar-label">AGENTS<span class="tmux-mapped-summary" id="tmux-mapped-summary"></span></div>
       <div id="agents-list"></div>
     </div>
     <!-- Project (hidden — single-project mode) -->
@@ -4574,6 +4680,16 @@
     <div class="rules-area" id="rules-area"></div>
     <div class="audit-log-area" id="audit-log-area" style="display:none; padding:16px 20px; overflow-y:auto; flex:1"></div>
     <div class="stats-area" id="stats-area"></div>
+<div class="terminal-area" id="terminal-area">
+  <div class="terminal-toolbar">
+    <span class="terminal-toolbar-title">Terminal</span>
+    <div class="terminal-toolbar-actions">
+      <button class="terminal-toolbar-btn" onclick="toggleTerminalFullscreen()" title="Full screen">⛶</button>
+      <button class="terminal-toolbar-btn" onclick="openShortcutsModal()" title="Keyboard shortcuts">ⓘ</button>
+    </div>
+  </div>
+  <div class="terminal-wrapper"><div id="terminal-container"></div></div>
+</div>
     <div class="docs-area" id="docs-area"><div id="docs-content"></div></div>
     <button class="scroll-bottom" id="scroll-bottom" type="button" onclick="scrollToBottom()" aria-label="Jump to latest messages.">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
@@ -4618,7 +4734,6 @@
     <button class="pp-tab active" data-tab="stats" onclick="switchPpTab('stats')">Stats</button>
     <button class="pp-tab" data-tab="actions" onclick="switchPpTab('actions')">Actions</button>
     <button class="pp-tab" data-tab="profile" onclick="switchPpTab('profile')">Profile</button>
-    <button class="pp-tab" data-tab="terminal" onclick="switchPpTab('terminal', true)">Terminal</button>
   </div>
   <!-- Stats (always visible) -->
   <div class="pp-tab-content active" id="pp-tab-stats">
@@ -4635,10 +4750,7 @@
     <div id="pp-skills-container"></div>
     <button class="btn btn-danger" style="display:none" id="pp-delete-btn" onclick="confirmDeleteAgent()">Delete Agent</button>
   </div>
-  <div class="pp-tab-content" id="pp-tab-terminal" style="display:none">
-    <div class="terminal-wrapper"><div id="pp-terminal-container"></div></div>
-    <span id="terminal-status" style="display:none">Ready</span>
-  </div>
+
 </div>
 
 <!-- Profile Editor Panel (replaces Character Designer) -->
@@ -5085,6 +5197,22 @@ function renderAgents(agents) {
     return BUILT_IN_AVATARS[Math.abs(hash) % BUILT_IN_AVATARS.length];
   }
 
+  // Shared by the full-rebuild render path and the DOM-patch fast-path below,
+  // so the two never drift out of sync with each other.
+  function tmuxBadgeClassAndText(info) {
+    var t = info && info.tmux;
+    if (!t) return null;
+    if (t.state === 'blocked_on_prompt') return { cls: 'blocked_on_prompt', text: '⚠ blocked?', title: 'tmux pane shows a possible permission prompt — advisory only' };
+    if (t.mapped) return { cls: 'mapped-low', text: 'tmux', title: 'mapped to a tmux pane, no strong signal' };
+    return { cls: 'unmapped', text: 'no tty', title: 'not mapped to any tmux pane' };
+  }
+
+  function tmuxBadgeHtml(info) {
+    var b = tmuxBadgeClassAndText(info);
+    if (!b) return '';
+    return '<span class="agent-tmux-badge ' + b.cls + '" title="' + escapeHtml(b.title) + '">' + b.text + '</span>';
+  }
+
   function renderAgentCards(agentNames) {
     var cardHtml = '';
     for (var i = 0; i < agentNames.length; i++) {
@@ -5138,6 +5266,7 @@ function renderAgents(agents) {
             '<div class="agent-subtitle">' + escapeHtml(subtitleText) + '</div>' +
           '</div>' +
           indicatorHtml +
+          tmuxBadgeHtml(info) +
         '</div>' +
       '</div>';
     }
@@ -5219,6 +5348,23 @@ function renderAgents(agents) {
       }
       var newCardClass = 'agent-card' + (pState !== 'working' ? ' ' + pState : '');
       if (pCard.className !== newCardClass) pCard.className = newCardClass;
+
+      var tmuxBadge = pCard.querySelector('.agent-tmux-badge');
+      var tb = tmuxBadgeClassAndText(pInfo);
+      if (tb) {
+        if (!tmuxBadge) {
+          tmuxBadge = document.createElement('span');
+          var agentTop = pCard.querySelector('.agent-top');
+          if (agentTop) agentTop.appendChild(tmuxBadge);
+        }
+        if (tmuxBadge) {
+          tmuxBadge.className = 'agent-tmux-badge ' + tb.cls;
+          tmuxBadge.textContent = tb.text;
+          tmuxBadge.title = tb.title;
+        }
+      } else if (tmuxBadge) {
+        tmuxBadge.remove();
+      }
     }
   }
   if (!didPatch) {
@@ -5228,6 +5374,14 @@ function renderAgents(agents) {
 
   // Update inject target dropdown — must run BEFORE the alertEl guard which may early-return
   updateInjectTargets(agents);
+
+  // Update tmux-mapped summary — must also run BEFORE the alertEl guard which may early-return
+  var tmuxSummaryEl = document.getElementById('tmux-mapped-summary');
+  if (tmuxSummaryEl) {
+    var agentNamesAll = Object.keys(agents);
+    var mappedCount = agentNamesAll.filter(function(n) { return agents[n].tmux && agents[n].tmux.mapped; }).length;
+    tmuxSummaryEl.textContent = agentNamesAll.length ? ' (' + mappedCount + '/' + agentNamesAll.length + ' mapped)' : '';
+  }
 
   // Update alert badge
   var alertEl = document.getElementById('alert-count');
@@ -6705,6 +6859,7 @@ function switchView(view) {
   }
   document.getElementById('stats-area').classList.toggle('visible', view === 'stats');
   document.getElementById('docs-area').classList.toggle('visible', view === 'docs');
+  document.getElementById('terminal-area').classList.toggle('visible', view === 'terminal');
   document.getElementById('search-bar').style.display = view === 'messages' ? 'flex' : 'none';
   document.getElementById('channel-filter-bar').style.display = view === 'messages' && activeChannel !== undefined ? '' : 'none';
   var composeBar = document.querySelector('.msg-input-bar');
@@ -6720,6 +6875,7 @@ function switchView(view) {
   if (view === 'rules') fetchRules();
   if (view === 'audit-log') fetchAuditLog();
   if (view === 'stats') fetchStats();
+  if (view === 'terminal') initTerminal();
   if (isMobile) closeSidebar();
 }
 
@@ -7555,11 +7711,29 @@ function loadXterm() {
   return _xtermLoadPromise;
 }
 
-var terminalInstances = new Map(); // agentName -> { term: Terminal, fit: FitAddon, lastMsgId: string }
+var TERMINAL_KEY = '__terminal__'; // single shared terminal — all agents/viewers attach to one tmux session
+var terminalInstances = new Map(); // TERMINAL_KEY -> { term: Terminal, fit: FitAddon, ws: WebSocket }
 
-async function initTerminal(agentName) {
-  var container = document.getElementById('pp-terminal-container');
-  if (!container || !agentName) return;
+async function initTerminal() {
+  var container = document.getElementById('terminal-container');
+  if (!container) return;
+
+  if (terminalInstances.has(TERMINAL_KEY)) {
+    // Container is a persistent DOM node (hidden via CSS, never torn down),
+    // and the terminal is already open()'d into it — just re-fit and make
+    // sure the socket is still live.
+    var inst = terminalInstances.get(TERMINAL_KEY);
+    if (inst.fit) {
+      setTimeout(function() {
+        inst.fit.fit();
+        sendResize(inst);
+      }, 50);
+    }
+    if (inst.ws.readyState === WebSocket.CLOSED) {
+      connectTerminalSocket(inst);
+    }
+    return inst.term;
+  }
 
   // Clear previous terminal output
   container.innerHTML = '<div style="padding:20px; color:var(--nh-text-muted); font-family:monospace;">Connecting terminal stream...</div>';
@@ -7574,15 +7748,6 @@ async function initTerminal(agentName) {
 
   container.innerHTML = '';
 
-  if (terminalInstances.has(agentName)) {
-    var inst = terminalInstances.get(agentName);
-    inst.term.open(container);
-    if (inst.fit) {
-      setTimeout(function() { inst.fit.fit(); }, 50);
-    }
-    return inst.term;
-  }
-
   var term = new Terminal({
     cursorBlink: true,
     theme: { background: '#111827', cursor: '#fbbf24' },
@@ -7591,49 +7756,145 @@ async function initTerminal(agentName) {
   });
   var fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
-  
+
   // Ensure DOM is ready
   setTimeout(function() {
     term.open(container);
     fit.fit();
-    terminalInstances.set(agentName, { term: term, fit: fit, lastMsgId: null });
-    
-    term.writeln('\x1b[33m[Neohive]\x1b[0m Connecting terminal stream for \x1b[32m' + agentName + '\x1b[0m...');
-    
-    // Real Stream: sync current history immediately
-    syncTerminalsFromHistory(agentName, term);
+    var inst = { term: term, fit: fit, ws: null };
+    terminalInstances.set(TERMINAL_KEY, inst);
+    // Registered once per terminal instance (not per reconnect) — reads
+    // inst.ws dynamically so it keeps working across reconnects.
+    term.onData(function(data) {
+      if (inst.ws && inst.ws.readyState === WebSocket.OPEN) {
+        inst.ws.send(JSON.stringify({ type: 'input', data: data }));
+      }
+    });
+    // Re-fit on any container size change — window resize, sidebar
+    // collapse/expand, etc. Debounced so a drag-resize doesn't spam pty resizes.
+    var resizeDebounce = null;
+    new ResizeObserver(function() {
+      clearTimeout(resizeDebounce);
+      resizeDebounce = setTimeout(function() {
+        inst.fit.fit();
+        sendResize(inst);
+      }, 100);
+    }).observe(container);
+    connectTerminalSocket(inst);
   }, 50);
-  
+
   return term;
 }
 
-function syncTerminalsFromHistory(targetAgent, specificTerm) {
-  // If targetAgent provided, sync only that one, else sync all open instances
-  var targets = targetAgent ? [targetAgent] : Array.from(terminalInstances.keys());
-  
-  targets.forEach(function(agent) {
-    var inst = terminalInstances.get(agent);
-    if (!inst) return;
-    var term = specificTerm || inst.term;
-    
-    // Find messages from this agent starting with [terminal:
-    // cachedHistory is global, oldest to newest
-    cachedHistory.forEach(function(msg) {
-      if (msg.from === agent && msg.content && msg.content.startsWith('[terminal:')) {
-        // Simple deduplication based on unique message ID
-        if (inst.lastMsgId && msg.id <= inst.lastMsgId) return;
-        
-        // Extract content: "[terminal: some command] output..." -> "output..." 
-        var clean = msg.content.replace(/^\[terminal:.*?\]/, '');
-        if (clean) {
-          // If the clean content is empty, it might be just the command tag
-          // We can echo the command tag if we want, or just the output
-          term.writeln(clean);
-        }
-        inst.lastMsgId = msg.id;
-      }
+function sendResize(inst) {
+  if (inst.ws && inst.ws.readyState === WebSocket.OPEN) {
+    var dims = inst.fit.proposeDimensions();
+    if (dims) inst.ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
+  }
+}
+
+function connectTerminalSocket(inst) {
+  var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  var wsUrl = proto + '//' + window.location.host + '/api/terminal' + (_lttToken ? '?token=' + encodeURIComponent(_lttToken) : '');
+  var ws = new WebSocket(wsUrl);
+  inst.ws = ws;
+
+  ws.onopen = function() {
+    inst.term.writeln('\x1b[33m[Neohive]\x1b[0m Terminal connected.');
+    sendResize(inst);
+  };
+
+  ws.onmessage = function(evt) {
+    var msg;
+    try { msg = JSON.parse(evt.data); } catch (e) { return; }
+    if (msg.type === 'output') {
+      inst.term.write(msg.data);
+    } else if (msg.type === 'error') {
+      inst.term.writeln('\x1b[31m[Neohive] ' + msg.data + '\x1b[0m');
+    } else if (msg.type === 'exit') {
+      inst.term.writeln('\x1b[33m[Neohive] Terminal session ended.\x1b[0m');
+    }
+  };
+
+  ws.onclose = function() {
+    inst.term.writeln('\x1b[33m[Neohive] Terminal disconnected.\x1b[0m');
+  };
+}
+
+function toggleTerminalFullscreen() {
+  var area = document.getElementById('terminal-area');
+  area.classList.toggle('fullscreen');
+  // ResizeObserver on #terminal-container already re-fits + resizes the pty
+  // once the container's actual size changes from this class toggle.
+}
+
+var TMUX_SHORTCUTS = [
+  { category: 'Panes', keys: 'Ctrl-b %', desc: 'Split pane vertically (side by side)' },
+  { category: 'Panes', keys: 'Ctrl-b "', desc: 'Split pane horizontally (stacked)' },
+  { category: 'Panes', keys: 'Ctrl-b arrow', desc: 'Move to the pane in that direction' },
+  { category: 'Panes', keys: 'Ctrl-b Alt+arrow', desc: 'Resize the active pane by 5 cells' },
+  { category: 'Panes', keys: 'Ctrl-b :resize-pane -R/-L/-U/-D N', desc: 'Resize the active pane by N cells in that direction' },
+  { category: 'Panes', keys: 'Ctrl-b z', desc: 'Zoom: toggle active pane to fill the whole window' },
+  { category: 'Panes', keys: 'Ctrl-b x', desc: 'Kill the active pane' },
+  { category: 'Panes', keys: 'Ctrl-b q', desc: 'Briefly show pane numbers' },
+  { category: 'Panes', keys: 'Ctrl-b o', desc: 'Cycle to the next pane' },
+  { category: 'Windows', keys: 'Ctrl-b c', desc: 'Create a new window' },
+  { category: 'Windows', keys: 'Ctrl-b n / p', desc: 'Go to next / previous window' },
+  { category: 'Windows', keys: 'Ctrl-b 0-9', desc: 'Jump to window by number' },
+  { category: 'Windows', keys: 'Ctrl-b ,', desc: 'Rename the current window' },
+  { category: 'Windows', keys: 'Ctrl-b w', desc: 'List all windows (interactive picker)' },
+  { category: 'Windows', keys: 'Ctrl-b &', desc: 'Kill the current window' },
+  { category: 'Session', keys: 'Ctrl-b d', desc: 'Detach from the session (keeps it running)' },
+  { category: 'Session', keys: 'Ctrl-b s', desc: 'List and switch between sessions' },
+  { category: 'Session', keys: 'Ctrl-b $', desc: 'Rename the current session' },
+  { category: 'Copy mode', keys: 'Ctrl-b [', desc: 'Enter copy/scroll mode (use arrows or PgUp/PgDn to scroll back)' },
+  { category: 'Copy mode', keys: 'q', desc: 'Exit copy mode' },
+  { category: 'Copy mode', keys: 'Space then Enter', desc: 'In copy mode: start selection, then copy it' },
+  { category: 'Copy mode', keys: 'Ctrl-b ]', desc: 'Paste the most recently copied text' },
+  { category: 'Command', keys: 'Ctrl-b :', desc: 'Open the tmux command prompt (type any tmux command)' },
+  { category: 'Command', keys: 'Ctrl-b ?', desc: 'List every current keybinding' },
+];
+
+function openShortcutsModal() {
+  document.getElementById('shortcuts-search').value = '';
+  renderShortcuts();
+  document.getElementById('shortcuts-modal-overlay').classList.add('open');
+}
+
+function closeShortcutsModal() {
+  document.getElementById('shortcuts-modal-overlay').classList.remove('open');
+}
+
+function renderShortcuts() {
+  var q = (document.getElementById('shortcuts-search').value || '').toLowerCase().trim();
+  var list = document.getElementById('shortcuts-list');
+  var matches = TMUX_SHORTCUTS.filter(function(s) {
+    if (!q) return true;
+    return s.desc.toLowerCase().indexOf(q) >= 0 ||
+           s.keys.toLowerCase().indexOf(q) >= 0 ||
+           s.category.toLowerCase().indexOf(q) >= 0;
+  });
+
+  if (!matches.length) {
+    list.innerHTML = '<div class="shortcuts-empty">No shortcuts match "' + escapeHtml(q) + '"</div>';
+    return;
+  }
+
+  var byCategory = {};
+  var order = [];
+  matches.forEach(function(s) {
+    if (!byCategory[s.category]) { byCategory[s.category] = []; order.push(s.category); }
+    byCategory[s.category].push(s);
+  });
+
+  var html = '';
+  order.forEach(function(cat) {
+    html += '<div class="shortcuts-category">' + escapeHtml(cat) + '</div>';
+    byCategory[cat].forEach(function(s) {
+      html += '<div class="shortcut-row"><span class="shortcut-desc">' + escapeHtml(s.desc) + '</span><span class="shortcut-keys">' + escapeHtml(s.keys) + '</span></div>';
     });
   });
+  list.innerHTML = html;
 }
 
 function ppPing(agentName) {
@@ -9149,8 +9410,6 @@ function poll() {
     // Browser notification for new messages
     if (prevHistLen > 0 && cachedHistory.length > prevHistLen) {
       sendBrowserNotification(cachedHistory[cachedHistory.length - 1]);
-      // Real-time terminal sync: new messages arrived, update any open terminals
-      syncTerminalsFromHistory();
     }
 
     $id('stat-messages').textContent = status.messageCount;
