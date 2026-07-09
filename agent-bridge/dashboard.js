@@ -1396,7 +1396,16 @@ async function apiInjectMessage(body, query) {
   // effect — if the agent's PID died and got reused by an unrelated process
   // in that window, a stale mapping would otherwise send keystrokes + Enter
   // into whatever pane that process happens to share ancestry with.
-  if (targetTmux && (await tmuxAgentState.verifyPaneMapping(targetPid, targetTmux.pane_id).catch(() => false))) {
+  // Fresh, uncached check that the agent isn't mid-generation or sitting at a
+  // permission prompt right now — the agents.json advisory state only polls
+  // every ~20s, too stale to safely gate a real-time send. Typing into a pane
+  // in either of those states could corrupt an in-progress turn or answer a
+  // permission menu with whatever character the message happens to start with.
+  if (
+    targetTmux &&
+    (await tmuxAgentState.verifyPaneMapping(targetPid, targetTmux.pane_id).catch(() => false)) &&
+    (await tmuxAgentState.isPaneSafeToInject(targetTmux.pane_id).catch(() => false))
+  ) {
     // The reply is the agent's own send_message() call, not a screen-scraped
     // guess: capture-pane heuristics (quiet-detection timing, box-boundary
     // parsing) proved unreliable in practice — a real reply was silently lost
