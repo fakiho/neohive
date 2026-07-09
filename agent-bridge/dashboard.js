@@ -2841,6 +2841,16 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, message: 'Restarting.' }));
       setTimeout(() => {
+        // server.close()'s callback only fires once every connection it's
+        // tracking has ended — and on its own it never does, because SSE
+        // (every open dashboard tab, via its heartbeat-fed real-time feed)
+        // and the terminal WebSocket are long-lived by design. Without
+        // force-closing them first, this handler hangs forever: the port is
+        // already unbound (new requests get connection-refused) but the
+        // replacement process never spawns and this one never exits.
+        for (const client of sseClients) { try { client.end(); } catch { /* already gone */ } }
+        sseClients.clear();
+        for (const ws of terminalWss.clients) { try { ws.terminate(); } catch { /* already gone */ } }
         // Relaunch with the exact same invocation (script + args) and
         // environment (NEOHIVE_PORT, NEOHIVE_LAN, NEOHIVE_TMUX_SESSION, etc.
         // all come along via env: process.env) before this process exits —
@@ -2855,6 +2865,10 @@ const server = http.createServer(async (req, res) => {
           child.unref();
           process.exit(0);
         });
+        // Backstop for any other lingering keep-alive HTTP connection the
+        // loops above don't cover. Node >=18.2 (package.json requires
+        // >=18.0.0, hence the guard).
+        if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
       }, 300);
     }
     else if (url.pathname === '/api/clear-messages' && req.method === 'POST') {

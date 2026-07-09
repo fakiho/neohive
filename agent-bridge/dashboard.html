@@ -7719,6 +7719,18 @@ function loadXterm() {
 
 var TERMINAL_KEY = '__terminal__'; // single shared terminal — all agents/viewers attach to one tmux session
 var terminalInstances = new Map(); // TERMINAL_KEY -> { term: Terminal, fit: FitAddon, ws: WebSocket }
+var TERMINAL_ENDED_KEY = 'neohive-terminal-ended';
+
+// terminalInstances (and inst.userEnded) live only in memory, so a full page
+// refresh wipes them and initTerminal() would otherwise take the "first
+// visit" branch again and auto-reconnect — silently undoing an explicit
+// "End" click. Persist the user's intent across reloads via localStorage.
+function getTerminalEndedPref() {
+  try { return localStorage.getItem(TERMINAL_ENDED_KEY) === 'true'; } catch { return false; }
+}
+function setTerminalEndedPref(ended) {
+  try { localStorage.setItem(TERMINAL_ENDED_KEY, ended ? 'true' : 'false'); } catch { /* ignore */ }
+}
 
 async function initTerminal() {
   var container = document.getElementById('terminal-container');
@@ -7789,7 +7801,15 @@ async function initTerminal() {
         sendResize(inst);
       }, 100);
     }).observe(container);
-    connectTerminalSocket(inst);
+    // Respect a previous explicit "End" across page reloads instead of
+    // silently re-attaching to the shared tmux session on every refresh.
+    if (getTerminalEndedPref()) {
+      inst.userEnded = true;
+      term.writeln('\x1b[33m[Neohive]\x1b[0m Terminal not connected (you ended the previous session). Click Start to reconnect.');
+      updateTerminalToggleBtn(false);
+    } else {
+      connectTerminalSocket(inst);
+    }
   }, 50);
 
   return term;
@@ -7835,14 +7855,18 @@ function connectTerminalSocket(inst) {
 
 // Ends this browser's terminal connection only — same as a normal SSH client
 // disconnecting. The underlying tmux session (and anything else attached to
-// it) is untouched; only this one pty client goes away server-side.
+// it) is untouched; only this one pty client goes away server-side. The
+// choice is persisted (setTerminalEndedPref) so it survives a page refresh
+// too, not just SPA tab switches.
 function toggleTerminalConnection() {
   var inst = terminalInstances.get(TERMINAL_KEY);
   if (inst && inst.ws && inst.ws.readyState === WebSocket.OPEN) {
     inst.userEnded = true;
+    setTerminalEndedPref(true);
     inst.ws.close();
     return;
   }
+  setTerminalEndedPref(false);
   if (!inst) { initTerminal(); return; }
   inst.userEnded = false;
   connectTerminalSocket(inst);
