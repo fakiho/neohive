@@ -2819,6 +2819,44 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(apiReset(url.searchParams)));
     }
+    else if (url.pathname === '/api/server/shutdown' && req.method === 'POST') {
+      const body = await parseBody(req).catch(() => ({}));
+      if (!body.confirm) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Destructive action requires { "confirm": true } in request body' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, message: 'Shutting down.' }));
+      // Give the response time to flush to the client before the process exits.
+      setTimeout(() => process.exit(0), 300);
+    }
+    else if (url.pathname === '/api/server/restart' && req.method === 'POST') {
+      const body = await parseBody(req).catch(() => ({}));
+      if (!body.confirm) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Destructive action requires { "confirm": true } in request body' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, message: 'Restarting.' }));
+      setTimeout(() => {
+        // Relaunch with the exact same invocation (script + args) and
+        // environment (NEOHIVE_PORT, NEOHIVE_LAN, NEOHIVE_TMUX_SESSION, etc.
+        // all come along via env: process.env) before this process exits —
+        // server.close() releases the port first to avoid an EADDRINUSE race.
+        server.close(() => {
+          const child = spawn(process.execPath, process.argv.slice(1), {
+            cwd: process.cwd(),
+            env: process.env,
+            detached: true,
+            stdio: 'ignore',
+          });
+          child.unref();
+          process.exit(0);
+        });
+      }, 300);
+    }
     else if (url.pathname === '/api/clear-messages' && req.method === 'POST') {
       const body = await parseBody(req).catch(() => ({}));
       if (!body.confirm) {
