@@ -46,6 +46,7 @@ const PROMPT_PATTERNS = [
 ];
 
 const CAPTURE_LINES = 50;
+const MAX_HOPS = 10;
 
 function execFilePromise(cmd, args, opts) {
   return new Promise((resolve, reject) => {
@@ -67,13 +68,94 @@ async function capturePane(paneId, lines) {
   }
 }
 
+async function listAllPanes() {
+  let out;
+  try {
+    out = await execFilePromise('tmux', ['list-panes', '-a', '-F', '#{pane_id} #{pane_pid} #{session_name}']);
+  } catch {
+    return new Map(); // no tmux server running, or no panes — every agent unmapped this cycle
+  }
+  const panesByPid = new Map();
+  out.trim().split('\n').filter(Boolean).forEach((line) => {
+    const [paneId, panePid, sessionName] = line.split(' ');
+    const pidNum = parseInt(panePid, 10);
+    if (paneId && !Number.isNaN(pidNum)) {
+      panesByPid.set(pidNum, { pane_id: paneId, session_name: sessionName || null });
+    }
+  });
+  return panesByPid;
+}
+
+function getParentPid(pid) {
+  try {
+    const out = execFileSync('ps', ['-o', 'ppid=', '-p', String(pid)], { timeout: 2000 }).toString().trim();
+    const ppid = parseInt(out, 10);
+    return Number.isNaN(ppid) ? null : ppid;
+  } catch {
+    return null; // pid already gone — benign, not an error
+  }
+}
+
+function walkAncestryToPane(pid, panesByPid, maxHops) {
+  maxHops = maxHops || MAX_HOPS;
+  let current = pid;
+  for (let hop = 0; hop <= maxHops; hop++) {
+    if (panesByPid.has(current)) {
+      const pane = panesByPid.get(current);
+      return { pane_id: pane.pane_id, session_name: pane.session_name, hops: hop };
+    }
+    const parent = getParentPid(current);
+    if (!parent || parent <= 1) break;
+    current = parent;
+  }
+  return null;
+}
+
+function isPidAlive(pid) {
+  if (!pid) return false;
+  try { process.kill(pid, 0); return true; }
+  catch { return false; }
+}
+
+// Re-checks a cached tmux mapping right before it's trusted for an actual
+// side effect (typing into the pane). The cached agents.json snapshot can be
+// up to poll_interval_seconds stale (default 20s) — if the agent's PID died
+// and got reused by an unrelated process in that window, a stale mapping
+// would otherwise cause literal keystrokes + Enter to be sent into whatever
+// pane that unrelated process happens to share ancestry with. Confirms the
+// PID is still alive AND a fresh ancestry walk still resolves to the same
+// pane_id before returning true.
+async function verifyPaneMapping(pid, expectedPaneId) {
+  if (!isPidAlive(pid)) return false;
+  const panesByPid = await listAllPanes();
+  const mapping = walkAncestryToPane(pid, panesByPid);
+  return !!(mapping && mapping.pane_id === expectedPaneId);
+}
+
+// Per-pane injection lock: prevents a second injected message from
+// interleaving into a pane whose previous injection is still being
+// captured by waitForReply(), which would scramble reply extraction or
+// let one reply be misattributed to the wrong sender.
+const _busyPanes = new Set();
+
+function isPaneBusy(paneId) {
+  return _busyPanes.has(paneId);
+}
+
+function markPaneBusy(paneId) {
+  _busyPanes.add(paneId);
+}
+
+function markPaneFree(paneId) {
+  _busyPanes.delete(paneId);
+}
+
 module.exports = function (ctx) {
   const { helpers, DATA_DIR } = ctx;
   const { getAgents, saveAgents, broadcastSystemMessage } = helpers;
 
   const MARKER_FILE = path.join(DATA_DIR, '.last-tmux-poll');
   const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
-  const MAX_HOPS = 10;
   const MATCH_LINES = 15;
 
   let _tmuxChecked = false;
@@ -108,49 +190,6 @@ module.exports = function (ctx) {
       // of returning cleanly. 0/false disables (falls back to listen_poll_interval).
       listen_backstop_seconds: config.listen_backstop_seconds === undefined ? 240 : config.listen_backstop_seconds,
     };
-  }
-
-  async function listAllPanes() {
-    let out;
-    try {
-      out = await execFilePromise('tmux', ['list-panes', '-a', '-F', '#{pane_id} #{pane_pid} #{session_name}']);
-    } catch {
-      return new Map(); // no tmux server running, or no panes — every agent unmapped this cycle
-    }
-    const panesByPid = new Map();
-    out.trim().split('\n').filter(Boolean).forEach((line) => {
-      const [paneId, panePid, sessionName] = line.split(' ');
-      const pidNum = parseInt(panePid, 10);
-      if (paneId && !Number.isNaN(pidNum)) {
-        panesByPid.set(pidNum, { pane_id: paneId, session_name: sessionName || null });
-      }
-    });
-    return panesByPid;
-  }
-
-  function getParentPid(pid) {
-    try {
-      const out = execFileSync('ps', ['-o', 'ppid=', '-p', String(pid)], { timeout: 2000 }).toString().trim();
-      const ppid = parseInt(out, 10);
-      return Number.isNaN(ppid) ? null : ppid;
-    } catch {
-      return null; // pid already gone — benign, not an error
-    }
-  }
-
-  function walkAncestryToPane(pid, panesByPid, maxHops) {
-    maxHops = maxHops || MAX_HOPS;
-    let current = pid;
-    for (let hop = 0; hop <= maxHops; hop++) {
-      if (panesByPid.has(current)) {
-        const pane = panesByPid.get(current);
-        return { pane_id: pane.pane_id, session_name: pane.session_name, hops: hop };
-      }
-      const parent = getParentPid(current);
-      if (!parent || parent <= 1) break;
-      current = parent;
-    }
-    return null;
   }
 
   function matchPromptPatterns(text) {
@@ -304,7 +343,11 @@ function extractLastReply(paneText) {
 
   const ruleIndices = [];
   lines.forEach((line, i) => { if (/─{5,}/.test(line)) ruleIndices.push(i); });
-  const boxStart = ruleIndices.length >= 2 ? ruleIndices[ruleIndices.length - 2] : lines.length;
+  // Fewer than 2 rule lines means the live input box's boundary can't be
+  // reliably located in this capture — bail rather than risk treating an
+  // unsent draft line (or the box itself) as settled history.
+  if (ruleIndices.length < 2) return null;
+  const boxStart = ruleIndices[ruleIndices.length - 2];
   const history = lines.slice(0, boxStart);
 
   let lastPromptIdx = -1;
@@ -359,3 +402,7 @@ async function waitForReply(paneId, opts) {
 module.exports.sendKeysToPane = sendKeysToPane;
 module.exports.extractLastReply = extractLastReply;
 module.exports.waitForReply = waitForReply;
+module.exports.verifyPaneMapping = verifyPaneMapping;
+module.exports.isPaneBusy = isPaneBusy;
+module.exports.markPaneBusy = markPaneBusy;
+module.exports.markPaneFree = markPaneFree;
