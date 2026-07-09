@@ -1381,12 +1381,14 @@ async function apiInjectMessage(body, query) {
   let targetTmux = null;
   let targetPid = null;
   let targetStatus = null;
+  let targetAgentAlive = null; // null = agent/agents.json missing entirely, not just dead
   try {
     const agentsFile = path.join(dataDir, 'agents.json');
     if (fs.existsSync(agentsFile)) {
       const info = JSON.parse(fs.readFileSync(agentsFile, 'utf8'))[body.to];
       if (info) {
         targetStatus = info.status;
+        targetAgentAlive = info.pid ? isPidAlive(info.pid, info.last_activity) : false;
         if (info.tmux && info.tmux.mapped) {
           targetTmux = info.tmux;
           targetPid = info.pid;
@@ -1433,6 +1435,14 @@ async function apiInjectMessage(body, query) {
     fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
 
     return { success: true, messageId: msg.id, delivery: 'tmux' };
+  }
+
+  // Neither channel is reachable: not tmux-injectable (unmapped/unsafe/busy) and
+  // the agent's own MCP process isn't alive to ever call listen() and consume
+  // messages.jsonl. Queuing here would report success while the message sits
+  // undelivered forever — surface the failure instead.
+  if (!targetAgentAlive) {
+    return { error: `Agent "${body.to}" is not reachable via tmux or MCP — message not delivered`, delivery: 'none' };
   }
 
   fs.appendFileSync(messagesFile, JSON.stringify(msg) + '\n');
@@ -4106,7 +4116,7 @@ function samplingPushToAgent(msg, dataDir) {
     const agent = agents[to];
     if (!agent || !agent.push_port) return;
     // Don't push to dead agents
-    if (agent.pid && !isPidAlive(agent.pid)) return;
+    if (agent.pid && !isPidAlive(agent.pid, agent.last_activity)) return;
 
     const payload = JSON.stringify({
       content: msg.content || '',
@@ -4128,12 +4138,6 @@ function samplingPushToAgent(msg, dataDir) {
     req.write(payload);
     req.end();
   } catch {}
-}
-
-// Helper: check if a PID is alive (dashboard-side, no activity fallback needed)
-function isPidAlive(pid) {
-  if (!pid) return false;
-  try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
 // Byte offset tracker for messages.jsonl — lets us push only NEW messages over SSE
