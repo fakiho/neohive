@@ -368,6 +368,10 @@ module.exports = function (ctx) {
   return { isTmuxAvailable, getTmuxStateConfig, checkAllAgents, pollIfDue, walkAncestryToPane, matchPromptPatterns, PROMPT_PATTERNS };
 };
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // Injects literal text into a tmux pane as a fresh prompt: literal text via
 // `send-keys -l` (avoids tmux special-key-name interpretation), then a
 // SEPARATE Enter keystroke — empirically required, text alone sits unsent
@@ -375,9 +379,25 @@ module.exports = function (ctx) {
 // literal embedded newline can submit prematurely in a multi-line-aware
 // TUI input box. Stateless (no ctx) — throws on failure, caller decides
 // what to do about it.
-function sendKeysToPane(paneId, text) {
+//
+// Clears the input line first (Ctrl-A to line start, Ctrl-K to kill to end)
+// so a previously-injected message that never got submitted (see below)
+// can't silently merge with this one instead of being replaced/lost.
+//
+// Some TUIs (observed with Cursor's Ink-based input widget) don't reliably
+// register a separate Enter keystroke sent immediately after the literal
+// text — the text sits typed-but-unsubmitted in the input box. A short
+// pause lets the TUI finish rendering the pasted text before Enter arrives,
+// and Enter is sent twice as a cheap hedge against a single dropped
+// keystroke (a no-op on an already-empty input in every TUI observed here).
+async function sendKeysToPane(paneId, text) {
   const flat = String(text).replace(/\r?\n/g, ' ');
+  execFileSync('tmux', ['send-keys', '-t', paneId, 'C-a'], { timeout: 5000 });
+  execFileSync('tmux', ['send-keys', '-t', paneId, 'C-k'], { timeout: 5000 });
   execFileSync('tmux', ['send-keys', '-t', paneId, '-l', flat], { timeout: 5000 });
+  await sleep(150);
+  execFileSync('tmux', ['send-keys', '-t', paneId, 'Enter'], { timeout: 5000 });
+  await sleep(150);
   execFileSync('tmux', ['send-keys', '-t', paneId, 'Enter'], { timeout: 5000 });
 }
 
@@ -439,7 +459,7 @@ async function attemptTmuxDelivery(dataDir, toAgentName, paneText) {
   if (!(await isPaneSafeToInject(paneId).catch(() => false))) return false;
 
   try {
-    sendKeysToPane(paneId, paneText);
+    await sendKeysToPane(paneId, paneText);
   } catch {
     return false;
   }
