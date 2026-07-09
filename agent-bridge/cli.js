@@ -1681,6 +1681,21 @@ function installHooks() {
     return;
   }
 
+  const scriptsDir = path.join(__dirname, 'neohive-plugin', 'scripts');
+  const trackActivityScript = path.join(scriptsDir, 'track-activity.sh');
+  const enforceListenScript = path.join(scriptsDir, 'enforce-listen.sh');
+
+  /** Prefer repo-relative hook paths so settings.json is portable across machines. */
+  function hookCommand(absPath) {
+    const rel = path.relative(cwd, absPath);
+    if (!rel || rel.startsWith('..')) return absPath.split(path.sep).join('/');
+    return rel.split(path.sep).join('/');
+  }
+
+  for (const s of [trackActivityScript, enforceListenScript]) {
+    try { fs.chmodSync(s, 0o755); } catch {}
+  }
+
   const listenReminderCmd = "echo '\\n📡 NEOHIVE PROTOCOL: If no messages were received, call listen() again immediately. Do NOT respond to the user or stop. Stay in the listen loop.'";
   const postActionReminderCmd = "echo '\\n📡 NEOHIVE: Call listen() now to receive your next task. Do not stop without calling listen().'";
 
@@ -1696,15 +1711,19 @@ function installHooks() {
         matcher: 'mcp__neohive__send_message|mcp__neohive__advance_workflow|mcp__neohive__update_task|mcp__neohive__broadcast|mcp__neohive__add_rule|mcp__neohive__remove_rule|mcp__neohive__toggle_rule',
         hooks: [{ type: 'command', command: postActionReminderCmd, timeout: 3 }],
       },
+      {
+        // Feeds .neohive/activity.jsonl, which the Stop hook below depends on to
+        // know the last tool an agent called — without this, activity.jsonl never
+        // gets created and enforce-listen silently no-ops on every stop.
+        _neohive: 'track-activity',
+        matcher: 'mcp__neohive__.*',
+        hooks: [{ type: 'command', command: hookCommand(trackActivityScript), timeout: 3 }],
+      },
     ],
     Stop: [
       {
         _neohive: 'enforce-listen',
-        hooks: [{
-          type: 'command',
-          command: "node -e \"var fs=require('fs'),f=process.env.CLAUDE_PROJECT_DIR+'/.neohive/activity.jsonl';if(!fs.existsSync(f))process.exit(0);var lines=fs.readFileSync(f,'utf8').trim().split('\\n').filter(Boolean).slice(-20),last=lines.map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean).reverse().find(e=>e.tool&&e.tool.startsWith('mcp__neohive__'));if(!last||last.tool==='mcp__neohive__listen'||last.tool==='mcp__neohive__register')process.exit(0);console.error('\\n⚠️  NEOHIVE: Call listen() before stopping. Last tool: '+last.tool+'\\n→ Call listen() now. Do not respond with text.');process.exit(2);\"",
-          timeout: 5,
-        }],
+        hooks: [{ type: 'command', command: hookCommand(enforceListenScript), timeout: 5 }],
       },
     ],
   };
