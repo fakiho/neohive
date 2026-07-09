@@ -414,9 +414,42 @@ function unregisterAllSessionHooks() {
   for (const s of [..._hookedSessions]) unregisterSessionHook(s);
 }
 
+// Attempts to deliver `paneText` straight into `toAgentName`'s tmux pane, so a
+// message never silently sits unconsumed in the mcp queue if the recipient
+// never calls listen() again (idle at its own prompt, no listen() in flight).
+// Shared by dashboard message injection and agent-to-agent send_message() —
+// same gating rules both ways: tmux-mapped, NOT currently blocked inside a
+// live listen() call (listening_since, not the stale agents.json "status"
+// field — see dashboard.js apiInjectMessage for why), pane verified live and
+// safe to type into right now. Returns true if delivered via tmux, false if
+// the caller should fall back to its normal queue-based delivery.
+async function attemptTmuxDelivery(dataDir, toAgentName, paneText) {
+  let info;
+  try {
+    const agentsFile = path.join(dataDir, 'agents.json');
+    if (!fs.existsSync(agentsFile)) return false;
+    info = JSON.parse(fs.readFileSync(agentsFile, 'utf8'))[toAgentName];
+  } catch {
+    return false;
+  }
+  if (!info || !info.tmux || !info.tmux.mapped || info.listening_since) return false;
+
+  const paneId = info.tmux.pane_id;
+  if (!(await verifyPaneMapping(info.pid, paneId).catch(() => false))) return false;
+  if (!(await isPaneSafeToInject(paneId).catch(() => false))) return false;
+
+  try {
+    sendKeysToPane(paneId, paneText);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 module.exports.sendKeysToPane = sendKeysToPane;
 module.exports.verifyPaneMapping = verifyPaneMapping;
 module.exports.isPaneSafeToInject = isPaneSafeToInject;
+module.exports.attemptTmuxDelivery = attemptTmuxDelivery;
 module.exports.registerSessionHook = registerSessionHook;
 module.exports.unregisterSessionHook = unregisterSessionHook;
 module.exports.unregisterAllSessionHooks = unregisterAllSessionHooks;
