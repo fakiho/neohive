@@ -1437,7 +1437,7 @@ async function apiInjectMessage(body, query) {
     // loop the same reliable way any other agent-to-agent reply does.
     const paneText = `${body.content} [neohive: reply via send_message(to="${fromName}") when done]`;
     try {
-      tmuxAgentState.sendKeysToPane(targetTmux.pane_id, paneText);
+      await tmuxAgentState.sendKeysToPane(targetTmux.pane_id, paneText);
     } catch (e) {
       return { error: 'tmux delivery failed: ' + e.message };
     }
