@@ -1380,13 +1380,17 @@ async function apiInjectMessage(body, query) {
   // — same messagesFile+historyFile write as before this change.
   let targetTmux = null;
   let targetPid = null;
+  let targetStatus = null;
   try {
     const agentsFile = path.join(dataDir, 'agents.json');
     if (fs.existsSync(agentsFile)) {
       const info = JSON.parse(fs.readFileSync(agentsFile, 'utf8'))[body.to];
-      if (info && info.tmux && info.tmux.mapped) {
-        targetTmux = info.tmux;
-        targetPid = info.pid;
+      if (info) {
+        targetStatus = info.status;
+        if (info.tmux && info.tmux.mapped) {
+          targetTmux = info.tmux;
+          targetPid = info.pid;
+        }
       }
     }
   } catch {}
@@ -1401,8 +1405,16 @@ async function apiInjectMessage(body, query) {
   // every ~20s, too stale to safely gate a real-time send. Typing into a pane
   // in either of those states could corrupt an in-progress turn or answer a
   // permission menu with whatever character the message happens to start with.
+  //
+  // Skip tmux injection when the agent is currently blocking inside listen():
+  // Claude Code's MCP tool-call wait state doesn't show "esc to interrupt" so
+  // isPaneSafeToInject() returns true, but stdin is not being read — the
+  // injected text would sit in the terminal buffer until listen() eventually
+  // times out. Instead, fall through to MCP delivery (messages.jsonl), which
+  // wakes the blocking listen() call immediately via fs.watch.
   if (
     targetTmux &&
+    targetStatus !== 'listening' &&
     (await tmuxAgentState.verifyPaneMapping(targetPid, targetTmux.pane_id).catch(() => false)) &&
     (await tmuxAgentState.isPaneSafeToInject(targetTmux.pane_id).catch(() => false))
   ) {
