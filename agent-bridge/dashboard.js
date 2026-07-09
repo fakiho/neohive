@@ -1380,14 +1380,14 @@ async function apiInjectMessage(body, query) {
   // — same messagesFile+historyFile write as before this change.
   let targetTmux = null;
   let targetPid = null;
-  let targetStatus = null;
+  let targetListeningSince = null;
   let targetAgentAlive = null; // null = agent/agents.json missing entirely, not just dead
   try {
     const agentsFile = path.join(dataDir, 'agents.json');
     if (fs.existsSync(agentsFile)) {
       const info = JSON.parse(fs.readFileSync(agentsFile, 'utf8'))[body.to];
       if (info) {
-        targetStatus = info.status;
+        targetListeningSince = info.listening_since || null;
         targetAgentAlive = info.pid ? isPidAlive(info.pid, info.last_activity) : false;
         if (info.tmux && info.tmux.mapped) {
           targetTmux = info.tmux;
@@ -1414,9 +1414,18 @@ async function apiInjectMessage(body, query) {
   // injected text would sit in the terminal buffer until listen() eventually
   // times out. Instead, fall through to MCP delivery (messages.jsonl), which
   // wakes the blocking listen() call immediately via fs.watch.
+  //
+  // Gated on listening_since, NOT the agents.json "status" field: status is
+  // set to 'listening' by a middleware right before every listen() call
+  // starts but is never reset afterward, so it stays 'listening' forever
+  // once an agent has called listen() at least once — even while genuinely
+  // idle at its own prompt. listening_since is set by setListening(true) at
+  // the start of the blocking wait and cleared back to null the instant it
+  // resolves, so it's the only field that actually reflects "blocked in
+  // listen() right now" rather than "last tool that was ever invoked".
   if (
     targetTmux &&
-    targetStatus !== 'listening' &&
+    !targetListeningSince &&
     (await tmuxAgentState.verifyPaneMapping(targetPid, targetTmux.pane_id).catch(() => false)) &&
     (await tmuxAgentState.isPaneSafeToInject(targetTmux.pane_id).catch(() => false))
   ) {
