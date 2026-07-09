@@ -59,6 +59,10 @@ const tmuxAgentState = require('./lib/tmux-agent-state')({
   DATA_DIR,
   helpers: { getAgents, saveAgents, broadcastSystemMessage },
 });
+const githubIssueSync = require('./lib/github-issue-sync')({
+  DATA_DIR,
+  helpers: { getTasks, saveTasks, generateId, broadcastSystemMessage },
+});
 const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
 const WORKFLOWS_FILE = path.join(DATA_DIR, 'workflows.json');
 const WORKSPACES_DIR = path.join(DATA_DIR, 'workspaces');
@@ -1587,6 +1591,8 @@ function toolRegister(name, provider = null, skills = null) {
         triggerStandupIfDue();
         // Advisory tmux pane-state signal: on by default, self-throttled across processes
         tmuxAgentState.pollIfDue();
+        // GitHub Issues → tasks mirror: opt-in, self-throttled across processes
+        githubIssueSync.pollIfDue();
         // Auto-reassign stuck workflow steps from dead agents
         checkStuckWorkflowSteps();
         // Stale task detection: warn about tasks in_progress for >30 minutes without update
