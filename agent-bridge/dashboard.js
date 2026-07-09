@@ -1395,35 +1395,21 @@ async function apiInjectMessage(body, query) {
   // 20s). Re-verify the mapping right before trusting it for a real side
   // effect — if the agent's PID died and got reused by an unrelated process
   // in that window, a stale mapping would otherwise send keystrokes + Enter
-  // into whatever pane that process happens to share ancestry with. Also
-  // skip (fall back to the MCP queue below) if a previous injection to this
-  // same pane hasn't finished being captured yet, to avoid interleaving.
-  if (targetTmux && (await tmuxAgentState.verifyPaneMapping(targetPid, targetTmux.pane_id).catch(() => false)) && !tmuxAgentState.isPaneBusy(targetTmux.pane_id)) {
-    tmuxAgentState.markPaneBusy(targetTmux.pane_id);
+  // into whatever pane that process happens to share ancestry with.
+  if (targetTmux && (await tmuxAgentState.verifyPaneMapping(targetPid, targetTmux.pane_id).catch(() => false))) {
+    // The reply is the agent's own send_message() call, not a screen-scraped
+    // guess: capture-pane heuristics (quiet-detection timing, box-boundary
+    // parsing) proved unreliable in practice — a real reply was silently lost
+    // when the pane text didn't match the expected shape. The agent already
+    // has the neohive MCP tools loaded in this session, so it can close the
+    // loop the same reliable way any other agent-to-agent reply does.
+    const paneText = `${body.content} [neohive: reply via send_message(to="${fromName}") when done]`;
     try {
-      tmuxAgentState.sendKeysToPane(targetTmux.pane_id, body.content);
+      tmuxAgentState.sendKeysToPane(targetTmux.pane_id, paneText);
     } catch (e) {
-      tmuxAgentState.markPaneFree(targetTmux.pane_id);
       return { error: 'tmux delivery failed: ' + e.message };
     }
     fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
-
-    // Fire-and-forget: the HTTP response doesn't wait on this. Once the
-    // agent's reply appears and the pane goes quiet, record it as a normal
-    // message back to whoever sent the original one — same two files a real
-    // send_message() call would have written to.
-    tmuxAgentState.waitForReply(targetTmux.pane_id).then((replyText) => {
-      if (!replyText) return;
-      const replyMsg = {
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-        from: body.to,
-        to: fromName,
-        content: replyText,
-        timestamp: new Date().toISOString(),
-      };
-      fs.appendFileSync(messagesFile, JSON.stringify(replyMsg) + '\n');
-      fs.appendFileSync(historyFile, JSON.stringify(replyMsg) + '\n');
-    }).catch(() => {}).finally(() => tmuxAgentState.markPaneFree(targetTmux.pane_id));
 
     return { success: true, messageId: msg.id, delivery: 'tmux' };
   }

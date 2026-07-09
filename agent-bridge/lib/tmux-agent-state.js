@@ -132,24 +132,6 @@ async function verifyPaneMapping(pid, expectedPaneId) {
   return !!(mapping && mapping.pane_id === expectedPaneId);
 }
 
-// Per-pane injection lock: prevents a second injected message from
-// interleaving into a pane whose previous injection is still being
-// captured by waitForReply(), which would scramble reply extraction or
-// let one reply be misattributed to the wrong sender.
-const _busyPanes = new Set();
-
-function isPaneBusy(paneId) {
-  return _busyPanes.has(paneId);
-}
-
-function markPaneBusy(paneId) {
-  _busyPanes.add(paneId);
-}
-
-function markPaneFree(paneId) {
-  _busyPanes.delete(paneId);
-}
-
 module.exports = function (ctx) {
   const { helpers, DATA_DIR } = ctx;
   const { getAgents, saveAgents, broadcastSystemMessage } = helpers;
@@ -328,81 +310,5 @@ function sendKeysToPane(paneId, text) {
   execFileSync('tmux', ['send-keys', '-t', paneId, 'Enter'], { timeout: 5000 });
 }
 
-// Extracts the agent's most recent reply from a raw capture-pane text.
-// Convention (Claude Code CLI, verified against real captures):
-//   - agent output is marked with a leading ● per turn/block
-//   - a submitted prompt line is marked with a leading ❯
-//   - the live, not-yet-processed input box is bordered top and bottom by a
-//     horizontal-rule line — always the last thing in any capture — and must
-//     be excluded, since its ❯ line may be unsent draft text, not history
-// So: drop everything from the second-to-last rule line onward (the live
-// box), then return everything after the LAST ❯ line in what remains.
-function extractLastReply(paneText) {
-  if (!paneText) return null;
-  const lines = paneText.split('\n');
-
-  const ruleIndices = [];
-  lines.forEach((line, i) => { if (/─{5,}/.test(line)) ruleIndices.push(i); });
-  // Fewer than 2 rule lines means the live input box's boundary can't be
-  // reliably located in this capture — bail rather than risk treating an
-  // unsent draft line (or the box itself) as settled history.
-  if (ruleIndices.length < 2) return null;
-  const boxStart = ruleIndices[ruleIndices.length - 2];
-  const history = lines.slice(0, boxStart);
-
-  let lastPromptIdx = -1;
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (/^❯\s/.test(history[i].trim())) { lastPromptIdx = i; break; }
-  }
-
-  // Each line is right-padded with spaces to the pane's fixed width — strip that.
-  const reply = history.slice(lastPromptIdx + 1).map((l) => l.replace(/\s+$/, '')).join('\n').trim();
-  return reply || null;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Polls the pane until output goes quiet (no change for quietMs) or timeoutMs
-// elapses, then extracts the reply from the final capture. Uses a wider
-// capture window than the prompt-detection path (capturePane's default 50
-// lines) since a real reply plus its preceding ❯ line can run longer.
-async function waitForReply(paneId, opts) {
-  opts = opts || {};
-  const pollMs = opts.pollMs || 800;
-  const quietMs = opts.quietMs || 1500;
-  const timeoutMs = opts.timeoutMs || 45000;
-  const captureLines = opts.captureLines || 300;
-
-  const start = Date.now();
-  let prev = null;
-  let lastChangeAt = Date.now();
-
-  while (Date.now() - start < timeoutMs) {
-    await sleep(pollMs);
-    const text = await capturePane(paneId, captureLines);
-    if (text === null) return null; // pane gone
-
-    // "esc to interrupt" is Claude Code's own live-generation marker (verified
-    // empirically — present only while actively generating, gone at rest).
-    // Text-diffing alone isn't enough: the animated status line ("Thinking…
-    // 4s") can happen to read identical across two polls if it lands on the
-    // same second, causing a false "quiet" reading mid-response. Treat any
-    // busy capture as a change regardless of whether the text matches.
-    const busy = /esc to interrupt/i.test(text);
-    if (busy || prev === null || text !== prev) lastChangeAt = Date.now();
-    prev = text;
-    if (!busy && Date.now() - lastChangeAt >= quietMs) break;
-  }
-
-  return prev ? extractLastReply(prev) : null;
-}
-
 module.exports.sendKeysToPane = sendKeysToPane;
-module.exports.extractLastReply = extractLastReply;
-module.exports.waitForReply = waitForReply;
 module.exports.verifyPaneMapping = verifyPaneMapping;
-module.exports.isPaneBusy = isPaneBusy;
-module.exports.markPaneBusy = markPaneBusy;
-module.exports.markPaneFree = markPaneFree;
