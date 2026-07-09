@@ -10,6 +10,7 @@ const { readIdeActivity, applyIdeActivityHint } = require('./lib/ide-activity');
 const _audit = require('./lib/audit');
 const { WebSocketServer } = require('ws');
 const terminalWs = require('./lib/terminal-ws');
+const tmuxAgentState = require('./lib/tmux-agent-state');
 
 function findCursorProjectRootWithNeohive(startDir) {
   let dir = path.resolve(startDir);
@@ -1298,7 +1299,7 @@ function apiLoadConversation(query) {
 const INJECT_FROM_BLOCKLIST = new Set(['__system__', '__all__', '__open__', '__close__', '__group__']);
 
 // Inject a message from the dashboard (system message or nudge to an agent)
-function apiInjectMessage(body, query) {
+async function apiInjectMessage(body, query) {
   const projectPath = query.get('project') || null;
   const dataDir = resolveDataDir(projectPath);
   const messagesFile = path.join(dataDir, 'messages.jsonl');
@@ -1371,10 +1372,52 @@ function apiInjectMessage(body, query) {
     timestamp: now,
   };
 
+  // Tmux-mapped agents are reachable directly through their terminal — deliver
+  // there instead of the MCP message queue. NOT both: injected text never goes
+  // through listen()'s consumed-tracking, so queuing it too would just mean
+  // it gets redelivered (and re-processed) the next time the agent calls
+  // listen() for any other reason. Unmapped agents are completely unaffected
+  // — same messagesFile+historyFile write as before this change.
+  let targetTmux = null;
+  let targetPid = null;
+  try {
+    const agentsFile = path.join(dataDir, 'agents.json');
+    if (fs.existsSync(agentsFile)) {
+      const info = JSON.parse(fs.readFileSync(agentsFile, 'utf8'))[body.to];
+      if (info && info.tmux && info.tmux.mapped) {
+        targetTmux = info.tmux;
+        targetPid = info.pid;
+      }
+    }
+  } catch {}
+
+  // The agents.json snapshot can be up to poll_interval_seconds stale (default
+  // 20s). Re-verify the mapping right before trusting it for a real side
+  // effect — if the agent's PID died and got reused by an unrelated process
+  // in that window, a stale mapping would otherwise send keystrokes + Enter
+  // into whatever pane that process happens to share ancestry with.
+  if (targetTmux && (await tmuxAgentState.verifyPaneMapping(targetPid, targetTmux.pane_id).catch(() => false))) {
+    // The reply is the agent's own send_message() call, not a screen-scraped
+    // guess: capture-pane heuristics (quiet-detection timing, box-boundary
+    // parsing) proved unreliable in practice — a real reply was silently lost
+    // when the pane text didn't match the expected shape. The agent already
+    // has the neohive MCP tools loaded in this session, so it can close the
+    // loop the same reliable way any other agent-to-agent reply does.
+    const paneText = `${body.content} [neohive: reply via send_message(to="${fromName}") when done]`;
+    try {
+      tmuxAgentState.sendKeysToPane(targetTmux.pane_id, paneText);
+    } catch (e) {
+      return { error: 'tmux delivery failed: ' + e.message };
+    }
+    fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
+
+    return { success: true, messageId: msg.id, delivery: 'tmux' };
+  }
+
   fs.appendFileSync(messagesFile, JSON.stringify(msg) + '\n');
   fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
 
-  return { success: true, messageId: msg.id };
+  return { success: true, messageId: msg.id, delivery: 'mcp' };
 }
 
 // Multi-project management
@@ -2903,7 +2946,7 @@ const server = http.createServer(async (req, res) => {
     // Message injection
     else if (url.pathname === '/api/inject' && req.method === 'POST') {
       const body = await parseBody(req);
-      const result = apiInjectMessage(body, url.searchParams);
+      const result = await apiInjectMessage(body, url.searchParams);
       res.writeHead(result.error ? 400 : 200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
     }
@@ -3369,7 +3412,7 @@ const server = http.createServer(async (req, res) => {
       activeWf.updated_at = new Date().toISOString();
       fs.writeFileSync(wfFile, JSON.stringify(workflows, null, 2));
       // Notify agents
-      apiInjectMessage({ to: '__all__', content: `[PLAN PAUSED] "${activeWf.name}" has been paused by the dashboard. Finish your current step, then wait for resume.` }, url.searchParams);
+      await apiInjectMessage({ to: '__all__', content: `[PLAN PAUSED] "${activeWf.name}" has been paused by the dashboard. Finish your current step, then wait for resume.` }, url.searchParams);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, message: 'Plan paused', workflow_id: activeWf.id }));
     }
@@ -3385,7 +3428,7 @@ const server = http.createServer(async (req, res) => {
       delete pausedWf.paused_at;
       pausedWf.updated_at = new Date().toISOString();
       fs.writeFileSync(wfFile, JSON.stringify(workflows, null, 2));
-      apiInjectMessage({ to: '__all__', content: `[PLAN RESUMED] "${pausedWf.name}" has been resumed. Call get_work() to continue.` }, url.searchParams);
+      await apiInjectMessage({ to: '__all__', content: `[PLAN RESUMED] "${pausedWf.name}" has been resumed. Call get_work() to continue.` }, url.searchParams);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, message: 'Plan resumed', workflow_id: pausedWf.id }));
     }
@@ -3401,7 +3444,7 @@ const server = http.createServer(async (req, res) => {
       activeWf.stopped_at = new Date().toISOString();
       activeWf.updated_at = new Date().toISOString();
       fs.writeFileSync(wfFile, JSON.stringify(workflows, null, 2));
-      apiInjectMessage({ to: '__all__', content: `[PLAN STOPPED] "${activeWf.name}" has been stopped by the dashboard. All work on this plan should cease.` }, url.searchParams);
+      await apiInjectMessage({ to: '__all__', content: `[PLAN STOPPED] "${activeWf.name}" has been stopped by the dashboard. All work on this plan should cease.` }, url.searchParams);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, message: 'Plan stopped', workflow_id: activeWf.id }));
     }
@@ -3453,7 +3496,7 @@ const server = http.createServer(async (req, res) => {
       step.assignee = body.new_assignee;
       wf.updated_at = new Date().toISOString();
       fs.writeFileSync(wfFile, JSON.stringify(workflows, null, 2));
-      apiInjectMessage({ to: body.new_assignee, content: `[REASSIGNED] Step ${stepId} "${step.description}" has been reassigned from ${oldAssignee || 'unassigned'} to you. ${step.status === 'in_progress' ? 'This step is IN PROGRESS — pick it up now.' : 'This step is ' + step.status + '.'}` }, url.searchParams);
+      await apiInjectMessage({ to: body.new_assignee, content: `[REASSIGNED] Step ${stepId} "${step.description}" has been reassigned from ${oldAssignee || 'unassigned'} to you. ${step.status === 'in_progress' ? 'This step is IN PROGRESS — pick it up now.' : 'This step is ' + step.status + '.'}` }, url.searchParams);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, step_id: stepId, old_assignee: oldAssignee, new_assignee: body.new_assignee }));
     }
@@ -3461,7 +3504,7 @@ const server = http.createServer(async (req, res) => {
     else if (url.pathname === '/api/plan/inject' && req.method === 'POST') {
       const body = await parseBody(req);
       if (!body.content) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'content required' })); return; }
-      const result = apiInjectMessage({ to: body.to || '__all__', content: body.content }, url.searchParams);
+      const result = await apiInjectMessage({ to: body.to || '__all__', content: body.content }, url.searchParams);
       res.writeHead(result.error ? 400 : 200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
     }

@@ -5,6 +5,7 @@
 // installed, attachTerminal() degrades to a clean error message instead of
 // throwing, matching lib/github-sync.js's isConfigured()-guarded no-op pattern.
 
+const { execFile } = require('child_process');
 const { getConfig } = require('./config');
 
 const DEFAULT_SESSION = 'neohive';
@@ -65,6 +66,15 @@ function attachTerminal(ws, { sessionName }) {
     ws.close();
     return;
   }
+
+  // tmux's default (window-size latest/smallest, depending on version) sizes
+  // a shared window to whichever client is smallest or most recently active
+  // — if this session is also used directly by a human (not created fresh
+  // for this connection), a small browser viewport attaching here can shrink
+  // their entire real terminal. "largest" makes the window always follow the
+  // biggest attached client instead, so this connection can never shrink it.
+  // Best-effort: never let this block or fail the actual terminal attach.
+  execFile('tmux', ['set-window-option', '-t', sessionName, 'window-size', 'largest'], () => {});
 
   ptyProcess.onData((data) => send(ws, { type: 'output', data }));
 
