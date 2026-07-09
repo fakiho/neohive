@@ -48,6 +48,10 @@ const PROMPT_PATTERNS = [
 const CAPTURE_LINES = 50;
 const MAX_HOPS = 10;
 
+// Process names that indicate the pane is at an idle shell prompt — i.e. the
+// agent process exited and no workload is running in the foreground.
+const SHELL_COMMANDS = new Set(['bash', 'zsh', 'sh', 'fish', 'dash', 'csh', 'tcsh']);
+
 function execFilePromise(cmd, args, opts) {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, Object.assign({ timeout: 5000 }, opts), (err, stdout) => {
@@ -71,16 +75,16 @@ async function capturePane(paneId, lines) {
 async function listAllPanes() {
   let out;
   try {
-    out = await execFilePromise('tmux', ['list-panes', '-a', '-F', '#{pane_id} #{pane_pid} #{session_name}']);
+    out = await execFilePromise('tmux', ['list-panes', '-a', '-F', '#{pane_id} #{pane_pid} #{session_name} #{pane_current_command}']);
   } catch {
     return new Map(); // no tmux server running, or no panes — every agent unmapped this cycle
   }
   const panesByPid = new Map();
   out.trim().split('\n').filter(Boolean).forEach((line) => {
-    const [paneId, panePid, sessionName] = line.split(' ');
+    const [paneId, panePid, sessionName, currentCommand] = line.split(' ');
     const pidNum = parseInt(panePid, 10);
     if (paneId && !Number.isNaN(pidNum)) {
-      panesByPid.set(pidNum, { pane_id: paneId, session_name: sessionName || null });
+      panesByPid.set(pidNum, { pane_id: paneId, session_name: sessionName || null, current_command: currentCommand || null });
     }
   });
   return panesByPid;
@@ -102,7 +106,7 @@ function walkAncestryToPane(pid, panesByPid, maxHops) {
   for (let hop = 0; hop <= maxHops; hop++) {
     if (panesByPid.has(current)) {
       const pane = panesByPid.get(current);
-      return { pane_id: pane.pane_id, session_name: pane.session_name, hops: hop };
+      return { pane_id: pane.pane_id, session_name: pane.session_name, current_command: pane.current_command || null, hops: hop };
     }
     const parent = getParentPid(current);
     if (!parent || parent <= 1) break;
@@ -157,13 +161,31 @@ function isGenerating(text) {
   return /esc to interrupt/i.test(text || '');
 }
 
+// Cheap single-field query — avoids a full capture-pane when all we need is
+// the foreground process name to decide whether the pane is idle.
+async function getPaneCurrentCommand(paneId) {
+  try {
+    const out = await execFilePromise('tmux', ['display-message', '-p', '-t', paneId, '#{pane_current_command}']);
+    return out.trim() || null;
+  } catch {
+    return null; // pane gone or tmux not running
+  }
+}
+
 // Live, uncached check of whether it's currently safe to type into a tmux
 // pane: the cached agents.json advisory state (from checkAllAgents' ~20s
 // poll) is too stale to gate a real-time send — an agent can start
 // generating or hit a permission prompt well within that window. Treats a
 // failed/empty capture as "not safe" too, since there's no reliable signal
 // either way.
+//
+// Short-circuits via pane_current_command before the more expensive
+// capture-pane: if the foreground process is a shell, the agent exited and
+// the pane is idle — injecting would type into the bare shell, not the agent.
 async function isPaneSafeToInject(paneId) {
+  const currentCommand = await getPaneCurrentCommand(paneId);
+  if (currentCommand === null) return false; // pane gone
+  if (SHELL_COMMANDS.has(currentCommand)) return false; // agent exited, shell is foreground
   const text = await capturePane(paneId);
   if (text === null) return false;
   if (isGenerating(text)) return false;
@@ -225,6 +247,7 @@ module.exports = function (ctx) {
       mapped: false,
       pane_id: null,
       session_name: null,
+      current_command: null,
       state: 'unknown',
       confidence: 'none',
       matched_pattern_id: null,
@@ -244,8 +267,19 @@ module.exports = function (ctx) {
     result.mapped = true;
     result.pane_id = mapping.pane_id;
     result.session_name = mapping.session_name;
+    result.current_command = mapping.current_command;
     result.hops = mapping.hops;
     result.confidence = 'low';
+
+    // If the foreground process is a shell, the agent exited and left behind an
+    // idle terminal. Mark unmapped so injection is disabled and the watchdog
+    // treats this like an offline agent — no capture-pane needed.
+    if (mapping.current_command && SHELL_COMMANDS.has(mapping.current_command)) {
+      result.mapped = false;
+      result.state = 'idle';
+      result.confidence = 'high';
+      return result;
+    }
 
     let text;
     try { text = await capturePane(mapping.pane_id); }
@@ -280,6 +314,7 @@ module.exports = function (ctx) {
       catch { continue; } // one agent's failure must never abort the cycle for others
 
       const prevState = info.tmux && info.tmux.state;
+      const prevMapped = info.tmux && info.tmux.mapped;
       info.tmux = tmuxState;
       changed = true;
 
@@ -287,6 +322,14 @@ module.exports = function (ctx) {
         try {
           broadcastSystemMessage(
             `[STATUS] ${name}'s tmux pane shows a possible permission prompt (pattern: ${tmuxState.matched_pattern_id}). Advisory signal only — verify before acting.`
+          );
+        } catch { /* best-effort */ }
+      }
+
+      if (prevMapped && !tmuxState.mapped && tmuxState.state === 'idle') {
+        try {
+          broadcastSystemMessage(
+            `[STATUS] ${name}'s tmux pane foreground process is now a shell (${tmuxState.current_command}) — agent process appears to have exited. Tmux mapping cleared.`
           );
         } catch { /* best-effort */ }
       }
