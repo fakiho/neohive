@@ -10,6 +10,7 @@ const { readIdeActivity, applyIdeActivityHint } = require('./lib/ide-activity');
 const _audit = require('./lib/audit');
 const { WebSocketServer } = require('ws');
 const terminalWs = require('./lib/terminal-ws');
+const tmuxAgentState = require('./lib/tmux-agent-state');
 
 function findCursorProjectRootWithNeohive(startDir) {
   let dir = path.resolve(startDir);
@@ -1371,10 +1372,53 @@ function apiInjectMessage(body, query) {
     timestamp: now,
   };
 
+  // Tmux-mapped agents are reachable directly through their terminal — deliver
+  // there instead of the MCP message queue. NOT both: injected text never goes
+  // through listen()'s consumed-tracking, so queuing it too would just mean
+  // it gets redelivered (and re-processed) the next time the agent calls
+  // listen() for any other reason. Unmapped agents are completely unaffected
+  // — same messagesFile+historyFile write as before this change.
+  let targetTmux = null;
+  try {
+    const agentsFile = path.join(dataDir, 'agents.json');
+    if (fs.existsSync(agentsFile)) {
+      const info = JSON.parse(fs.readFileSync(agentsFile, 'utf8'))[body.to];
+      if (info && info.tmux && info.tmux.mapped) targetTmux = info.tmux;
+    }
+  } catch {}
+
+  if (targetTmux) {
+    try {
+      tmuxAgentState.sendKeysToPane(targetTmux.pane_id, body.content);
+    } catch (e) {
+      return { error: 'tmux delivery failed: ' + e.message };
+    }
+    fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
+
+    // Fire-and-forget: the HTTP response doesn't wait on this. Once the
+    // agent's reply appears and the pane goes quiet, record it as a normal
+    // message back to whoever sent the original one — same two files a real
+    // send_message() call would have written to.
+    tmuxAgentState.waitForReply(targetTmux.pane_id).then((replyText) => {
+      if (!replyText) return;
+      const replyMsg = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+        from: body.to,
+        to: fromName,
+        content: replyText,
+        timestamp: new Date().toISOString(),
+      };
+      fs.appendFileSync(messagesFile, JSON.stringify(replyMsg) + '\n');
+      fs.appendFileSync(historyFile, JSON.stringify(replyMsg) + '\n');
+    }).catch(() => {});
+
+    return { success: true, messageId: msg.id, delivery: 'tmux' };
+  }
+
   fs.appendFileSync(messagesFile, JSON.stringify(msg) + '\n');
   fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
 
-  return { success: true, messageId: msg.id };
+  return { success: true, messageId: msg.id, delivery: 'mcp' };
 }
 
 // Multi-project management

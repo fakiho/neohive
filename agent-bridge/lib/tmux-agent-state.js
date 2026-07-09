@@ -45,6 +45,28 @@ const PROMPT_PATTERNS = [
   },
 ];
 
+const CAPTURE_LINES = 50;
+
+function execFilePromise(cmd, args, opts) {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, Object.assign({ timeout: 5000 }, opts), (err, stdout) => {
+      if (err) return reject(err);
+      resolve(stdout);
+    });
+  });
+}
+
+async function capturePane(paneId, lines) {
+  try {
+    // -J rejoins soft-wrapped lines — without it, narrow panes can split a
+    // prompt's key phrase (e.g. "don't ask again") across physical lines
+    // and silently defeat the regex patterns below.
+    return await execFilePromise('tmux', ['capture-pane', '-t', paneId, '-p', '-J', '-S', String(-(lines || CAPTURE_LINES))]);
+  } catch {
+    return null; // pane died between list-panes and capture-pane — benign race
+  }
+}
+
 module.exports = function (ctx) {
   const { helpers, DATA_DIR } = ctx;
   const { getAgents, saveAgents, broadcastSystemMessage } = helpers;
@@ -52,7 +74,6 @@ module.exports = function (ctx) {
   const MARKER_FILE = path.join(DATA_DIR, '.last-tmux-poll');
   const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
   const MAX_HOPS = 10;
-  const CAPTURE_LINES = 50;
   const MATCH_LINES = 15;
 
   let _tmuxChecked = false;
@@ -87,15 +108,6 @@ module.exports = function (ctx) {
       // of returning cleanly. 0/false disables (falls back to listen_poll_interval).
       listen_backstop_seconds: config.listen_backstop_seconds === undefined ? 240 : config.listen_backstop_seconds,
     };
-  }
-
-  function execFilePromise(cmd, args, opts) {
-    return new Promise((resolve, reject) => {
-      execFile(cmd, args, Object.assign({ timeout: 5000 }, opts), (err, stdout) => {
-        if (err) return reject(err);
-        resolve(stdout);
-      });
-    });
   }
 
   async function listAllPanes() {
@@ -139,17 +151,6 @@ module.exports = function (ctx) {
       current = parent;
     }
     return null;
-  }
-
-  async function capturePane(paneId) {
-    try {
-      // -J rejoins soft-wrapped lines — without it, narrow panes can split a
-      // prompt's key phrase (e.g. "don't ask again") across physical lines
-      // and silently defeat the regex patterns below.
-      return await execFilePromise('tmux', ['capture-pane', '-t', paneId, '-p', '-J', '-S', String(-CAPTURE_LINES)]);
-    } catch {
-      return null; // pane died between list-panes and capture-pane — benign race
-    }
   }
 
   function matchPromptPatterns(text) {
@@ -274,3 +275,87 @@ module.exports = function (ctx) {
 
   return { isTmuxAvailable, getTmuxStateConfig, checkAllAgents, pollIfDue, walkAncestryToPane, matchPromptPatterns, PROMPT_PATTERNS };
 };
+
+// Injects literal text into a tmux pane as a fresh prompt: literal text via
+// `send-keys -l` (avoids tmux special-key-name interpretation), then a
+// SEPARATE Enter keystroke — empirically required, text alone sits unsent
+// in the pane's input box. Newlines are collapsed to spaces first, since a
+// literal embedded newline can submit prematurely in a multi-line-aware
+// TUI input box. Stateless (no ctx) — throws on failure, caller decides
+// what to do about it.
+function sendKeysToPane(paneId, text) {
+  const flat = String(text).replace(/\r?\n/g, ' ');
+  execFileSync('tmux', ['send-keys', '-t', paneId, '-l', flat], { timeout: 5000 });
+  execFileSync('tmux', ['send-keys', '-t', paneId, 'Enter'], { timeout: 5000 });
+}
+
+// Extracts the agent's most recent reply from a raw capture-pane text.
+// Convention (Claude Code CLI, verified against real captures):
+//   - agent output is marked with a leading ● per turn/block
+//   - a submitted prompt line is marked with a leading ❯
+//   - the live, not-yet-processed input box is bordered top and bottom by a
+//     horizontal-rule line — always the last thing in any capture — and must
+//     be excluded, since its ❯ line may be unsent draft text, not history
+// So: drop everything from the second-to-last rule line onward (the live
+// box), then return everything after the LAST ❯ line in what remains.
+function extractLastReply(paneText) {
+  if (!paneText) return null;
+  const lines = paneText.split('\n');
+
+  const ruleIndices = [];
+  lines.forEach((line, i) => { if (/─{5,}/.test(line)) ruleIndices.push(i); });
+  const boxStart = ruleIndices.length >= 2 ? ruleIndices[ruleIndices.length - 2] : lines.length;
+  const history = lines.slice(0, boxStart);
+
+  let lastPromptIdx = -1;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (/^❯\s/.test(history[i].trim())) { lastPromptIdx = i; break; }
+  }
+
+  // Each line is right-padded with spaces to the pane's fixed width — strip that.
+  const reply = history.slice(lastPromptIdx + 1).map((l) => l.replace(/\s+$/, '')).join('\n').trim();
+  return reply || null;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Polls the pane until output goes quiet (no change for quietMs) or timeoutMs
+// elapses, then extracts the reply from the final capture. Uses a wider
+// capture window than the prompt-detection path (capturePane's default 50
+// lines) since a real reply plus its preceding ❯ line can run longer.
+async function waitForReply(paneId, opts) {
+  opts = opts || {};
+  const pollMs = opts.pollMs || 800;
+  const quietMs = opts.quietMs || 1500;
+  const timeoutMs = opts.timeoutMs || 45000;
+  const captureLines = opts.captureLines || 300;
+
+  const start = Date.now();
+  let prev = null;
+  let lastChangeAt = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    await sleep(pollMs);
+    const text = await capturePane(paneId, captureLines);
+    if (text === null) return null; // pane gone
+
+    // "esc to interrupt" is Claude Code's own live-generation marker (verified
+    // empirically — present only while actively generating, gone at rest).
+    // Text-diffing alone isn't enough: the animated status line ("Thinking…
+    // 4s") can happen to read identical across two polls if it lands on the
+    // same second, causing a false "quiet" reading mid-response. Treat any
+    // busy capture as a change regardless of whether the text matches.
+    const busy = /esc to interrupt/i.test(text);
+    if (busy || prev === null || text !== prev) lastChangeAt = Date.now();
+    prev = text;
+    if (!busy && Date.now() - lastChangeAt >= quietMs) break;
+  }
+
+  return prev ? extractLastReply(prev) : null;
+}
+
+module.exports.sendKeysToPane = sendKeysToPane;
+module.exports.extractLastReply = extractLastReply;
+module.exports.waitForReply = waitForReply;
