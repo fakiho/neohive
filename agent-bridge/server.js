@@ -55,7 +55,8 @@ const HISTORY_FILE = path.join(DATA_DIR, 'history.jsonl');
 const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
 const ACKS_FILE = path.join(DATA_DIR, 'acks.json');
 const TASKS_FILE = path.join(DATA_DIR, 'tasks.json');
-const tmuxAgentState = require('./lib/tmux-agent-state')({
+const tmuxAgentStateLib = require('./lib/tmux-agent-state');
+const tmuxAgentState = tmuxAgentStateLib({
   DATA_DIR,
   helpers: { getAgents, saveAgents, broadcastSystemMessage },
 });
@@ -2007,7 +2008,22 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
   // Write to channel-specific file if channel specified, otherwise default
   const msgFile = channel ? getChannelMessagesFile(channel) : getMessagesFile(currentBranch);
   const histFile = channel ? getChannelHistoryFile(channel) : getHistoryFile(currentBranch);
-  fs.appendFileSync(msgFile, JSON.stringify(msg) + '\n');
+
+  // Direct 1:1 sends: try tmux delivery first so a message never silently
+  // sits unconsumed in the queue if the recipient never calls listen() again
+  // (e.g. idle at its own prompt with no listen() in flight, or its own
+  // enforce-listen Stop hook failed to bring it back). Group/channel/
+  // broadcast messages always go through the queue — tmux injection is only
+  // meaningful for a single named recipient.
+  let deliveredViaTmux = false;
+  if (!channel && !isGroup && to !== '__user__' && to !== '__all__' && to !== '__group__') {
+    const paneText = `[neohive message from ${registeredName}]: ${content} — reply via send_message(to="${registeredName}") when done.`;
+    deliveredViaTmux = await tmuxAgentStateLib.attemptTmuxDelivery(DATA_DIR, to, paneText).catch(() => false);
+  }
+
+  if (!deliveredViaTmux) {
+    fs.appendFileSync(msgFile, JSON.stringify(msg) + '\n');
+  }
   fs.appendFileSync(histFile, JSON.stringify(msg) + '\n');
   touchActivity();
   lastSentAt = Date.now();
@@ -2095,7 +2111,9 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
       result._budget_hint = 'Response budget depleted (2 unaddressed sends in 60s). Wait to be addressed or wait for budget reset.';
     }
   }
-  if (!recipientAlive) {
+  if (deliveredViaTmux) {
+    result.delivery = 'tmux';
+  } else if (!recipientAlive) {
     result.warning = `Agent "${to}" appears offline (PID not running). Message queued but may not be received until they reconnect.`;
   } else if (to !== '__user__' && agents[to] && !agents[to].listening_since) {
     result.note = `Agent "${to}" is currently working (not in listen mode). Message queued — they'll see it when they finish their current task and call listen().`;
