@@ -75,16 +75,16 @@ async function capturePane(paneId, lines) {
 async function listAllPanes() {
   let out;
   try {
-    out = await execFilePromise('tmux', ['list-panes', '-a', '-F', '#{pane_id} #{pane_pid} #{session_name} #{pane_current_command}']);
+    out = await execFilePromise('tmux', ['list-panes', '-a', '-F', '#{pane_id} #{pane_pid} #{session_name} #{pane_current_command} #{pane_dead}']);
   } catch {
     return new Map(); // no tmux server running, or no panes — every agent unmapped this cycle
   }
   const panesByPid = new Map();
   out.trim().split('\n').filter(Boolean).forEach((line) => {
-    const [paneId, panePid, sessionName, currentCommand] = line.split(' ');
+    const [paneId, panePid, sessionName, currentCommand, paneDead] = line.split(' ');
     const pidNum = parseInt(panePid, 10);
     if (paneId && !Number.isNaN(pidNum)) {
-      panesByPid.set(pidNum, { pane_id: paneId, session_name: sessionName || null, current_command: currentCommand || null });
+      panesByPid.set(pidNum, { pane_id: paneId, session_name: sessionName || null, current_command: currentCommand || null, dead: paneDead === '1' });
     }
   });
   return panesByPid;
@@ -106,7 +106,7 @@ function walkAncestryToPane(pid, panesByPid, maxHops) {
   for (let hop = 0; hop <= maxHops; hop++) {
     if (panesByPid.has(current)) {
       const pane = panesByPid.get(current);
-      return { pane_id: pane.pane_id, session_name: pane.session_name, current_command: pane.current_command || null, hops: hop };
+      return { pane_id: pane.pane_id, session_name: pane.session_name, current_command: pane.current_command || null, dead: pane.dead || false, hops: hop };
     }
     const parent = getParentPid(current);
     if (!parent || parent <= 1) break;
@@ -129,9 +129,16 @@ function isPidAlive(pid) {
 // pane that unrelated process happens to share ancestry with. Confirms the
 // PID is still alive AND a fresh ancestry walk still resolves to the same
 // pane_id before returning true.
+//
+// pane_dead short-circuit: if the expected pane is already in the list but
+// marked dead, reject immediately without the multi-hop ps ancestry walk.
 async function verifyPaneMapping(pid, expectedPaneId) {
   if (!isPidAlive(pid)) return false;
   const panesByPid = await listAllPanes();
+  // Check the target pane directly by pane_id before doing the ancestry walk.
+  for (const entry of panesByPid.values()) {
+    if (entry.pane_id === expectedPaneId && entry.dead) return false;
+  }
   const mapping = walkAncestryToPane(pid, panesByPid);
   return !!(mapping && mapping.pane_id === expectedPaneId);
 }
@@ -262,7 +269,7 @@ module.exports = function (ctx) {
     try { mapping = walkAncestryToPane(info.pid, panesByPid); }
     catch { mapping = null; }
 
-    if (!mapping) return result;
+    if (!mapping || mapping.dead) return result;
 
     result.mapped = true;
     result.pane_id = mapping.pane_id;
