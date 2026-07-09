@@ -132,13 +132,51 @@ async function verifyPaneMapping(pid, expectedPaneId) {
   return !!(mapping && mapping.pane_id === expectedPaneId);
 }
 
+const MATCH_LINES = 15;
+
+function matchPromptPatterns(text) {
+  if (!text) return { matched: false, pattern_id: null };
+  // tmux capture-pane returns the full pane height, padded with blank lines
+  // below wherever the cursor currently sits — e.g. a 50-row pane with content
+  // ending at row 30 yields 20 trailing blank lines. Trim those first, or
+  // "last N lines" grabs blank padding instead of the actual last output.
+  const lines = text.split('\n');
+  while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+  const recentLines = lines.slice(-MATCH_LINES).join('\n');
+  for (const p of PROMPT_PATTERNS) {
+    if (p.regex.test(recentLines)) {
+      return { matched: true, pattern_id: p.id };
+    }
+  }
+  return { matched: false, pattern_id: null };
+}
+
+// "esc to interrupt" is Claude Code's own live-generation marker (verified
+// empirically — present only while actively generating, gone at rest).
+function isGenerating(text) {
+  return /esc to interrupt/i.test(text || '');
+}
+
+// Live, uncached check of whether it's currently safe to type into a tmux
+// pane: the cached agents.json advisory state (from checkAllAgents' ~20s
+// poll) is too stale to gate a real-time send — an agent can start
+// generating or hit a permission prompt well within that window. Treats a
+// failed/empty capture as "not safe" too, since there's no reliable signal
+// either way.
+async function isPaneSafeToInject(paneId) {
+  const text = await capturePane(paneId);
+  if (text === null) return false;
+  if (isGenerating(text)) return false;
+  if (matchPromptPatterns(text).matched) return false;
+  return true;
+}
+
 module.exports = function (ctx) {
   const { helpers, DATA_DIR } = ctx;
   const { getAgents, saveAgents, broadcastSystemMessage } = helpers;
 
   const MARKER_FILE = path.join(DATA_DIR, '.last-tmux-poll');
   const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
-  const MATCH_LINES = 15;
 
   let _tmuxChecked = false;
   let _tmuxAvailable = false;
@@ -172,23 +210,6 @@ module.exports = function (ctx) {
       // of returning cleanly. 0/false disables (falls back to listen_poll_interval).
       listen_backstop_seconds: config.listen_backstop_seconds === undefined ? 240 : config.listen_backstop_seconds,
     };
-  }
-
-  function matchPromptPatterns(text) {
-    if (!text) return { matched: false, pattern_id: null };
-    // tmux capture-pane returns the full pane height, padded with blank lines
-    // below wherever the cursor currently sits — e.g. a 50-row pane with content
-    // ending at row 30 yields 20 trailing blank lines. Trim those first, or
-    // "last N lines" grabs blank padding instead of the actual last output.
-    const lines = text.split('\n');
-    while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
-    const recentLines = lines.slice(-MATCH_LINES).join('\n');
-    for (const p of PROMPT_PATTERNS) {
-      if (p.regex.test(recentLines)) {
-        return { matched: true, pattern_id: p.id };
-      }
-    }
-    return { matched: false, pattern_id: null };
   }
 
   function detectOutputChange(paneId, text) {
@@ -312,3 +333,4 @@ function sendKeysToPane(paneId, text) {
 
 module.exports.sendKeysToPane = sendKeysToPane;
 module.exports.verifyPaneMapping = verifyPaneMapping;
+module.exports.isPaneSafeToInject = isPaneSafeToInject;
