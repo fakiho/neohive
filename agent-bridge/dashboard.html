@@ -3759,6 +3759,9 @@
     font-size: 15px;
   }
   .terminal-toolbar-btn:hover { background: var(--nh-hover, rgba(255,255,255,0.06)); color: var(--nh-text); }
+  #terminal-toggle-btn { width: auto; padding: 0 12px; font-size: 12px; font-weight: 600; }
+  #terminal-toggle-btn.terminal-toolbar-btn-danger { color: var(--nh-red, #ef4444); border-color: rgba(239,68,68,0.3); }
+  #terminal-toggle-btn.terminal-toolbar-btn-danger:hover { background: rgba(239,68,68,0.1); }
   .launch-section {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
     padding: 20px; margin-bottom: 20px;
@@ -4498,6 +4501,8 @@
         <div class="settings-item" onclick="switchView('docs');toggleSettingsMenu()">Help &amp; Docs</div>
         <div style="height:1px;background:var(--border);margin:4px 8px"></div>
         <div class="settings-item settings-danger" onclick="doReset();toggleSettingsMenu()">Reset Data</div>
+        <div class="settings-item settings-danger" onclick="doRestartServer();toggleSettingsMenu()">Restart Server</div>
+        <div class="settings-item settings-danger" onclick="doShutdownServer();toggleSettingsMenu()">Shutdown Server</div>
       </div>
     </div>
   </div>
@@ -4684,6 +4689,7 @@
   <div class="terminal-toolbar">
     <span class="terminal-toolbar-title">Terminal</span>
     <div class="terminal-toolbar-actions">
+      <button class="terminal-toolbar-btn" id="terminal-toggle-btn" onclick="toggleTerminalConnection()" title="Start terminal connection">Start</button>
       <button class="terminal-toolbar-btn" onclick="toggleTerminalFullscreen()" title="Full screen">⛶</button>
       <button class="terminal-toolbar-btn" onclick="openShortcutsModal()" title="Keyboard shortcuts">ⓘ</button>
     </div>
@@ -7713,6 +7719,18 @@ function loadXterm() {
 
 var TERMINAL_KEY = '__terminal__'; // single shared terminal — all agents/viewers attach to one tmux session
 var terminalInstances = new Map(); // TERMINAL_KEY -> { term: Terminal, fit: FitAddon, ws: WebSocket }
+var TERMINAL_ENDED_KEY = 'neohive-terminal-ended';
+
+// terminalInstances (and inst.userEnded) live only in memory, so a full page
+// refresh wipes them and initTerminal() would otherwise take the "first
+// visit" branch again and auto-reconnect — silently undoing an explicit
+// "End" click. Persist the user's intent across reloads via localStorage.
+function getTerminalEndedPref() {
+  try { return localStorage.getItem(TERMINAL_ENDED_KEY) === 'true'; } catch { return false; }
+}
+function setTerminalEndedPref(ended) {
+  try { localStorage.setItem(TERMINAL_ENDED_KEY, ended ? 'true' : 'false'); } catch { /* ignore */ }
+}
 
 async function initTerminal() {
   var container = document.getElementById('terminal-container');
@@ -7729,7 +7747,10 @@ async function initTerminal() {
         sendResize(inst);
       }, 50);
     }
-    if (inst.ws.readyState === WebSocket.CLOSED) {
+    // Only auto-reconnect if the disconnect wasn't the user explicitly
+    // clicking "End" — otherwise just revisiting this tab would silently
+    // undo that choice.
+    if (inst.ws.readyState === WebSocket.CLOSED && !inst.userEnded) {
       connectTerminalSocket(inst);
     }
     return inst.term;
@@ -7761,7 +7782,7 @@ async function initTerminal() {
   setTimeout(function() {
     term.open(container);
     fit.fit();
-    var inst = { term: term, fit: fit, ws: null };
+    var inst = { term: term, fit: fit, ws: null, userEnded: false };
     terminalInstances.set(TERMINAL_KEY, inst);
     // Registered once per terminal instance (not per reconnect) — reads
     // inst.ws dynamically so it keeps working across reconnects.
@@ -7780,7 +7801,15 @@ async function initTerminal() {
         sendResize(inst);
       }, 100);
     }).observe(container);
-    connectTerminalSocket(inst);
+    // Respect a previous explicit "End" across page reloads instead of
+    // silently re-attaching to the shared tmux session on every refresh.
+    if (getTerminalEndedPref()) {
+      inst.userEnded = true;
+      term.writeln('\x1b[33m[Neohive]\x1b[0m Terminal not connected (you ended the previous session). Click Start to reconnect.');
+      updateTerminalToggleBtn(false);
+    } else {
+      connectTerminalSocket(inst);
+    }
   }, 50);
 
   return term;
@@ -7798,10 +7827,12 @@ function connectTerminalSocket(inst) {
   var wsUrl = proto + '//' + window.location.host + '/api/terminal' + (_lttToken ? '?token=' + encodeURIComponent(_lttToken) : '');
   var ws = new WebSocket(wsUrl);
   inst.ws = ws;
+  inst.userEnded = false;
 
   ws.onopen = function() {
     inst.term.writeln('\x1b[33m[Neohive]\x1b[0m Terminal connected.');
     sendResize(inst);
+    updateTerminalToggleBtn(true);
   };
 
   ws.onmessage = function(evt) {
@@ -7818,7 +7849,35 @@ function connectTerminalSocket(inst) {
 
   ws.onclose = function() {
     inst.term.writeln('\x1b[33m[Neohive] Terminal disconnected.\x1b[0m');
+    updateTerminalToggleBtn(false);
   };
+}
+
+// Ends this browser's terminal connection only — same as a normal SSH client
+// disconnecting. The underlying tmux session (and anything else attached to
+// it) is untouched; only this one pty client goes away server-side. The
+// choice is persisted (setTerminalEndedPref) so it survives a page refresh
+// too, not just SPA tab switches.
+function toggleTerminalConnection() {
+  var inst = terminalInstances.get(TERMINAL_KEY);
+  if (inst && inst.ws && inst.ws.readyState === WebSocket.OPEN) {
+    inst.userEnded = true;
+    setTerminalEndedPref(true);
+    inst.ws.close();
+    return;
+  }
+  setTerminalEndedPref(false);
+  if (!inst) { initTerminal(); return; }
+  inst.userEnded = false;
+  connectTerminalSocket(inst);
+}
+
+function updateTerminalToggleBtn(connected) {
+  var btn = document.getElementById('terminal-toggle-btn');
+  if (!btn) return;
+  btn.textContent = connected ? 'End' : 'Start';
+  btn.title = connected ? 'End terminal connection (tmux session keeps running)' : 'Start terminal connection';
+  btn.classList.toggle('terminal-toolbar-btn-danger', connected);
 }
 
 function toggleTerminalFullscreen() {
@@ -9479,6 +9538,20 @@ function doReset() {
     cachedAgents = {};
     poll();
   }).catch(function(e) { console.error('Reset failed:', e); });
+}
+
+function doRestartServer() {
+  if (!confirm('Restart the neohive dashboard server? Active connections (including any open terminal) will be briefly interrupted.')) return;
+  lttFetch('/api/server/restart', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) })
+    .then(function() { alert('Server is restarting — reload this page in a few seconds.'); })
+    .catch(function() { alert('Server is restarting — reload this page in a few seconds.'); });
+}
+
+function doShutdownServer() {
+  if (!confirm('Shut down the neohive dashboard server? You will need to start it manually again — this page will stop updating.')) return;
+  lttFetch('/api/server/shutdown', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) })
+    .then(function() { alert('Server is shutting down.'); })
+    .catch(function() { alert('Server is shutting down.'); });
 }
 
 // ==================== PROJECT MANAGEMENT ====================
