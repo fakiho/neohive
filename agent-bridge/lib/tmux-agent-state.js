@@ -381,6 +381,42 @@ function sendKeysToPane(paneId, text) {
   execFileSync('tmux', ['send-keys', '-t', paneId, 'Enter'], { timeout: 5000 });
 }
 
+// Tracks which tmux sessions have a pane-exited hook registered by this
+// process. Module-level so it survives across multiple callers in the same
+// process (dashboard.js re-uses these without a factory context).
+const _hookedSessions = new Set();
+
+// Sets a pane-exited hook on the given tmux session that fires an HTTP
+// callback to the local dashboard. Tmux expands #{pane_id} when the hook
+// fires — do NOT pre-expand it here. Idempotent: skips if already hooked.
+function registerSessionHook(sessionName, port) {
+  if (!sessionName || _hookedSessions.has(sessionName)) return;
+  try {
+    execFileSync('tmux', [
+      'set-hook', '-t', sessionName, 'pane-exited',
+      `run-shell "curl -sf 'http://localhost:${port}/api/tmux-pane-exited?pane=#{pane_id}' &"`,
+    ], { timeout: 3000 });
+    _hookedSessions.add(sessionName);
+  } catch { /* session gone or tmux unavailable — benign */ }
+}
+
+// Removes the pane-exited hook from a tmux session registered by this process.
+function unregisterSessionHook(sessionName) {
+  if (!sessionName) return;
+  try {
+    execFileSync('tmux', ['set-hook', '-ut', sessionName, 'pane-exited'], { timeout: 3000 });
+  } catch { /* session already gone — benign */ }
+  _hookedSessions.delete(sessionName);
+}
+
+// Unregisters hooks on all sessions this process registered. Call on exit.
+function unregisterAllSessionHooks() {
+  for (const s of [..._hookedSessions]) unregisterSessionHook(s);
+}
+
 module.exports.sendKeysToPane = sendKeysToPane;
 module.exports.verifyPaneMapping = verifyPaneMapping;
 module.exports.isPaneSafeToInject = isPaneSafeToInject;
+module.exports.registerSessionHook = registerSessionHook;
+module.exports.unregisterSessionHook = unregisterSessionHook;
+module.exports.unregisterAllSessionHooks = unregisterAllSessionHooks;

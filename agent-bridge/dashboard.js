@@ -1432,6 +1432,12 @@ async function apiInjectMessage(body, query) {
     } catch (e) {
       return { error: 'tmux delivery failed: ' + e.message };
     }
+    // Ensure the pane-exited hook is registered for this session so any future
+    // pane death is caught immediately, even if the dashboard restarted after
+    // the initial startup scan.
+    if (targetTmux.session_name) {
+      try { tmuxAgentState.registerSessionHook(targetTmux.session_name, PORT); } catch {}
+    }
     fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
 
     return { success: true, messageId: msg.id, delivery: 'tmux' };
@@ -2981,6 +2987,40 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(result.error ? 400 : 200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
     }
+    // Tmux pane-exited hook callback — called by the shell hook registered via
+    // registerSessionHook(). Clears the tmux mapping for whichever agent owns
+    // the exited pane so agents.json stays accurate without waiting for the
+    // next 20s poll cycle. Localhost-only: rejects requests from non-loopback.
+    else if (url.pathname === '/api/tmux-pane-exited') {
+      const remoteAddr = req.socket.remoteAddress;
+      const isLocal = remoteAddr === '127.0.0.1' || remoteAddr === '::1' || remoteAddr === '::ffff:127.0.0.1';
+      if (!isLocal) { res.writeHead(403); res.end(); return; }
+      const paneId = url.searchParams.get('pane');
+      if (paneId) {
+        try {
+          const dataDir = resolveDataDir(url.searchParams.get('project') || undefined);
+          const agentsFile = path.join(dataDir, 'agents.json');
+          if (fs.existsSync(agentsFile)) {
+            const agents = JSON.parse(fs.readFileSync(agentsFile, 'utf8'));
+            let changed = false;
+            for (const info of Object.values(agents)) {
+              if (info.tmux && info.tmux.pane_id === paneId && info.tmux.mapped) {
+                info.tmux.mapped = false;
+                info.tmux.state = 'exited';
+                info.tmux.pane_id = null;
+                changed = true;
+                break;
+              }
+            }
+            // Atomic-ish write — SSE watcher picks up the change and the
+            // dashboard reflects it without waiting for the next 20s poll.
+            if (changed) fs.writeFileSync(agentsFile, JSON.stringify(agents, null, 2));
+          }
+        } catch { /* best-effort — do not crash the request handler */ }
+      }
+      res.writeHead(200);
+      res.end();
+    }
     // Multi-project management
     else if (url.pathname === '/api/projects' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -4337,8 +4377,25 @@ server.listen(PORT, LAN_MODE ? '0.0.0.0' : '127.0.0.1', () => {
     fs.writeFileSync(path.join(dataDir, 'dashboard.json'), JSON.stringify(dashboardMeta));
   } catch {}
 
+  // Register pane-exited hooks for any already-mapped agents so instant
+  // unmap works from the first moment the dashboard is up.
+  try {
+    const agentsFile = path.join(dataDir, 'agents.json');
+    if (fs.existsSync(agentsFile)) {
+      const agents = JSON.parse(fs.readFileSync(agentsFile, 'utf8'));
+      for (const info of Object.values(agents)) {
+        if (info.tmux && info.tmux.mapped && info.tmux.session_name) {
+          tmuxAgentState.registerSessionHook(info.tmux.session_name, PORT);
+        }
+      }
+    }
+  } catch {}
+
   // Clean up on exit
-  process.on('exit', () => { try { fs.unlinkSync(path.join(resolveDataDir(), 'dashboard.json')); } catch {} });
+  process.on('exit', () => {
+    try { fs.unlinkSync(path.join(resolveDataDir(), 'dashboard.json')); } catch {}
+    tmuxAgentState.unregisterAllSessionHooks();
+  });
   process.on('SIGINT', () => process.exit(0));
   process.on('SIGTERM', () => process.exit(0));
 
