@@ -3744,7 +3744,9 @@
     color: var(--nh-text-muted);
     font-size: 13px;
   }
-  .terminal-toolbar-actions { display: flex; gap: 6px; }
+  .terminal-toolbar-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .terminal-toolbar-group { display: flex; gap: 4px; align-items: center; padding-right: 6px; border-right: 1px solid var(--nh-border); }
+  .terminal-window-state { min-width: 92px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font: 11px 'SFMono-Regular', Consolas, monospace; color: var(--nh-text-muted); }
   .terminal-toolbar-btn {
     background: var(--surface);
     border: 1px solid var(--nh-border);
@@ -3759,6 +3761,8 @@
     font-size: 15px;
   }
   .terminal-toolbar-btn:hover { background: var(--nh-hover, rgba(255,255,255,0.06)); color: var(--nh-text); }
+  .terminal-toolbar-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .terminal-toolbar-btn-wide { width: auto; padding: 0 8px; font-size: 11px; }
   #terminal-toggle-btn { width: auto; padding: 0 12px; font-size: 12px; font-weight: 600; }
   #terminal-toggle-btn.terminal-toolbar-btn-danger { color: var(--nh-red, #ef4444); border-color: rgba(239,68,68,0.3); }
   #terminal-toggle-btn.terminal-toolbar-btn-danger:hover { background: rgba(239,68,68,0.1); }
@@ -3779,6 +3783,12 @@
   .launch-form-field .field-hint { font-size: 11px; color: var(--text-muted); min-height: 16px; }
   .launch-form-field .field-hint.error { color: var(--red); }
   .launch-form-field .field-hint.success { color: var(--green); }
+  .ollama-instance-list { display: grid; gap: 8px; margin-top: 14px; }
+  .ollama-instance-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
+  .ollama-instance-meta { min-width: 0; }
+  .ollama-instance-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .ollama-instance-detail { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ollama-instance-actions { display: flex; gap: 6px; flex-shrink: 0; }
   .launch-prompt-output {
     background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
     padding: 12px; font-size: 12px; font-family: 'SFMono-Regular', Consolas, monospace;
@@ -4689,6 +4699,22 @@
   <div class="terminal-toolbar">
     <span class="terminal-toolbar-title">Terminal</span>
     <div class="terminal-toolbar-actions">
+      <div class="terminal-toolbar-group">
+        <button class="terminal-toolbar-btn tmux-control-btn" onclick="sendTmuxControl('window_previous')" title="Previous tmux window" aria-label="Previous tmux window">&larr;</button>
+        <span class="terminal-window-state" id="terminal-window-state">No connection — click Start</span>
+        <button class="terminal-toolbar-btn tmux-control-btn" onclick="sendTmuxControl('window_next')" title="Next tmux window" aria-label="Next tmux window">&rarr;</button>
+      </div>
+      <div class="terminal-toolbar-group">
+        <button class="terminal-toolbar-btn tmux-control-btn" onclick="sendTmuxControl('pane_left')" title="Focus pane left" aria-label="Focus pane left">&larr;</button>
+        <button class="terminal-toolbar-btn tmux-control-btn" onclick="sendTmuxControl('pane_up')" title="Focus pane above" aria-label="Focus pane above">&uarr;</button>
+        <button class="terminal-toolbar-btn tmux-control-btn" onclick="sendTmuxControl('pane_down')" title="Focus pane below" aria-label="Focus pane below">&darr;</button>
+        <button class="terminal-toolbar-btn tmux-control-btn" onclick="sendTmuxControl('pane_right')" title="Focus pane right" aria-label="Focus pane right">&rarr;</button>
+      </div>
+      <div class="terminal-toolbar-group">
+        <button class="terminal-toolbar-btn terminal-toolbar-btn-wide tmux-control-btn" onclick="sendTmuxControl('split_left_right')" title="Split into side-by-side panes">Side by side</button>
+        <button class="terminal-toolbar-btn terminal-toolbar-btn-wide tmux-control-btn" onclick="sendTmuxControl('split_top_bottom')" title="Split into stacked panes">Stacked</button>
+        <button class="terminal-toolbar-btn terminal-toolbar-btn-wide tmux-control-btn" id="terminal-close-pane-btn" onclick="closeActiveTmuxPane()" title="Close active pane" disabled>Close pane</button>
+      </div>
       <button class="terminal-toolbar-btn" id="terminal-toggle-btn" onclick="toggleTerminalConnection()" title="Start terminal connection">Start</button>
       <button class="terminal-toolbar-btn" onclick="toggleTerminalFullscreen()" title="Full screen">⛶</button>
       <button class="terminal-toolbar-btn" onclick="openShortcutsModal()" title="Keyboard shortcuts">ⓘ</button>
@@ -7720,6 +7746,9 @@ function loadXterm() {
 var TERMINAL_KEY = '__terminal__'; // single shared terminal — all agents/viewers attach to one tmux session
 var terminalInstances = new Map(); // TERMINAL_KEY -> { term: Terminal, fit: FitAddon, ws: WebSocket }
 var TERMINAL_ENDED_KEY = 'neohive-terminal-ended';
+var terminalControlSeq = 0;
+var terminalTmuxState = null;
+var pendingTmuxActions = [];
 
 // terminalInstances (and inst.userEnded) live only in memory, so a full page
 // refresh wipes them and initTerminal() would otherwise take the "first
@@ -7833,6 +7862,10 @@ function connectTerminalSocket(inst) {
     inst.term.writeln('\x1b[33m[Neohive]\x1b[0m Terminal connected.');
     sendResize(inst);
     updateTerminalToggleBtn(true);
+    setTmuxControlsEnabled(true);
+    sendTmuxControl('get_state');
+    var queued = pendingTmuxActions.splice(0);
+    queued.forEach(function(action) { sendTmuxControl(action); });
   };
 
   ws.onmessage = function(evt) {
@@ -7844,13 +7877,71 @@ function connectTerminalSocket(inst) {
       inst.term.writeln('\x1b[31m[Neohive] ' + msg.data + '\x1b[0m');
     } else if (msg.type === 'exit') {
       inst.term.writeln('\x1b[33m[Neohive] Terminal session ended.\x1b[0m');
+    } else if (msg.type === 'tmux-control-result') {
+      setTmuxControlsEnabled(true);
+      if (msg.ok && msg.state) {
+        updateTmuxState(msg.state);
+      } else if (!msg.ok) {
+        showToast('!', msg.error || 'Tmux control failed');
+      }
     }
   };
 
   ws.onclose = function() {
     inst.term.writeln('\x1b[33m[Neohive] Terminal disconnected.\x1b[0m');
     updateTerminalToggleBtn(false);
+    setTmuxControlsEnabled(false);
+    updateTmuxState(null);
   };
+}
+
+function setTmuxControlsEnabled(enabled) {
+  var buttons = document.querySelectorAll('.tmux-control-btn');
+  buttons.forEach(function(button) {
+    button.disabled = button.id === 'terminal-close-pane-btn' ? !enabled : false;
+  });
+  var closeBtn = document.getElementById('terminal-close-pane-btn');
+  if (closeBtn && enabled && terminalTmuxState) closeBtn.disabled = !terminalTmuxState.canClosePane;
+}
+
+function updateTmuxState(state) {
+  terminalTmuxState = state;
+  var label = document.getElementById('terminal-window-state');
+  if (label) {
+    label.textContent = state
+      ? String(state.windowIndex) + ' / ' + String(state.windowCount) + ' · ' + (state.windowName || 'window')
+      : 'No connection — click Start';
+    label.title = state ? (state.windowName || '') : '';
+  }
+  var closeBtn = document.getElementById('terminal-close-pane-btn');
+  if (closeBtn) closeBtn.disabled = !state || !state.canClosePane;
+}
+
+function sendTmuxControl(action) {
+  var inst = terminalInstances.get(TERMINAL_KEY);
+  if (!inst || !inst.ws || inst.ws.readyState !== WebSocket.OPEN) {
+    if (action !== 'get_state') pendingTmuxActions.push(action);
+    setTerminalEndedPref(false);
+    if (!inst) {
+      initTerminal();
+    } else if (!inst.ws || inst.ws.readyState === WebSocket.CLOSED) {
+      inst.userEnded = false;
+      connectTerminalSocket(inst);
+    }
+    return;
+  }
+  terminalControlSeq += 1;
+  inst.ws.send(JSON.stringify({
+    type: 'tmux-control',
+    requestId: String(terminalControlSeq),
+    action: action
+  }));
+}
+
+function closeActiveTmuxPane() {
+  if (!terminalTmuxState || !terminalTmuxState.canClosePane) return;
+  if (!confirm('Close the active tmux pane? Running Neohive agent panes are protected.')) return;
+  sendTmuxControl('close_pane');
 }
 
 // Ends this browser's terminal connection only — same as a normal SSH client
@@ -10192,34 +10283,41 @@ fetchLanState();
 
 var launchTemplates = [];
 var selectedCli = 'claude';
+var launchRoleProfiles = [];
+var ROLE_SKILLS = {};
+var ROLE_PROMPTS = {};
+var ollamaModelRequestSeq = 0;
 
 var _launchWatchers = []; // [{name, cli, prompt, state}] for tracking launch status
 var _launchWatchInterval = null;
 
-var ROLE_SKILLS = {
-  lead: ['planning', 'delegation', 'tracking', 'review'],
-  backend: ['javascript', 'typescript', 'nodejs', 'coding', 'debugging'],
-  frontend: ['ui', 'ux', 'css', 'html', 'frontend', 'design'],
-  quality: ['review', 'testing', 'quality', 'security', 'standards'],
-  monitor: ['observability', 'logging', 'performance', 'health-checks']
-};
-var ROLE_PROMPTS = {
-  lead: function(name) { return 'You are ' + name + ', the Coordinator in a multi-agent team. Register as "' + name + '", call update_profile() to set your role, call get_briefing() for project context, then call listen() to receive the first request.\n\nYour loop:\n1. Receive request via listen()\n2. Break it into subtasks — create_task() per item, assign to agents\n3. Create a workflow with create_workflow() for multi-step plans\n4. Delegate via send_message() to each assigned agent\n5. Monitor with workflow_status() and list_tasks()\n6. Check updates with messages(action="consume") without blocking\n7. Synthesize results and report back to the user\n8. Call listen(outcome="completed", summary="...") for the next task\n\nRules:\n- NEVER edit files or write code — delegate ALL implementation to other agents\n- Always report synthesis back to the user via send_message()\n- If listen() returns retry: true, call listen() again immediately'; },
-  backend: function(name) { return 'You are ' + name + ', a Backend Developer in a multi-agent team. Register as "' + name + '", call update_profile() to set your role, call get_briefing() for project context, then call listen() to wait for tasks.\n\nYour loop:\n1. Receive task via listen()\n2. Call update_task(status="in_progress", task_id=...) to claim it\n3. Call lock_file() before editing any shared file\n4. Implement the changes — clean, production-quality code\n5. Call unlock_file() when done\n6. Call update_task(status="done", task_id=...)\n7. Report to Lead via send_message(): what you did, files changed, decisions made, any blockers\n8. Call listen(outcome="completed", task_id=..., summary="...") for the next task\n\nIf a lock is already held: notify Lead via send_message() and call listen() to wait.\nIf listen() returns retry: true, call listen() again immediately.'; },
-  frontend: function(name) { return 'You are ' + name + ', a Frontend Developer in a multi-agent team. Register as "' + name + '", call update_profile() to set your role, call get_briefing() for project context, then call listen() to wait for tasks.\n\nYour loop:\n1. Receive task via listen()\n2. Call update_task(status="in_progress", task_id=...) to claim it\n3. Call lock_file() before editing any shared frontend file\n4. Implement UI/UX changes — clean, accessible, responsive code\n5. Call unlock_file() when done\n6. Call update_task(status="done", task_id=...)\n7. Report to Lead via send_message(): files changed, design decisions, screenshots if relevant\n8. Call listen(outcome="completed", task_id=..., summary="...") for the next task\n\nIf a lock is already held: notify Lead via send_message() and call listen() to wait.\nIf listen() returns retry: true, call listen() again immediately.'; },
-  quality: function(name) { return 'You are ' + name + ', a Code Reviewer in a multi-agent team. Register as "' + name + '", call update_profile() to set your role, call get_briefing() for project context, then call listen() to wait for review requests.\n\nYour loop:\n1. Receive review request via listen()\n2. Call update_task(status="in_progress", task_id=...) to claim it\n3. Read the actual files that were changed\n4. Check for: bugs, security issues, logic errors, code style, edge cases\n5. Call submit_review(approved=true/false, feedback="...") with structured feedback\n6. Report to Lead via send_message(): blockers vs suggestions with file:line references\n7. Call update_task(status="done", task_id=...)\n8. Call listen(outcome="completed", task_id=..., summary="...") for the next review\n\nBe specific: reference file paths and line numbers. Separate blockers from suggestions.\nIf listen() returns retry: true, call listen() again immediately.'; },
-  monitor: function(name) { return 'You are ' + name + ', a System Monitor in a multi-agent team. Register as "' + name + '", call update_profile() to set your role, call get_briefing() for project context, then call listen() to begin monitoring.\n\nYour loop (runs continuously):\n1. Call list_agents() — flag agents with last_activity > 5 min and status != offline\n2. Call list_tasks() — flag in_progress tasks whose assignee appears idle\n3. Nudge idle agents: send_message() asking them to resume their listen() loop\n4. Reassign stuck tasks (no progress > 10 min): update_task() to reset to pending\n5. For blocked_permanent tasks: send_message() to Lead immediately\n6. Log all interventions via workspace_write()\n7. Call listen(outcome="completed", summary="...") — repeat\n\nEscalation: if unresolved after 2 attempts, create_task() assigned to Lead describing the issue.\nIf listen() returns retry: true, call listen() again immediately.\nNever stop monitoring.'; }
-};
+function setLaunchRoleProfiles(profiles) {
+  launchRoleProfiles = Array.isArray(profiles) ? profiles : [];
+  ROLE_SKILLS = {};
+  ROLE_PROMPTS = {};
+  launchRoleProfiles.forEach(function(profile) {
+    ROLE_SKILLS[profile.id] = Array.isArray(profile.skills) ? profile.skills.slice() : [];
+    ROLE_PROMPTS[profile.id] = function(name) {
+      return String(profile.prompt_template || '').replace(/\{\{name\}\}/g, name);
+    };
+  });
+}
 
 function renderLaunchPanel() {
   var el = document.getElementById('launch-area');
   var pq = projectParam();
   Promise.all([
     lttFetch('/api/templates').then(function(r) { return r.json(); }).catch(function() { return []; }),
-    lttFetch('/api/agents' + pq).then(function(r) { return r.json(); }).catch(function() { return {}; })
+    lttFetch('/api/agents' + pq).then(function(r) { return r.json(); }).catch(function() { return {}; }),
+    lttFetch('/api/launch/roles').then(function(r) { return r.json(); }),
+    lttFetch('/api/ollama/endpoints' + pq).then(function(r) { return r.json(); }).catch(function() { return { endpoints: [] }; }),
+    lttFetch('/api/ollama/instances' + pq).then(function(r) { return r.json(); }).catch(function() { return { instances: [] }; })
   ]).then(function(results) {
     var allTemplates = results[0];
     var existingAgents = results[1];
+    setLaunchRoleProfiles(results[2].roles || []);
+    var ollamaEndpoints = results[3].endpoints || [];
+    var ollamaInstances = results[4].instances || [];
     var existingNames = Object.keys(existingAgents).map(function(n) { return n.toLowerCase(); });
 
     var simpleTemplates = [];
@@ -10232,23 +10330,71 @@ function renderLaunchPanel() {
     window._convTemplates = convTemplates;
 
     var html = '';
-    // Section 1: Add Agent
+    // Section 1: Unified agent launcher
     html += '<div class="launch-section">';
-    html += '<h3>Add Agent</h3>';
+    html += '<h3>Create Agent</h3>';
     html += '<div class="launch-form-row">';
-    html += '<div class="launch-form-field"><label>Agent Name</label><input type="text" id="launch-name" placeholder="e.g. Backend, Reviewer" maxlength="20" oninput="validateLaunchName()"><div class="field-hint" id="launch-name-hint">1-20 alphanumeric, underscore, or hyphen</div></div>';
-    html += '<div class="launch-form-field"><label>Role</label><select id="launch-role" onchange="onLaunchRoleChange()"><option value="">Select role...</option><option value="lead">Lead</option><option value="backend">Backend</option><option value="frontend">Frontend</option><option value="quality">Quality</option><option value="monitor">Monitor</option></select></div>';
+    html += '<div class="launch-form-field"><label>Agent Name</label><input type="text" id="launch-name" placeholder="e.g. LocalCoder" maxlength="20" oninput="validateLaunchName();updateUnifiedLaunchForm()"><div class="field-hint" id="launch-name-hint">1-20 alphanumeric, underscore, or hyphen</div></div>';
+    html += '<div class="launch-form-field"><label>Role</label><select id="launch-role" onchange="onLaunchRoleChange()" required><option value="">Select role...</option>';
+    launchRoleProfiles.forEach(function(profile) {
+      html += '<option value="' + escapeHtml(profile.id) + '">' + escapeHtml(profile.label) + '</option>';
+    });
+    html += '</select><div class="field-hint" id="launch-role-hint">A role is required and determines skills and prompt.</div></div>';
     html += '</div>';
     html += '<div class="launch-form-row">';
-    html += '<div class="launch-form-field"><label>CLI Type</label><select id="launch-cli"><option value="claude"' + (selectedCli === 'claude' ? ' selected' : '') + '>Claude Code</option><option value="gemini"' + (selectedCli === 'gemini' ? ' selected' : '') + '>Gemini CLI</option><option value="codex"' + (selectedCli === 'codex' ? ' selected' : '') + '>Codex CLI</option><option value="cursor"' + (selectedCli === 'cursor' ? ' selected' : '') + '>Cursor IDE</option></select></div>';
-    html += '<div class="launch-form-field"><label>Skills</label><input type="text" id="launch-skills" placeholder="Auto-filled from role" readonly style="color:var(--text-muted)"></div>';
+    html += '<div class="launch-form-field"><label>Runtime</label><select id="launch-runtime" onchange="updateUnifiedLaunchForm()"><option value="claude">Claude Code</option><option value="gemini">Gemini CLI</option><option value="codex">Codex CLI</option><option value="cursor">Cursor IDE</option><option value="ollama-claude">Claude Code via Ollama</option><option value="ollama-responder">Ollama responder</option></select><div class="field-hint" id="launch-runtime-hint">Select where this agent should run.</div></div>';
+    html += '<div class="launch-form-field"><label>Registration Skills</label><input type="text" id="launch-skills" placeholder="Select a role" readonly style="color:var(--text-muted)"></div>';
     html += '</div>';
-    html += '<div style="margin-top:8px"><button class="btn btn-primary" onclick="generateAgentPrompt()" style="margin-right:8px">Generate Prompt</button><button class="btn" onclick="doLaunch()">Launch Terminal</button></div>';
-    html += '<div id="launch-prompt-output" style="display:none;margin-top:12px"></div>';
+    html += '<div id="launch-ollama-fields" style="display:none">';
+    html += '<div class="launch-form-row">';
+    html += '<div class="launch-form-field"><label>Ollama Endpoint</label><select id="ollama-endpoint" onchange="loadOllamaModels(true)">';
+    if (!ollamaEndpoints.length) {
+      html += '<option value="">Add an endpoint profile below</option>';
+    } else {
+      ollamaEndpoints.forEach(function(endpoint) {
+        html += '<option value="' + escapeHtml(endpoint.id) + '">' + escapeHtml(endpoint.name) + ' — ' + escapeHtml(endpoint.url) + '</option>';
+      });
+    }
+    html += '</select><div class="field-hint">Models are read live from this saved endpoint.</div></div>';
+    html += '<div class="launch-form-field"><label>Model</label><div style="display:flex;gap:6px"><select id="ollama-model" disabled style="flex:1"><option value="">Select an endpoint first</option></select><button class="btn" type="button" onclick="loadOllamaModels(true)" title="Refresh installed models">Refresh</button></div><div class="field-hint" id="ollama-model-hint">Choose an installed Ollama model.</div></div>';
+    html += '</div></div>';
+    html += '<details id="launch-prompt-details" style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--text-muted)">Generated role prompt</summary><div id="launch-prompt-output" style="margin-top:8px"></div></details>';
+    html += '<div style="margin-top:12px"><button class="btn btn-primary" id="launch-primary-btn" onclick="launchConfiguredAgent()">Generate prompt and launch</button></div>';
     html += '<div class="launch-result" id="launch-result"></div>';
+    html += '<details style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)"><summary style="cursor:pointer;font-size:13px;font-weight:600">Manage Ollama endpoints</summary><div style="margin-top:12px">';
+    html += '<div class="launch-form-row">';
+    html += '<div class="launch-form-field"><label>ID</label><input type="text" id="ollama-endpoint-id" placeholder="office-ollama" maxlength="40"></div>';
+    html += '<div class="launch-form-field"><label>Display Name</label><input type="text" id="ollama-endpoint-name" placeholder="Office Ollama" maxlength="80"></div>';
+    html += '</div>';
+    html += '<div class="launch-form-field"><label>URL</label><input type="url" id="ollama-endpoint-url" placeholder="http://192.168.1.120:11434"></div>';
+    html += '<div style="display:flex;gap:8px;margin-top:10px"><button class="btn" onclick="saveOllamaEndpoint()">Save Endpoint</button>';
+    if (ollamaEndpoints.length) {
+      html += '<button class="btn" onclick="deleteSelectedOllamaEndpoint()">Delete Selected Endpoint</button>';
+    }
+    html += '</div></div></details>';
     html += '</div>';
 
-    // Section 2: Team Templates
+    // Section 2: Managed agents
+    html += '<div class="launch-section">';
+    html += '<h3>Running Managed Agents</h3>';
+    html += '<div class="ollama-instance-list">';
+    ollamaInstances.slice().reverse().slice(0, 20).forEach(function(instance) {
+      var isActive = ['starting', 'running', 'working'].indexOf(instance.status) !== -1;
+      html += '<div class="ollama-instance-row">';
+      html += '<div class="ollama-instance-meta"><div class="ollama-instance-name">' + escapeHtml(instance.name) + ' <span style="font-weight:400;color:var(--text-muted)">(' + escapeHtml(instance.status) + ')</span></div>';
+      html += '<div class="ollama-instance-detail">' + escapeHtml(instance.runtime === 'claude' ? 'Claude Code via Ollama' : 'Ollama responder') + ' · ' + escapeHtml(instance.model) + ' · ' + escapeHtml(instance.endpoint_name || instance.endpoint_id) + ' · ' + escapeHtml(instance.tmux_window_name || '') + '</div></div>';
+      html += '<div class="ollama-instance-actions">';
+      if (isActive) {
+        html += '<button class="btn" onclick="openOllamaWindow(\'' + instance.id + '\')">Open terminal</button>';
+        html += '<button class="btn" onclick="stopOllamaAgent(\'' + instance.id + '\',\'' + escapeHtml(instance.name) + '\')">Stop</button>';
+      }
+      html += '</div></div>';
+    });
+    if (!ollamaInstances.length) html += '<div style="font-size:12px;color:var(--text-muted)">No managed agents running.</div>';
+    html += '</div>';
+    html += '</div>';
+
+    // Section 3: Team Templates
     html += '<div class="launch-section">';
     html += '<h3 style="display:flex;justify-content:space-between;align-items:center">Team Templates <button class="btn btn-primary" onclick="showTemplateBuilder()" style="font-size:12px;padding:5px 12px">+ Create Template</button></h3>';
     if (allTemplates.length > 0) {
@@ -10289,8 +10435,247 @@ function renderLaunchPanel() {
     window._allLaunchTemplates = allTpls;
 
     el.innerHTML = html;
+    updateUnifiedLaunchForm();
   }).catch(function() {
     el.innerHTML = '<div class="launch-section"><h3>Add Agent</h3><p style="color:var(--text-dim)">Failed to load data.</p></div>';
+  });
+}
+
+function saveOllamaEndpoint() {
+  var id = (document.getElementById('ollama-endpoint-id').value || '').trim();
+  var name = (document.getElementById('ollama-endpoint-name').value || '').trim();
+  var url = (document.getElementById('ollama-endpoint-url').value || '').trim();
+  lttFetch('/api/ollama/endpoints' + projectParam(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: id, name: name, url: url })
+  }).then(function(response) { return response.json(); }).then(function(result) {
+    if (result.error) throw new Error(result.error);
+    showToast('OK', 'Ollama endpoint saved');
+    renderLaunchPanel();
+  }).catch(function(error) {
+    showToast('!', error.message || 'Failed to save endpoint');
+  });
+}
+
+function isOllamaLaunchRuntime(runtime) {
+  return runtime === 'ollama-claude' || runtime === 'ollama-responder';
+}
+
+function selectedRoleProfile() {
+  var roleSelect = document.getElementById('launch-role');
+  var role = roleSelect ? roleSelect.value : '';
+  return launchRoleProfiles.find(function(profile) { return profile.id === role; }) || null;
+}
+
+function formatModelSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '';
+  var gib = bytes / (1024 * 1024 * 1024);
+  return gib >= 1 ? gib.toFixed(gib >= 10 ? 0 : 1) + ' GB' : Math.round(bytes / (1024 * 1024)) + ' MB';
+}
+
+function updateUnifiedLaunchForm() {
+  var runtimeSelect = document.getElementById('launch-runtime');
+  if (!runtimeSelect) return;
+  var runtime = runtimeSelect.value;
+  var ollamaFields = document.getElementById('launch-ollama-fields');
+  var roleProfile = selectedRoleProfile();
+  var nameInput = document.getElementById('launch-name');
+  var name = nameInput ? nameInput.value.trim() : '';
+  var skillsInput = document.getElementById('launch-skills');
+  var roleHint = document.getElementById('launch-role-hint');
+  var promptOutput = document.getElementById('launch-prompt-output');
+  var primaryButton = document.getElementById('launch-primary-btn');
+  var ollamaRuntime = isOllamaLaunchRuntime(runtime);
+
+  if (ollamaFields) ollamaFields.style.display = ollamaRuntime ? 'block' : 'none';
+  if (skillsInput) skillsInput.value = roleProfile ? roleProfile.skills.join(', ') : '';
+  if (roleHint) roleHint.textContent = roleProfile ? roleProfile.description : 'A role is required and determines skills and prompt.';
+
+  var validName = /^[a-zA-Z0-9_-]{1,20}$/.test(name);
+  var prompt = roleProfile && validName
+    ? String(roleProfile.prompt_template || '').replace(/\{\{name\}\}/g, name)
+    : '';
+  window._generatedLaunchPrompt = prompt;
+  if (promptOutput) {
+    promptOutput.innerHTML = prompt
+      ? '<div class="launch-prompt-output" onclick="copyGeneratedPrompt()"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Click to copy</div>' + escapeHtml(prompt) + '</div>'
+      : '<div style="font-size:12px;color:var(--text-muted)">Enter a valid name and select a role to generate the prompt.</div>';
+  }
+
+  if (primaryButton) {
+    primaryButton.textContent = ollamaRuntime
+      ? 'Launch agent and open terminal'
+      : runtime === 'cursor' ? 'Configure Cursor' : 'Generate prompt and launch';
+  }
+  var runtimeHint = document.getElementById('launch-runtime-hint');
+  if (runtimeHint) {
+    runtimeHint.textContent = runtime === 'ollama-claude'
+      ? 'Runs Claude Code against the selected Ollama model in managed tmux.'
+      : runtime === 'ollama-responder'
+        ? 'Runs the lightweight Neohive message responder in managed tmux.'
+        : runtime === 'cursor'
+          ? 'Writes Cursor MCP configuration and copies the prompt.'
+          : 'Generates the role prompt and prepares the selected CLI.';
+  }
+
+  if (ollamaRuntime) loadOllamaModels(false);
+}
+
+function loadOllamaModels(force) {
+  var endpointSelect = document.getElementById('ollama-endpoint');
+  var modelSelect = document.getElementById('ollama-model');
+  var hint = document.getElementById('ollama-model-hint');
+  if (!endpointSelect || !modelSelect) return Promise.resolve();
+  var endpointId = endpointSelect.value;
+  if (!endpointId) {
+    modelSelect.disabled = true;
+    modelSelect.innerHTML = '<option value="">Add an endpoint profile first</option>';
+    if (hint) hint.textContent = 'Save an Ollama endpoint before selecting a model.';
+    return Promise.resolve();
+  }
+  if (!force && modelSelect.dataset.endpointId === endpointId && modelSelect.options.length) return Promise.resolve();
+
+  ollamaModelRequestSeq += 1;
+  var requestId = ollamaModelRequestSeq;
+  modelSelect.disabled = true;
+  modelSelect.innerHTML = '<option value="">Loading installed models...</option>';
+  if (hint) {
+    hint.className = 'field-hint';
+    hint.textContent = 'Reading models from the selected endpoint...';
+  }
+  var url = '/api/ollama/models?endpoint_id=' + encodeURIComponent(endpointId);
+  if (activeProject) url += '&project=' + encodeURIComponent(activeProject);
+  return lttFetch(url).then(function(response) { return response.json(); }).then(function(result) {
+    if (requestId !== ollamaModelRequestSeq) return;
+    if (result.error) throw new Error(result.error);
+    var models = result.models || [];
+    modelSelect.dataset.endpointId = endpointId;
+    if (!models.length) {
+      modelSelect.disabled = true;
+      modelSelect.innerHTML = '<option value="">No installed models found</option>';
+      if (hint) {
+        hint.className = 'field-hint error';
+        hint.textContent = 'This endpoint has no installed models.';
+      }
+      return;
+    }
+    modelSelect.innerHTML = '<option value="">Select an installed model...</option>' + models.map(function(model) {
+      var details = [model.parameter_size, model.quantization_level, formatModelSize(model.size)].filter(Boolean).join(' · ');
+      return '<option value="' + escapeHtml(model.name) + '">' + escapeHtml(model.name + (details ? ' — ' + details : '')) + '</option>';
+    }).join('');
+    modelSelect.disabled = false;
+    if (hint) {
+      hint.className = 'field-hint success';
+      hint.textContent = models.length + ' installed model' + (models.length === 1 ? '' : 's') + ' available.';
+    }
+  }).catch(function(error) {
+    if (requestId !== ollamaModelRequestSeq) return;
+    modelSelect.disabled = true;
+    modelSelect.innerHTML = '<option value="">Models unavailable</option>';
+    delete modelSelect.dataset.endpointId;
+    if (hint) {
+      hint.className = 'field-hint error';
+      hint.textContent = error.message || 'Failed to load models.';
+    }
+  });
+}
+
+function launchConfiguredAgent() {
+  var name = (document.getElementById('launch-name').value || '').trim();
+  var role = document.getElementById('launch-role').value;
+  var runtime = document.getElementById('launch-runtime').value;
+  var resultEl = document.getElementById('launch-result');
+  if (!/^[a-zA-Z0-9_-]{1,20}$/.test(name)) { showToast('!', 'Enter a valid agent name'); return; }
+  if (!role || !ROLE_PROMPTS[role]) { showToast('!', 'Select an agent role'); return; }
+  window._generatedLaunchPrompt = ROLE_PROMPTS[role](name);
+
+  if (!isOllamaLaunchRuntime(runtime)) {
+    selectedCli = runtime;
+    doLaunch();
+    return;
+  }
+
+  var endpointId = document.getElementById('ollama-endpoint').value;
+  var modelSelect = document.getElementById('ollama-model');
+  var model = modelSelect && !modelSelect.disabled ? modelSelect.value : '';
+  if (!endpointId) { showToast('!', 'Select an Ollama endpoint'); return; }
+  if (!model) { showToast('!', 'Select an installed Ollama model'); return; }
+  if (resultEl) {
+    resultEl.className = 'launch-result info';
+    resultEl.textContent = 'Starting managed agent...';
+  }
+  lttFetch('/api/ollama/instances' + projectParam(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: name,
+      model: model,
+      endpoint_id: endpointId,
+      runtime: runtime === 'ollama-claude' ? 'claude' : 'ollama',
+      role: role
+    })
+  }).then(function(response) { return response.json(); }).then(function(result) {
+    if (result.error) throw new Error(result.error);
+    showToast('OK', 'Managed agent started');
+    if (resultEl) {
+      resultEl.className = 'launch-result success';
+      resultEl.textContent = 'Agent started. Opening its terminal...';
+    }
+    return focusOllamaWindow(result.instance.id);
+  }).catch(function(error) {
+    if (resultEl) {
+      resultEl.className = 'launch-result error';
+      resultEl.textContent = error.message || 'Failed to start managed agent';
+    }
+    showToast('!', error.message || 'Failed to start managed agent');
+  });
+}
+
+function deleteSelectedOllamaEndpoint() {
+  var select = document.getElementById('ollama-endpoint');
+  var endpointId = select && select.value;
+  if (!endpointId || !confirm('Delete the selected Ollama endpoint profile?')) return;
+  lttFetch('/api/ollama/endpoints/' + encodeURIComponent(endpointId) + projectParam(), {
+    method: 'DELETE'
+  }).then(function(response) { return response.json(); }).then(function(result) {
+    if (result.error) throw new Error(result.error);
+    showToast('OK', 'Ollama endpoint deleted');
+    renderLaunchPanel();
+  }).catch(function(error) {
+    showToast('!', error.message || 'Failed to delete endpoint');
+  });
+}
+
+function stopOllamaAgent(instanceId, agentName) {
+  if (!confirm('Stop Ollama agent "' + agentName + '" and close its tmux window?')) return;
+  lttFetch('/api/ollama/instances/' + encodeURIComponent(instanceId) + projectParam(), {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true })
+  }).then(function(response) { return response.json(); }).then(function(result) {
+    if (result.error) throw new Error(result.error);
+    showToast('OK', 'Ollama agent stopped');
+    renderLaunchPanel();
+  }).catch(function(error) {
+    showToast('!', error.message || 'Failed to stop Ollama agent');
+  });
+}
+
+function openOllamaWindow(instanceId) {
+  focusOllamaWindow(instanceId).catch(function(error) {
+    showToast('!', error.message || 'Failed to open Ollama terminal window');
+  });
+}
+
+function focusOllamaWindow(instanceId) {
+  return lttFetch('/api/ollama/instances/' + encodeURIComponent(instanceId) + '/focus' + projectParam(), {
+    method: 'POST'
+  }).then(function(response) { return response.json(); }).then(function(result) {
+    if (result.error) throw new Error(result.error);
+    switchView('terminal');
+    setTimeout(function() { sendTmuxControl('get_state'); }, 250);
+    return result;
   });
 }
 
@@ -10305,28 +10690,17 @@ function validateLaunchName() {
 }
 
 function onLaunchRoleChange() {
-  var role = document.getElementById('launch-role').value;
-  var skillsInput = document.getElementById('launch-skills');
-  if (role && ROLE_SKILLS[role]) {
-    skillsInput.value = ROLE_SKILLS[role].join(', ');
-  } else {
-    skillsInput.value = '';
-  }
+  updateUnifiedLaunchForm();
 }
 
 function generateAgentPrompt() {
   var name = (document.getElementById('launch-name').value || '').trim();
   var role = document.getElementById('launch-role').value;
-  var cli = document.getElementById('launch-cli').value;
   if (!name) { showToast('!', 'Enter an agent name'); return; }
   if (!/^[a-zA-Z0-9_-]{1,20}$/.test(name)) { showToast('!', 'Invalid agent name'); return; }
+  if (!role || !ROLE_PROMPTS[role]) { showToast('!', 'Select an agent role'); return; }
 
-  var prompt;
-  if (role && ROLE_PROMPTS[role]) {
-    prompt = ROLE_PROMPTS[role](name);
-  } else {
-    prompt = 'You are ' + name + ' in a multi-agent team. Register as "' + name + '". Call listen() to wait for tasks. When you receive a task, implement it, report what you did, and call listen() again.';
-  }
+  var prompt = ROLE_PROMPTS[role](name);
 
   var outputEl = document.getElementById('launch-prompt-output');
   outputEl.style.display = 'block';
@@ -10633,6 +11007,8 @@ function doLaunch() {
   var resultEl = document.getElementById('launch-result');
   var cliSelect = document.getElementById('launch-cli');
   var cli = cliSelect ? cliSelect.value : selectedCli;
+  var roleSelect = document.getElementById('launch-role');
+  var role = roleSelect ? roleSelect.value : '';
 
   if (!agentName) {
     resultEl.className = 'launch-result error';
@@ -10651,7 +11027,7 @@ function doLaunch() {
   lttFetch('/api/launch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cli: cli, project_dir: undefined, agent_name: agentName, prompt: launchPrompt })
+    body: JSON.stringify({ cli: cli, project_dir: undefined, agent_name: agentName, role: role, prompt: launchPrompt })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.error) {
       resultEl.className = 'launch-result error';

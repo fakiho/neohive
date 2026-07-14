@@ -13,8 +13,6 @@ const pkg = require('./package.json');
 const CLI_CONFIG = {
   MCP_TOOL_TIMEOUT_S:   300,    // MCP tool timeout written to IDE config files (seconds)
   OLLAMA_DETECT_TIMEOUT_MS: 5000, // timeout for 'ollama --version' probe
-  OLLAMA_HEARTBEAT_MS:  10000,  // how often Ollama agent writes heartbeat
-  OLLAMA_POLL_MS:        2000,  // how often Ollama agent polls for messages
   MSG_MAX_CHARS:        10000,  // max length of --msg text argument
 };
 
@@ -816,118 +814,31 @@ function setupAcpWorkersFile(cwd) {
   console.log('  [ok] .neohive/acp-workers.json (edit command/args for your ACP worker)');
 }
 
-// Setup Ollama agent bridge script
-function setupOllama(serverPath, cwd) {
-  const dir = dataDir(cwd);
+// Setup a compatibility launcher for the packaged Ollama runtime.
+function setupOllama(cwd) {
   const scriptPath = path.join(cwd, '.neohive', 'ollama-agent.js');
+  const runtimePath = path.join(__dirname, 'scripts', 'ollama-agent.js');
 
   if (!fs.existsSync(path.join(cwd, '.neohive'))) {
     fs.mkdirSync(path.join(cwd, '.neohive'), { recursive: true });
   }
 
   const script = `#!/usr/bin/env node
-// ollama-agent.js - bridges Ollama to Neohive
+// Compatibility launcher for Neohive's packaged Ollama runtime.
 // Usage: node .neohive/ollama-agent.js [agent-name] [model]
-const fs = require('fs'), path = require('path'), http = require('http');
-const DATA_DIR = path.join(__dirname);
+const path = require('path');
+const crypto = require('crypto');
+const { spawnSync } = require('child_process');
 const name = process.argv[2] || 'Ollama';
-if (!/^[a-zA-Z0-9_-]{1,20}$/.test(name)) throw new Error('Invalid agent name');
 const model = process.argv[3] || 'llama3';
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-
-function readJson(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; } }
-function readJsonl(f) { if (!fs.existsSync(f)) return []; return fs.readFileSync(f, 'utf8').split(/\\r?\\n/).filter(l => l.trim()).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); }
-
-// Register agent
-function register() {
-  const agentsFile = path.join(DATA_DIR, 'agents.json');
-  const agents = readJson(agentsFile);
-  agents[name] = { pid: process.pid, timestamp: new Date().toISOString(), last_activity: new Date().toISOString(), provider: 'Ollama (' + model + ')' };
-  fs.writeFileSync(agentsFile, JSON.stringify(agents, null, 2));
-  console.log('[' + name + '] Registered (PID ' + process.pid + ', model: ' + model + ')');
-}
-
-// Update heartbeat
-function heartbeat() {
-  const agentsFile = path.join(DATA_DIR, 'agents.json');
-  const agents = readJson(agentsFile);
-  if (agents[name]) {
-    agents[name].last_activity = new Date().toISOString();
-    agents[name].pid = process.pid;
-    fs.writeFileSync(agentsFile, JSON.stringify(agents, null, 2));
-  }
-}
-
-// Call Ollama API
-function callOllama(prompt) {
-  return new Promise(function(resolve, reject) {
-    const url = new URL(OLLAMA_URL + '/api/chat');
-    const body = JSON.stringify({ model: model, messages: [{ role: 'user', content: prompt }], stream: false });
-    const req = http.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, function(res) {
-      let data = '';
-      res.on('data', function(c) { data += c; });
-      res.on('end', function() {
-        try { const j = JSON.parse(data); resolve(j.message ? j.message.content : data); }
-        catch { resolve(data); }
-      });
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
-}
-
-// Send a message
-function sendMessage(to, content) {
-  const msgId = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  const msg = { id: msgId, from: name, to: to, content: content, timestamp: new Date().toISOString() };
-  fs.appendFileSync(path.join(DATA_DIR, 'messages.jsonl'), JSON.stringify(msg) + '\\n');
-  fs.appendFileSync(path.join(DATA_DIR, 'history.jsonl'), JSON.stringify(msg) + '\\n');
-  console.log('[' + name + '] -> ' + to + ': ' + content.substring(0, 80) + (content.length > 80 ? '...' : ''));
-}
-
-// Listen for messages
-let lastOffset = 0;
-function checkMessages() {
-  const consumedFile = path.join(DATA_DIR, 'consumed-' + name + '.json');
-  const consumed = readJson(consumedFile);
-  lastOffset = consumed.offset || 0;
-
-  const messages = readJsonl(path.join(DATA_DIR, 'messages.jsonl'));
-  const newMsgs = messages.slice(lastOffset).filter(function(m) {
-    return m.to === name || (m.to === 'all' && m.from !== name);
-  });
-
-  if (newMsgs.length > 0) {
-    consumed.offset = messages.length;
-    fs.writeFileSync(consumedFile, JSON.stringify(consumed));
-  }
-
-  return newMsgs;
-}
-
-async function processMessages() {
-  const msgs = checkMessages();
-  for (const m of msgs) {
-    console.log('[' + name + '] <- ' + m.from + ': ' + m.content.substring(0, 80));
-    try {
-      const response = await callOllama(m.content);
-      sendMessage(m.from, response);
-    } catch (e) {
-      sendMessage(m.from, 'Error calling Ollama: ' + e.message);
-    }
-  }
-}
-
-// Main loop
-register();
-const hb = setInterval(heartbeat, CLI_CONFIG.OLLAMA_HEARTBEAT_MS);
-hb.unref();
-console.log('[' + name + '] Listening for messages... (Ctrl+C to stop)');
-setInterval(processMessages, CLI_CONFIG.OLLAMA_POLL_MS);
-
-// Cleanup on exit
-process.on('SIGINT', function() { console.log('\\n[' + name + '] Shutting down.'); process.exit(0); });
+const endpoint = process.env.OLLAMA_URL || 'http://localhost:11434';
+const runtime = ${JSON.stringify(runtimePath)};
+const instance = crypto.randomBytes(12).toString('hex');
+const env = Object.assign({}, process.env, { NEOHIVE_DATA_DIR: __dirname });
+const result = spawnSync(process.execPath, [
+  runtime, '--name', name, '--model', model, '--endpoint', endpoint, '--instance', instance
+], { stdio: 'inherit', env });
+process.exit(result.status === null ? 1 : result.status);
 `;
 
   const tmpPath = scriptPath + '.tmp.' + process.pid;
@@ -999,17 +910,18 @@ function init() {
   } else if (flag === '--all') {
     targets = ['claude', 'gemini', 'codex', 'cursor', 'vscode', 'antigravity'];
   } else if (flag === '--ollama') {
-    const ollama = detectOllama();
+    const remoteUrl = process.env.OLLAMA_URL;
+    const ollama = remoteUrl ? { installed: true, version: 'remote endpoint ' + remoteUrl } : detectOllama();
     if (!ollama.installed) {
       console.log('  Ollama not found. Install it from: https://ollama.com/download');
+      console.log('  Or set OLLAMA_URL to an accessible remote Ollama endpoint.');
       console.log('  After installing, run: ollama pull llama3');
       console.log('');
     } else {
       console.log('  Ollama detected: ' + ollama.version);
-      setupOllama(serverPath, cwd);
+      setupOllama(cwd);
     }
-    targets = detectCLIs();
-    if (targets.length === 0) targets = ['claude'];
+    return;
   } else {
     // Auto-detect
     targets = detectCLIs();

@@ -143,6 +143,12 @@ async function verifyPaneMapping(pid, expectedPaneId) {
   return !!(mapping && mapping.pane_id === expectedPaneId);
 }
 
+async function resolvePaneForPid(pid) {
+  if (!isPidAlive(pid)) return null;
+  const panesByPid = await listAllPanes();
+  return walkAncestryToPane(pid, panesByPid);
+}
+
 const MATCH_LINES = 15;
 
 function matchPromptPatterns(text) {
@@ -468,6 +474,7 @@ async function attemptTmuxDelivery(dataDir, toAgentName, paneText) {
 
 module.exports.sendKeysToPane = sendKeysToPane;
 module.exports.verifyPaneMapping = verifyPaneMapping;
+module.exports.resolvePaneForPid = resolvePaneForPid;
 module.exports.isPaneSafeToInject = isPaneSafeToInject;
 module.exports.attemptTmuxDelivery = attemptTmuxDelivery;
 module.exports.registerSessionHook = registerSessionHook;

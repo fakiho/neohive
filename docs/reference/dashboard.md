@@ -64,6 +64,54 @@ Heartbeat files (`heartbeat-*.json`) and lock files (`.lock`) are excluded to re
 
 The client receives combined change types (e.g., `data: messages,agents\n\n`) and performs targeted fetches for each type.
 
+## Managed Ollama Agents
+
+The Launch view uses one role-first **Create Agent** form for native CLIs and Ollama-backed agents. An agent name and supported role are required; the role determines the generated bootstrap prompt and registration skills. The prompt can be previewed before launch, but it is also generated and validated on the server.
+
+When an Ollama runtime is selected, choose a saved endpoint and an installed model. The model dropdown is loaded live from Ollama's `/api/tags` endpoint, so model names do not need to be typed and removed models cannot be launched accidentally. Choose **Claude Code via Ollama** for a full coding agent or **Ollama responder** for message-only inference.
+
+The primary launch action starts a managed Ollama agent, selects its tagged tmux window, and opens the Terminal view. Endpoint profile management remains available from the collapsible section below the form.
+
+Each managed agent:
+
+- runs the packaged Neohive Ollama bridge;
+- appears in its own named window in the configured tmux session;
+- registers and heartbeats like other Neohive agents;
+- remains available if the browser disconnects or the dashboard restarts;
+- is stopped cooperatively from the Launch view, which also closes its tagged tmux window.
+
+The dashboard identifies managed windows with an instance tag rather than trusting a persisted PID. This prevents a stale record from killing an unrelated process after PID reuse.
+The Launch view only lists live or starting windows. Stopped, failed, and dead instances are removed instead of remaining as stale history rows.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/launch/roles` | List supported roles, skills, descriptions, and prompt templates |
+| `GET` | `/api/ollama/endpoints` | List saved endpoint profiles |
+| `POST` | `/api/ollama/endpoints` | Add or update an endpoint profile |
+| `DELETE` | `/api/ollama/endpoints/{id}` | Delete an unused endpoint profile |
+| `GET` | `/api/ollama/models?endpoint_id={id}` | List installed models from a saved endpoint |
+| `GET` | `/api/ollama/instances` | List managed Ollama instances and lifecycle status |
+| `POST` | `/api/ollama/instances` | Start an agent. Body: `name`, `model`, `endpoint_id`, `runtime`, `role` |
+| `POST` | `/api/ollama/instances/{id}/focus` | Select the instance's tmux window |
+| `DELETE` | `/api/ollama/instances/{id}` | Stop an instance. Requires `{ "confirm": true }` |
+
+All mutations require the standard dashboard CSRF and LAN authentication headers.
+
+## Interactive Terminal and tmux Controls
+
+The Terminal view attaches an xterm client to the shared tmux session. Ending the browser terminal connection only detaches that client; it does not stop the tmux session or its processes.
+
+The toolbar provides:
+
+- previous and next window navigation with the active window name/index;
+- pane focus in all four directions;
+- side-by-side and stacked pane creation;
+- active pane deletion.
+
+Pane deletion is refused for the final pane in a window and for any pane containing a live registered Neohive agent. Stop managed Ollama agents through the Launch view instead.
+
+Controls use the authenticated `/api/terminal` WebSocket with allowlisted `tmux-control` actions. The browser cannot send arbitrary tmux commands, session names, pane IDs, or working directories. Control messages are serialized and rate-limited; terminal input and resize payloads are bounded.
+
 ## REST API Reference
 
 ### Mutating requests (`POST` / `PUT` / `DELETE`)

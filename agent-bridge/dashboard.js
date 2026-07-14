@@ -11,6 +11,8 @@ const _audit = require('./lib/audit');
 const { WebSocketServer } = require('ws');
 const terminalWs = require('./lib/terminal-ws');
 const tmuxAgentState = require('./lib/tmux-agent-state');
+const ollamaBridgeManager = require('./lib/ollama-bridge-manager');
+const agentLaunchProfiles = require('./lib/agent-launch-profiles');
 
 function findCursorProjectRootWithNeohive(startDir) {
   let dir = path.resolve(startDir);
@@ -185,7 +187,14 @@ function resolveDashboardDefaultDataDir() {
         return { path: path.resolve(s), source: 'environment' };
       }
     } else {
-      return { path: path.resolve(s), source: 'environment' };
+      const resolved = path.resolve(s);
+      // If the env var points to a project root (not the data dir itself),
+      // prefer the .neohive subdirectory when it has data — matches resolveDataDir() logic.
+      const neohiveSubdir = path.join(resolved, '.neohive');
+      if (hasDataFiles(neohiveSubdir)) {
+        return { path: neohiveSubdir, source: 'environment' };
+      }
+      return { path: resolved, source: 'environment' };
     }
   }
 
@@ -2039,7 +2048,7 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
 }
 
 function apiLaunchAgent(body) {
-  const { cli, project_dir, agent_name, prompt } = body;
+  const { cli, project_dir, agent_name, prompt, role } = body;
   if (!cli || !['claude', 'gemini', 'codex', 'cursor'].includes(cli)) {
     return { error: 'Invalid cli type. Must be: claude, gemini, codex, or cursor' };
   }
@@ -2051,8 +2060,15 @@ function apiLaunchAgent(body) {
     return { error: 'Project directory does not exist: ' + projectDir };
   }
 
-  const safeName = (agent_name || '').replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
-  const launchPrompt = prompt || (safeName ? `You are agent "${safeName}". Use the register tool to register as "${safeName}", then use listen to wait for messages.` : `Register with the neohive MCP tools and use listen to wait for messages.`);
+  const safeName = (agent_name || '').replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 20);
+  let launchPrompt;
+  try {
+    launchPrompt = role
+      ? agentLaunchProfiles.buildRolePrompt(role, safeName)
+      : prompt || (safeName ? `You are agent "${safeName}". Use the register tool to register as "${safeName}", then use listen to wait for messages.` : `Register with the neohive MCP tools and use listen to wait for messages.`);
+  } catch (error) {
+    return { error: error.message };
+  }
 
   const serverPath = path.join(__dirname, 'server.js').replace(/\\/g, '/');
   ensureMCPConfig(cli, serverPath, projectDir);
@@ -2084,6 +2100,18 @@ function apiLaunchAgent(body) {
     prompt: launchPrompt,
     message: 'Run the command in a terminal, then paste the prompt.'
   };
+}
+
+function ollamaRequestContext(url) {
+  const projectPath = url.searchParams.get('project') || null;
+  const dataDir = resolveDataDir(projectPath);
+  const projectDir = projectPath || (path.basename(dataDir) === '.neohive' ? path.dirname(dataDir) : process.cwd());
+  return { dataDir, projectDir, packageDir: __dirname };
+}
+
+function writeApiResult(res, result, statusCode) {
+  res.writeHead(statusCode || 200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(result));
 }
 
 // --- v3.4: Message Edit ---
@@ -4044,6 +4072,10 @@ const server = http.createServer(async (req, res) => {
         });
       });
     }
+    // Agent launcher role profiles
+    else if (url.pathname === '/api/launch/roles' && req.method === 'GET') {
+      writeApiResult(res, { roles: agentLaunchProfiles.listRoleProfiles() });
+    }
     // Templates API
     else if (url.pathname === '/api/templates' && req.method === 'GET') {
       let templates = [];
@@ -4077,6 +4109,85 @@ const server = http.createServer(async (req, res) => {
       const result = apiLaunchAgent(body);
       res.writeHead(result.error ? 400 : 200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
+    }
+    // Managed Ollama endpoint profiles and tmux-backed agents
+    else if (url.pathname === '/api/ollama/endpoints' && req.method === 'GET') {
+      const { dataDir } = ollamaRequestContext(url);
+      writeApiResult(res, { endpoints: ollamaBridgeManager.listEndpoints(dataDir) });
+    }
+    else if (url.pathname === '/api/ollama/models' && req.method === 'GET') {
+      const { dataDir } = ollamaRequestContext(url);
+      try {
+        const result = await ollamaBridgeManager.listModels(dataDir, url.searchParams.get('endpoint_id'));
+        writeApiResult(res, result);
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    else if (url.pathname === '/api/ollama/endpoints' && req.method === 'POST') {
+      const { dataDir } = ollamaRequestContext(url);
+      try {
+        const endpoint = ollamaBridgeManager.upsertEndpoint(dataDir, await parseBody(req));
+        writeApiResult(res, { success: true, endpoint });
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    else if (url.pathname.startsWith('/api/ollama/endpoints/') && req.method === 'DELETE') {
+      const { dataDir } = ollamaRequestContext(url);
+      try {
+        const endpointId = decodeURIComponent(url.pathname.slice('/api/ollama/endpoints/'.length));
+        const removed = ollamaBridgeManager.removeEndpoint(dataDir, endpointId);
+        writeApiResult(res, { success: true, removed });
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    else if (url.pathname === '/api/ollama/instances' && req.method === 'GET') {
+      const { dataDir } = ollamaRequestContext(url);
+      writeApiResult(res, { instances: ollamaBridgeManager.listInstances(dataDir) });
+    }
+    else if (url.pathname === '/api/ollama/instances' && req.method === 'POST') {
+      const context = ollamaRequestContext(url);
+      try {
+        const body = await parseBody(req);
+        if (body.runtime === 'claude') {
+          ensureMCPConfig('claude', path.join(__dirname, 'server.js').replace(/\\/g, '/'), context.projectDir);
+        }
+        const instance = await ollamaBridgeManager.startInstance({
+          ...context,
+          name: body.name,
+          model: body.model,
+          endpointId: body.endpoint_id,
+          runtime: body.runtime,
+          role: body.role,
+        });
+        writeApiResult(res, { success: true, instance });
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    else if (/^\/api\/ollama\/instances\/[^/]+\/focus$/.test(url.pathname) && req.method === 'POST') {
+      const { dataDir } = ollamaRequestContext(url);
+      try {
+        const instanceId = decodeURIComponent(url.pathname.split('/')[4]);
+        const instance = await ollamaBridgeManager.focusInstance(dataDir, instanceId);
+        writeApiResult(res, { success: true, instance });
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    else if (url.pathname.startsWith('/api/ollama/instances/') && req.method === 'DELETE') {
+      const { dataDir } = ollamaRequestContext(url);
+      try {
+        const instanceId = decodeURIComponent(url.pathname.slice('/api/ollama/instances/'.length));
+        const body = await parseBody(req).catch(() => ({}));
+        if (body.confirm !== true) throw new Error('Confirmation required');
+        const instance = await ollamaBridgeManager.stopInstance(dataDir, instanceId);
+        writeApiResult(res, { success: true, instance });
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
     }
     // --- v3.4: Notifications ---
     else if (url.pathname === '/api/notifications' && req.method === 'GET') {
@@ -4323,7 +4434,7 @@ setInterval(() => {
 // (unconditionally — there's no legitimate non-browser caller of this
 // endpoint, unlike the HTTP path's "absent origin = local CLI" allowance)
 // and, in LAN mode, the same LAN token used everywhere else in this file.
-const terminalWss = new WebSocketServer({ noServer: true });
+const terminalWss = new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 });
 server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, 'http://localhost:' + PORT);
   if (url.pathname !== '/api/terminal') {

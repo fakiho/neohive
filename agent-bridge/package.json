@@ -12,6 +12,7 @@
     "dashboard": "node dashboard.js",
     "test": "echo \"No tests configured\"",
     "test:e2e-scroll": "node scripts/test-message-scroll-anchor.mjs",
+    "test:ollama-tmux": "node scripts/test-ollama-tmux.js",
     "check-paths": "node scripts/check-portable-paths.mjs",
     "acp-spike": "node scripts/acp-spike.mjs",
     "acp-agent": "node acp-agent.mjs"
@@ -21,6 +22,7 @@
   },
   "files": [
     "scripts/check-portable-paths.mjs",
+    "scripts/ollama-agent.js",
     "server.js",
     "dashboard.js",
     "dashboard.html",

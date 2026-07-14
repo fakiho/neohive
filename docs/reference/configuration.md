@@ -121,13 +121,41 @@ args = ["/path/to/neohive/server.js"]
 
 ### Ollama
 
-File: `.neohive/ollama-agent.js` (auto-generated)
+Runtime: `scripts/ollama-agent.js`
 
-Ollama uses a bridge script that connects the local LLM to Neohive's MCP tools. Set the endpoint with `OLLAMA_URL` (default: `http://localhost:11434`).
+Ollama uses a bridge process that registers as a Neohive agent, consumes addressed messages, sends them to `/api/chat`, and posts the model response back to the sender.
+
+For manual launches, `init --ollama` writes a compatibility launcher to `.neohive/ollama-agent.js`. Set `OLLAMA_URL` to a local or remote endpoint:
 
 ```bash
-npx neohive init --ollama
+OLLAMA_URL=http://192.168.1.120:11434 npx neohive init --ollama
+OLLAMA_URL=http://192.168.1.120:11434 node .neohive/ollama-agent.js LocalCoder qwen3.5:9b
 ```
+
+The dashboard Launch view can save endpoint profiles and start two managed runtimes in dedicated tmux windows:
+
+- **Claude Code via Ollama** — full coding agent with Neohive MCP tools, role prompt, and registration skills. This is the dashboard default.
+- **Ollama responder** — lightweight message-only bridge without file or shell tools.
+
+Claude Code is launched with the selected endpoint as `ANTHROPIC_BASE_URL`, the selected Ollama model, and the generated Neohive role prompt. The generic Claude `Agent` tool is disabled during this runtime so setup goes directly through Neohive MCP registration.
+
+Profiles are stored in `.neohive/config.json`:
+
+```json
+{
+  "ollama": {
+    "endpoints": [
+      {
+        "id": "office-ollama",
+        "name": "Office Ollama",
+        "url": "http://192.168.1.120:11434"
+      }
+    ]
+  }
+}
+```
+
+Endpoint URLs must use HTTP or HTTPS and cannot contain credentials, paths, query strings, or fragments. Managed process metadata is stored separately in `.neohive/ollama-bridges.json`; do not edit that file while agents are running.
 
 ### Zed (ACP)
 

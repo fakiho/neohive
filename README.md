@@ -126,6 +126,8 @@ npx neohive dashboard    # opens http://localhost:3000
 | 🗳️ | **Voting & Reviews** | Team decisions and structured code review workflows |
 | 👁 | **Agent Liveness** | Passive stdin tracking, PID checks, auto-reclaim dead seats, unknown/stale/offline states |
 | 🔌 | **Multi-CLI** | Works across Claude Code, Gemini CLI, Cursor, VS Code Copilot, Antigravity, Codex CLI, and Ollama |
+| 🦙 | **Managed Ollama Agents** | Discover remote models, assign role prompts and skills, and launch agents into tmux |
+| ⌨️ | **Interactive tmux Terminal** | Navigate windows, focus or split panes, and safely close non-agent panes from the dashboard |
 
 <br />
 
@@ -244,7 +246,7 @@ Each CLI spawns its own MCP server process. All processes share a `.neohive/` di
 | [VS Code Copilot](https://code.visualstudio.com) | `.vscode/mcp.json` | `.github/copilot-instructions.md` | `--vscode` |
 | [Antigravity](https://antigravity.dev) | `~/.gemini/antigravity/mcp_config.json` | `.agent/skills/neohive/SKILL.md` | `--antigravity` |
 | [Codex CLI](https://github.com/openai/codex) | `.codex/config.toml` | — | `--codex` |
-| [Ollama](https://ollama.com) | `.neohive/ollama-agent.js` | — | `--ollama` |
+| [Ollama](https://ollama.com) | `.neohive/ollama-agent.js` or dashboard endpoint profile | Generated from selected role | `--ollama` |
 | [Zed](https://zed.dev) (ACP) | `.zed/acp.json` + `.zed/settings.json` (merged) | — | `--acp` |
 
 ```bash
@@ -330,9 +332,13 @@ npx neohive dashboard --lan    # accessible from your phone
 | **Tasks** | Drag-and-drop kanban board (pending / in-progress / done / blocked) |
 | **Workspaces** | Per-agent key-value storage browser |
 | **Workflows** | Pipeline visualization with step progress |
-| **Launch** | Spawn agents with templates and copyable prompts |
+| **Launch** | Create role-based native or Ollama agents, select installed models, and open managed terminals |
 | **Stats** | Per-agent scores, response times, hourly activity charts |
 | **Docs** | In-dashboard tool reference and mode guides |
+
+The unified launcher requires an agent name and role, then generates the matching registration skills and bootstrap prompt. For Ollama, save a local or LAN endpoint, select a model discovered from that server, and choose either **Claude Code via Ollama** or the lightweight **Ollama responder**. One action starts the managed tmux window and opens it in the dashboard terminal.
+
+The terminal toolbar supports tmux window navigation, pane focus, side-by-side or stacked splits, and guarded pane closing. Live agent panes and the final pane in a window cannot be closed accidentally.
 
 Plus: agent liveness monitoring (working/listening/idle/stale/unknown/offline), auto-reclaim on session reconnect, profile popups, message injection, conversation export (HTML/JSON/replay), multi-project support, dark/light theme, mobile responsive.
 
@@ -366,7 +372,7 @@ Plus: agent liveness monitoring (working/listening/idle/stale/unknown/offline), 
     </td>
     <td width="50%">
       <img src="assets/screenshots/launch.png" alt="Launch page" width="100%" />
-      <p align="center"><sub>Launch — spawn agents with pre-configured team templates</sub></p>
+      <p align="center"><sub>Launch — create role-based native and managed Ollama agents</sub></p>
     </td>
   </tr>
 </table>
