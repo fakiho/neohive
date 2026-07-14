@@ -4065,9 +4065,12 @@ const server = http.createServer(async (req, res) => {
           server._handle = null;
         }
         server.listen(PORT, newMode ? '0.0.0.0' : '127.0.0.1', () => {
-          console.log(newMode
-            ? `  LAN mode enabled — http://${lanIP}:${PORT}`
-            : '  LAN mode disabled — localhost only');
+          if (newMode) {
+            console.log(`  LAN mode enabled — http://${lanIP}:${PORT}?token=${LAN_TOKEN}`);
+            console.log(`  LAN token: ${LAN_TOKEN}`);
+          } else {
+            console.log('  LAN mode disabled — localhost only');
+          }
           startFileWatcher(); // restart file watcher
         });
       });
@@ -4523,8 +4526,9 @@ server.listen(PORT, LAN_MODE ? '0.0.0.0' : '127.0.0.1', () => {
   console.log(`  Neohive Dashboard v${pkg.version}`);
   console.log('  ============================================');
   console.log('  Dashboard:  http://localhost:' + PORT);
-  if (LAN_MODE && lanIP) {
-    console.log('  LAN access: http://' + lanIP + ':' + PORT);
+  if (LAN_MODE) {
+    if (lanIP) console.log('  LAN access: http://' + lanIP + ':' + PORT + '?token=' + LAN_TOKEN);
+    console.log('  LAN token:  ' + LAN_TOKEN);
     console.log('  WARNING:    LAN mode enabled — accessible to anyone on your network');
   }
   let dataDirLine = '  Data dir:   ' + dataDir;
