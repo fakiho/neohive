@@ -476,6 +476,14 @@
   .agent-tmux-badge.unmapped { background: rgba(156,163,175,0.08); color: #6b7280; opacity: 0.6; }
   .agent-tmux-badge:empty { display: none; }
   .tmux-mapped-summary { font-size: 10px; color: var(--nh-text-muted); font-weight: 400; margin-left: 4px; }
+  .agent-profile-btn {
+    width: 22px; height: 22px; padding: 3px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 5px; background: transparent;
+    color: var(--text-muted); cursor: pointer; opacity: 0.45;
+  }
+  .agent-profile-btn:hover { background: var(--surface); color: var(--text); opacity: 1; }
+  .agent-profile-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 
   .agent-card.stuck { border-color: rgba(239, 68, 68, 0.3); }
   .agent-card.unresponsive { border-color: rgba(249, 115, 22, 0.3); }
@@ -5315,7 +5323,7 @@ function renderAgents(agents) {
       var indicatorHtml = (state === 'listening' || state === 'working')
         ? '<span class="agent-state-pill ' + state + '">' + state + '</span>'
         : '<span class="agent-status-dot ' + state + '" title="' + state + '"></span>';
-      cardHtml += '<div class="' + cardClass + '" data-agent="' + escapeHtml(name) + '" onclick="showProfilePopup(\'' + escapeHtml(name) + '\', event)">' +
+      cardHtml += '<div class="' + cardClass + '" data-agent="' + escapeHtml(name) + '" onclick="openAgentTerminal(\'' + escapeHtml(name) + '\', event)">' +
         '<div class="agent-top">' +
           avatarHtml +
           '<div class="agent-info">' +
@@ -5324,6 +5332,7 @@ function renderAgents(agents) {
           '</div>' +
           indicatorHtml +
           tmuxBadgeHtml(info) +
+          '<button type="button" class="agent-profile-btn" onclick="openAgentProfile(\'' + escapeHtml(name) + '\', event)" title="View agent profile" aria-label="View ' + escapeHtml(displayName) + ' profile"><svg viewBox="0 0 16 16"><circle cx="8" cy="5" r="2.5"/><path d="M3.5 14c.4-3 2-4.5 4.5-4.5S12.1 11 12.5 14"/></svg></button>' +
         '</div>' +
       '</div>';
     }
@@ -5449,6 +5458,23 @@ function renderAgents(agents) {
   } else {
     alertEl.style.display = 'none';
   }
+}
+
+function openAgentProfile(agentName, event) {
+  if (event) event.stopPropagation();
+  showProfilePopup(agentName, event);
+}
+
+function openAgentTerminal(agentName, event) {
+  if (event) event.stopPropagation();
+  var agent = cachedAgents[agentName];
+  var tmux = agent && agent.tmux;
+  showProfilePopup(agentName, event);
+  if (!tmux || !tmux.mapped || !tmux.pane_id) {
+    return;
+  }
+  switchView('terminal');
+  sendTmuxControl('focus_pane', { paneId: tmux.pane_id });
 }
 
 function sendNudge(agentName) {
@@ -7890,7 +7916,7 @@ function connectTerminalSocket(inst) {
     setTmuxControlsEnabled(true);
     sendTmuxControl('get_state');
     var queued = pendingTmuxActions.splice(0);
-    queued.forEach(function(action) { sendTmuxControl(action); });
+    queued.forEach(function(request) { sendTmuxControl(request.action, request.payload); });
   };
 
   ws.onmessage = function(evt) {
@@ -7942,10 +7968,10 @@ function updateTmuxState(state) {
   if (closeBtn) closeBtn.disabled = !state || !state.canClosePane;
 }
 
-function sendTmuxControl(action) {
+function sendTmuxControl(action, payload) {
   var inst = terminalInstances.get(TERMINAL_KEY);
   if (!inst || !inst.ws || inst.ws.readyState !== WebSocket.OPEN) {
-    if (action !== 'get_state') pendingTmuxActions.push(action);
+    if (action !== 'get_state') pendingTmuxActions.push({ action: action, payload: payload || null });
     setTerminalEndedPref(false);
     if (!inst) {
       initTerminal();
@@ -7956,11 +7982,13 @@ function sendTmuxControl(action) {
     return;
   }
   terminalControlSeq += 1;
-  inst.ws.send(JSON.stringify({
+  var message = {
     type: 'tmux-control',
     requestId: String(terminalControlSeq),
     action: action
-  }));
+  };
+  if (payload && payload.paneId) message.paneId = payload.paneId;
+  inst.ws.send(JSON.stringify(message));
 }
 
 function closeActiveTmuxPane() {

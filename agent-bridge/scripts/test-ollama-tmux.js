@@ -167,6 +167,7 @@ async function main() {
   assert(terminal.CONTROL_ACTIONS.has('split_left_right'));
   assert(terminal.CONTROL_ACTIONS.has('split_top_bottom'));
   assert(terminal.CONTROL_ACTIONS.has('close_pane'));
+  assert(terminal.CONTROL_ACTIONS.has('focus_pane'));
   assert(!terminal.CONTROL_ACTIONS.has('run_arbitrary_command'));
 
   const session = `neohive-test-${process.pid}`;
@@ -184,6 +185,15 @@ async function main() {
     const split = await terminal.executeTmuxControl(session, 'split_left_right');
     assert.strictEqual(split.paneCount, 2);
     assert.strictEqual(split.canClosePane, true);
+
+    await terminal.executeTmuxControl(session, 'window_next');
+    const focused = await terminal.executeTmuxControl(session, 'focus_pane', null, { paneId: split.paneId });
+    assert.strictEqual(focused.windowName, 'first');
+    assert.strictEqual(focused.paneId, split.paneId);
+    await assert.rejects(
+      () => terminal.executeTmuxControl(session, 'focus_pane', null, { paneId: 'not-a-pane' }),
+      /Invalid tmux pane ID/
+    );
 
     const closed = await terminal.executeTmuxControl(session, 'close_pane');
     assert.strictEqual(closed.paneCount, 1);

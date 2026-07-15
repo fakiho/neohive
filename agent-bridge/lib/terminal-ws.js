@@ -15,7 +15,7 @@ const SESSION_NAME_RE = /^[A-Za-z0-9_-]+$/;
 const CONTROL_ACTIONS = new Set([
   'window_previous', 'window_next',
   'pane_left', 'pane_right', 'pane_up', 'pane_down',
-  'split_left_right', 'split_top_bottom', 'close_pane', 'get_state',
+  'split_left_right', 'split_top_bottom', 'close_pane', 'focus_pane', 'get_state',
 ]);
 const controlQueues = new Map();
 
@@ -103,12 +103,33 @@ async function liveAgentInPane(paneId) {
   return null;
 }
 
-async function executeTmuxControl(sessionName, action, clientName) {
+async function focusTmuxPane(sessionName, paneId, clientName) {
+  if (!/^%\d+$/.test(paneId || '')) throw new Error('Invalid tmux pane ID');
+  const target = await execTmux([
+    'display-message', '-p', '-t', paneId,
+    '#{session_name}\t#{window_index}',
+  ]);
+  const [targetSession, windowIndex] = target.split('\t');
+  if (targetSession !== sessionName || !/^\d+$/.test(windowIndex || '')) {
+    throw new Error('Agent pane is not in the dashboard tmux session');
+  }
+
+  await execTmux(['select-pane', '-t', paneId]);
+  if (clientName) {
+    await execTmux(['switch-client', '-c', clientName, '-t', `${sessionName}:${windowIndex}`]);
+  } else {
+    await execTmux(['select-window', '-t', `${sessionName}:${windowIndex}`]);
+  }
+}
+
+async function executeTmuxControl(sessionName, action, clientName, options) {
   if (!CONTROL_ACTIONS.has(action)) throw new Error('Unsupported tmux control action');
   let state = await getTmuxState(sessionName, clientName);
   if (action === 'get_state') return state;
 
-  if (action === 'window_previous') {
+  if (action === 'focus_pane') {
+    await focusTmuxPane(sessionName, options && options.paneId, clientName);
+  } else if (action === 'window_previous') {
     await execTmux(['select-window', '-t', `${sessionName}:-`]);
   } else if (action === 'window_next') {
     await execTmux(['select-window', '-t', `${sessionName}:+`]);
@@ -131,10 +152,10 @@ async function executeTmuxControl(sessionName, action, clientName) {
   return state;
 }
 
-function queueTmuxControl(sessionName, action, clientName) {
+function queueTmuxControl(sessionName, action, clientName, options) {
   const queueKey = `${sessionName}:${clientName || 'session'}`;
   const previous = controlQueues.get(queueKey) || Promise.resolve();
-  const next = previous.then(() => executeTmuxControl(sessionName, action, clientName));
+  const next = previous.then(() => executeTmuxControl(sessionName, action, clientName, options));
   controlQueues.set(queueKey, next.catch(() => {}));
   return next;
 }
@@ -208,7 +229,9 @@ function attachTerminal(ws, { sessionName }) {
       }
       try {
         const clientName = await clientNamePromise;
-        const state = await queueTmuxControl(sessionName, msg.action, clientName);
+        const state = await queueTmuxControl(sessionName, msg.action, clientName, {
+          paneId: msg.paneId,
+        });
         send(ws, { type: 'tmux-control-result', requestId: msg.requestId || null, ok: true, state });
       } catch (error) {
         send(ws, { type: 'tmux-control-result', requestId: msg.requestId || null, ok: false, error: error.message });
@@ -231,6 +254,7 @@ module.exports = {
   getTerminalConfig,
   resolveTerminalClient,
   getTmuxState,
+  focusTmuxPane,
   executeTmuxControl,
   attachTerminal,
 };
