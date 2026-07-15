@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
 const { upsertNeohiveMcpInToml } = require('./lib/codex-neohive-toml');
+const { upsertNeohiveHooksInToml } = require('./lib/codex-neohive-hooks-toml');
 const pkg = require('./package.json');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,8 +47,9 @@ function printUsage() {
     npx neohive doctor              Diagnostic health check
     npx neohive templates           List available team templates
     npx neohive reset --force       Clear all data (auto-archives first)
-    npx neohive hooks               Install listen-enforcement hooks for all detected IDEs (Claude + Cursor)
+    npx neohive hooks               Install listen-enforcement hooks for all detected IDEs (Claude + Cursor + Codex)
     npx neohive cursor-hooks        Install listen-enforcement hooks into .cursor/hooks.json only
+    npx neohive codex-hooks         Install listen-enforcement hooks into .codex/hooks.json only
     npx neohive skills              Install neohive skills & agents for all detected IDEs
     npx neohive run --name N --cmd C  Wrap a CLI agent with event-driven message injection
     npx neohive uninstall           Remove from all CLI configs
@@ -634,6 +636,62 @@ function setupCodex(serverPath, cwd) {
   fs.writeFileSync(configPath, config);
 
   console.log('  [ok] Codex CLI: .codex/config.toml updated');
+
+  // Write AGENTS.md agent rules if not already present (Codex's CLAUDE.md equivalent)
+  const agentsMdPath = path.join(cwd, 'AGENTS.md');
+  if (!fs.existsSync(agentsMdPath)) {
+    fs.writeFileSync(agentsMdPath, neohiveAgentRules('Codex'));
+    console.log('  [ok] Codex CLI: AGENTS.md created with agent rules');
+  } else {
+    console.log('  [skip] AGENTS.md already exists — not overwriting');
+  }
+
+  installCodexHooks(cwd);
+}
+
+// ─── Codex hooks ────────────────────────────────────────────────────────────
+// Codex's real hook config lives under [[hooks.<EventName>]] array-of-tables
+// in .codex/config.toml (PascalCase event names, camelCase fields: command,
+// timeoutSec, async) — there is no separate hooks.json file; that format is
+// specific to Claude Code's settings.json and Codex never reads it.
+// Safe to re-run: replaces only the neohive-managed block, preserves the rest
+// of config.toml (including any user-defined hooks/sections).
+function installCodexHooks(cwd) {
+  const codexDir = path.join(cwd, '.codex');
+  const configPath = path.join(codexDir, 'config.toml');
+  const legacyHooksJsonPath = path.join(codexDir, 'hooks.json');
+  const scriptsDir = path.join(__dirname, 'neohive-plugin', 'scripts');
+
+  const trackActivityScript = path.join(scriptsDir, 'codex-track-activity.sh');
+  const enforceListenScript = path.join(scriptsDir, 'codex-enforce-listen.sh');
+
+  function hookCommand(absPath) {
+    const rel = path.relative(cwd, absPath);
+    if (!rel || rel.startsWith('..')) return absPath.split(path.sep).join('/');
+    return rel.split(path.sep).join('/');
+  }
+
+  for (const s of [trackActivityScript, enforceListenScript]) {
+    try { fs.chmodSync(s, 0o755); } catch {}
+  }
+
+  fs.mkdirSync(codexDir, { recursive: true });
+  const existing = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : '';
+  const updated = upsertNeohiveHooksInToml(existing, {
+    trackActivityCmd: hookCommand(trackActivityScript),
+    enforceListenCmd: hookCommand(enforceListenScript),
+  });
+  fs.writeFileSync(configPath, updated, 'utf8');
+
+  if (fs.existsSync(legacyHooksJsonPath)) {
+    fs.unlinkSync(legacyHooksJsonPath);
+    console.log('  [ok] Removed stale .codex/hooks.json (Codex never reads this format).');
+  }
+
+  console.log('  Neohive hooks installed into .codex/config.toml ([[hooks.PostToolUse]], [[hooks.Stop]])');
+  console.log('  Your existing config.toml content was preserved.');
+  console.log('  NOTE: Codex hook trust review may prompt on first run — approve to enable enforcement.');
+  console.log('  Restart Codex for changes to take effect.');
 }
 
 // Configure for Cursor IDE — absolute NEOHIVE_DATA_DIR so Node never sees unexpanded ${workspaceFolder}.
@@ -1778,9 +1836,13 @@ switch (command) {
   case 'hooks':
     installHooks();
     installCursorHooks();
+    installCodexHooks(process.cwd());
     break;
   case 'cursor-hooks':
     installCursorHooks();
+    break;
+  case 'codex-hooks':
+    installCodexHooks(process.cwd());
     break;
   case 'skills':
     installSkills(detectCLIs().length ? detectCLIs() : ['claude', 'cursor', 'antigravity'], process.cwd());
