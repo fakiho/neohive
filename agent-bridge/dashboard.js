@@ -14,6 +14,7 @@ const terminalWs = require('./lib/terminal-ws');
 const tmuxAgentState = require('./lib/tmux-agent-state');
 const ollamaBridgeManager = require('./lib/ollama-bridge-manager');
 const agentLaunchProfiles = require('./lib/agent-launch-profiles');
+const tmuxCliLauncher = require('./lib/tmux-cli-launcher');
 
 function findCursorProjectRootWithNeohive(startDir) {
   let dir = path.resolve(startDir);
@@ -2124,7 +2125,7 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
   }
 }
 
-function apiLaunchAgent(body) {
+async function apiLaunchAgent(body) {
   const { cli, project_dir, agent_name, prompt, role } = body;
   if (!cli || !['claude', 'gemini', 'codex', 'cursor'].includes(cli)) {
     return { error: 'Invalid cli type. Must be: claude, gemini, codex, or cursor' };
@@ -2132,11 +2133,14 @@ function apiLaunchAgent(body) {
   if (project_dir && !validateProjectPath(project_dir)) {
     return { error: 'Project directory not registered. Add it via the dashboard first.' };
   }
-  const projectDir = project_dir || process.cwd();
+  const projectDir = project_dir
+    ? path.resolve(normalizeMonitoredProjectRoot(project_dir))
+    : (path.basename(DEFAULT_DATA_DIR) === '.neohive' ? path.dirname(DEFAULT_DATA_DIR) : process.cwd());
   if (!fs.existsSync(projectDir)) {
     return { error: 'Project directory does not exist: ' + projectDir };
   }
 
+  const dataDir = resolveDataDir(project_dir || null);
   const safeName = (agent_name || '').replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 20);
   let launchPrompt;
   try {
@@ -2150,33 +2154,37 @@ function apiLaunchAgent(body) {
   const serverPath = path.join(__dirname, 'server.js').replace(/\\/g, '/');
   ensureMCPConfig(cli, serverPath, projectDir);
 
-  if (cli === 'cursor') {
+  // Windows: open a system terminal (tmux is uncommon there)
+  if (process.platform === 'win32') {
+    const cliCommands = { claude: 'claude', gemini: 'gemini', codex: 'codex', cursor: 'agent' };
+    const cliCmd = cliCommands[cli];
+    spawn('cmd', ['/c', 'start', 'cmd', '/k', cliCmd], { cwd: projectDir, shell: false, detached: true, stdio: 'ignore' });
+    return { success: true, launched: true, cli, project_dir: projectDir, prompt: launchPrompt, message: 'Terminal opened. Paste the prompt after the CLI loads.' };
+  }
+
+  try {
+    const window = await tmuxCliLauncher.launchNativeCli({
+      dataDir,
+      projectDir,
+      cli,
+      agentName: safeName || 'agent',
+      prompt: launchPrompt,
+    });
     return {
       success: true,
-      launched: false,
-      cli: 'cursor',
+      launched: true,
+      cli,
       project_dir: projectDir,
       prompt: launchPrompt,
-      message: 'Open this folder in Cursor IDE. .cursor/mcp.json sets NEOHIVE_DATA_DIR to this project’s .neohive (absolute path). Restart Cursor or reload MCP tools, then paste the prompt.',
+      tmux_session: window.sessionName,
+      tmux_window_id: window.windowId,
+      tmux_pane_id: window.paneId,
+      tmux_window_name: window.windowName,
+      message: `${window.label} launched in tmux with the generated prompt.`,
     };
+  } catch (error) {
+    return { error: error.message || 'Failed to launch agent in tmux' };
   }
-
-  const cliCommands = { claude: 'claude', gemini: 'gemini', codex: 'codex' };
-  const cliCmd = cliCommands[cli];
-
-  // Try to launch terminal — user pastes prompt from clipboard after CLI loads
-  if (process.platform === 'win32') {
-    spawn('cmd', ['/c', 'start', 'cmd', '/k', cliCmd], { cwd: projectDir, shell: false, detached: true, stdio: 'ignore' });
-    return { success: true, launched: true, cli, project_dir: projectDir, prompt: launchPrompt };
-  }
-
-  // Non-Windows: return command for manual execution
-  return {
-    success: true, launched: false, cli, project_dir: projectDir,
-    command: `cd "${projectDir}" && ${cliCmd}`,
-    prompt: launchPrompt,
-    message: 'Run the command in a terminal, then paste the prompt.'
-  };
 }
 
 function ollamaRequestContext(url) {
@@ -4189,9 +4197,13 @@ const server = http.createServer(async (req, res) => {
     // Agent launcher
     else if (url.pathname === '/api/launch' && req.method === 'POST') {
       const body = await parseBody(req);
-      const result = apiLaunchAgent(body);
-      res.writeHead(result.error ? 400 : 200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(result));
+      const projectPath = url.searchParams.get('project') || body.project_dir || null;
+      try {
+        const result = await apiLaunchAgent({ ...body, project_dir: projectPath });
+        writeApiResult(res, result, result.error ? 400 : 200);
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
     }
     // Managed Ollama endpoint profiles and tmux-backed agents
     else if (url.pathname === '/api/ollama/endpoints' && req.method === 'GET') {

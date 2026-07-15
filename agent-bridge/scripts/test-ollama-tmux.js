@@ -10,6 +10,7 @@ const { execFileSync } = require('child_process');
 const ollama = require('../lib/ollama-bridge-manager');
 const launchProfiles = require('../lib/agent-launch-profiles');
 const terminal = require('../lib/terminal-ws');
+const tmuxCli = require('../lib/tmux-cli-launcher');
 
 function rejects(fn, pattern) {
   assert.throws(fn, pattern);
@@ -54,7 +55,60 @@ async function main() {
   assert.match(systemPrompt, /Neohive MCP register tool directly/);
   assert(!systemPrompt.includes(backendPrompt), 'role prompt should not be duplicated in the system prompt');
 
+  const claudeNative = tmuxCli.buildNativeCliEnvArgs({
+    cli: 'claude',
+    dataDir: '/tmp/neohive',
+    prompt: backendPrompt,
+  });
+  assert.strictEqual(claudeNative[0], 'NEOHIVE_DATA_DIR=/tmp/neohive');
+  assert.strictEqual(claudeNative[claudeNative.length - 1], backendPrompt);
+  assert.match(claudeNative[1], /claude$/);
+
+  const geminiNative = tmuxCli.buildNativeCliEnvArgs({
+    cli: 'gemini',
+    dataDir: '/tmp/neohive',
+    prompt: backendPrompt,
+  });
+  assert.strictEqual(geminiNative[2], '--prompt-interactive');
+  assert.strictEqual(geminiNative[3], backendPrompt);
+
+  const cursorNative = tmuxCli.buildNativeCliEnvArgs({
+    cli: 'cursor',
+    dataDir: '/tmp/neohive',
+    prompt: backendPrompt,
+  });
+  assert.match(cursorNative[1], /agent$/);
+  assert.strictEqual(cursorNative[cursorNative.length - 1], backendPrompt);
+
+  rejects(() => tmuxCli.buildNativeCliEnvArgs({ cli: 'claude', dataDir: '/tmp', prompt: '' }), /Launch prompt is required/);
+  rejects(() => tmuxCli.getCliSpec('nope'), /Invalid cli type/);
+
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'neohive-ollama-test-'));
+  const launchSession = `neohive-cli-launch-${process.pid}`;
+  fs.writeFileSync(path.join(dataDir, 'config.json'), JSON.stringify({
+    terminal: { tmux_session: launchSession },
+  }));
+  try {
+    const window = await tmuxCli.launchInTmux({
+      dataDir,
+      projectDir: dataDir,
+      windowName: 'test-cli',
+      envArgs: ['TRUE=1', 'sleep', '30'],
+      tagOption: '@neohive_cli_launch',
+      tagValue: 'claude:TestBot',
+      select: true,
+    });
+    assert.match(window.windowId, /^@/);
+    assert.match(window.paneId, /^%/);
+    assert.strictEqual(window.sessionName, launchSession);
+    const tag = execFileSync('tmux', ['show-options', '-w', '-v', '-t', window.windowId, '@neohive_cli_launch'], {
+      encoding: 'utf8',
+    }).trim();
+    assert.strictEqual(tag, 'claude:TestBot');
+  } finally {
+    try { execFileSync('tmux', ['kill-session', '-t', launchSession]); } catch {}
+  }
+
   const modelServer = http.createServer((req, res) => {
     if (req.url !== '/api/tags') {
       res.writeHead(404).end();

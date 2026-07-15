@@ -4884,6 +4884,31 @@ function lttFetch(url, opts) {
   return fetch(url, opts);
 }
 
+// navigator.clipboard is unavailable on plain HTTP LAN pages in many browsers.
+// Copying is best-effort and must never block actions such as launching agents.
+function writeClipboard(text) {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    return navigator.clipboard.writeText(String(text));
+  }
+  return new Promise(function(resolve, reject) {
+    var textarea = document.createElement('textarea');
+    textarea.value = String(text);
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      if (!document.execCommand('copy')) throw new Error('Clipboard copy is unavailable');
+      resolve();
+    } catch (error) {
+      reject(error);
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  });
+}
+
 var activeThread = null;
 var activeChannel = null; // null = all channels
 // Safe element getter — returns dummy div for removed elements to prevent null crashes
@@ -10362,7 +10387,7 @@ function renderLaunchPanel() {
     html += '</select><div class="field-hint" id="launch-role-hint">A role is required and determines skills and prompt.</div></div>';
     html += '</div>';
     html += '<div class="launch-form-row">';
-    html += '<div class="launch-form-field"><label>Runtime</label><select id="launch-runtime" onchange="updateUnifiedLaunchForm()"><option value="claude">Claude Code</option><option value="gemini">Gemini CLI</option><option value="codex">Codex CLI</option><option value="cursor">Cursor IDE</option><option value="ollama-claude">Claude Code via Ollama</option><option value="ollama-responder">Ollama responder</option></select><div class="field-hint" id="launch-runtime-hint">Select where this agent should run.</div></div>';
+    html += '<div class="launch-form-field"><label>Runtime</label><select id="launch-runtime" onchange="updateUnifiedLaunchForm()"><option value="claude">Claude Code</option><option value="gemini">Gemini CLI</option><option value="codex">Codex CLI</option><option value="cursor">Cursor Agent</option><option value="ollama-claude">Claude Code via Ollama</option><option value="ollama-responder">Ollama responder</option></select><div class="field-hint" id="launch-runtime-hint">Select where this agent should run.</div></div>';
     html += '<div class="launch-form-field"><label>Registration Skills</label><input type="text" id="launch-skills" placeholder="Select a role" readonly style="color:var(--text-muted)"></div>';
     html += '</div>';
     html += '<div id="launch-ollama-fields" style="display:none">';
@@ -10381,6 +10406,7 @@ function renderLaunchPanel() {
     html += '<details id="launch-prompt-details" style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--text-muted)">Generated role prompt</summary><div id="launch-prompt-output" style="margin-top:8px"></div></details>';
     html += '<div style="margin-top:12px"><button class="btn btn-primary" id="launch-primary-btn" onclick="launchConfiguredAgent()">Generate prompt and launch</button></div>';
     html += '<div class="launch-result" id="launch-result"></div>';
+    html += '<div id="launch-status-tracker" class="launch-status-tracker" style="display:none;margin-top:12px"></div>';
     html += '<details style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)"><summary style="cursor:pointer;font-size:13px;font-weight:600">Manage Ollama endpoints</summary><div style="margin-top:12px">';
     html += '<div class="launch-form-row">';
     html += '<div class="launch-form-field"><label>ID</label><input type="text" id="ollama-endpoint-id" placeholder="office-ollama" maxlength="40"></div>';
@@ -10526,7 +10552,7 @@ function updateUnifiedLaunchForm() {
   if (primaryButton) {
     primaryButton.textContent = ollamaRuntime
       ? 'Launch agent and open terminal'
-      : runtime === 'cursor' ? 'Configure Cursor' : 'Generate prompt and launch';
+      : 'Generate prompt and launch';
   }
   var runtimeHint = document.getElementById('launch-runtime-hint');
   if (runtimeHint) {
@@ -10535,8 +10561,8 @@ function updateUnifiedLaunchForm() {
       : runtime === 'ollama-responder'
         ? 'Runs a lightweight responder for Neohive messages and direct terminal chat.'
         : runtime === 'cursor'
-          ? 'Writes Cursor MCP configuration and copies the prompt.'
-          : 'Generates the role prompt and prepares the selected CLI.';
+          ? 'Writes MCP config and launches Cursor Agent (agent) in tmux with the generated prompt.'
+          : 'Writes MCP config and launches the CLI in tmux with the generated prompt.';
   }
 
   if (ollamaRuntime) loadOllamaModels(false);
@@ -11038,16 +11064,16 @@ function doLaunch() {
 
   // Use generated prompt if available, otherwise build a default
   var launchPrompt = window._generatedLaunchPrompt || 'You are agent "' + agentName + '". Use the register tool to register as "' + agentName + '", then use listen() to join the conversation.';
-  navigator.clipboard.writeText(launchPrompt).catch(function() {});
+  writeClipboard(launchPrompt).catch(function() {});
   selectedCli = cli;
 
   resultEl.className = 'launch-result info';
   resultEl.innerHTML = 'Launching terminal for <strong>' + escapeHtml(agentName) + '</strong>...';
 
-  lttFetch('/api/launch', {
+  lttFetch('/api/launch' + projectParam(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cli: cli, project_dir: undefined, agent_name: agentName, role: role, prompt: launchPrompt })
+    body: JSON.stringify({ cli: cli, agent_name: agentName, role: role, prompt: launchPrompt })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.error) {
       resultEl.className = 'launch-result error';
@@ -11058,24 +11084,18 @@ function doLaunch() {
     if (data.launched) {
       resultEl.className = 'launch-result success';
       resultEl.innerHTML =
-        '<strong>Terminal opened!</strong> Prompt copied to clipboard.<br>' +
-        '<span style="font-size:11px;color:var(--text-dim)">Wait for ' + escapeHtml(selectedCli) + ' to load, then paste the prompt (Ctrl+V / Cmd+V).</span>';
-      // Start watching for agent registration
+        '<strong>Agent launched in terminal!</strong> Prompt was passed to ' + escapeHtml(selectedCli === 'cursor' ? 'Cursor Agent' : selectedCli) + ' automatically.<br>' +
+        '<span style="font-size:11px;color:var(--text-dim)">Opening terminal view' + (data.tmux_window_name ? ' (' + escapeHtml(data.tmux_window_name) + ')' : '') + '...</span>';
       startLaunchWatcher(agentName);
+      switchView('terminal');
+      setTimeout(function() { sendTmuxControl('get_state'); }, 250);
     } else {
       resultEl.className = 'launch-result success';
-      if (data.cli === 'cursor') {
-        resultEl.innerHTML =
-          '<strong>.cursor/mcp.json updated</strong> with <code>NEOHIVE_DATA_DIR</code>. Open this project in Cursor, reload MCP tools if needed, then paste the prompt (already copied).<br>' +
-          '<span style="font-size:11px;color:var(--text-dim)">' + escapeHtml(data.project_dir || '') + '</span><br><br>' +
-          '<div class="launch-prompt-box" onclick="copyText(this)" data-text="' + escapeHtml(launchPrompt).replace(/"/g, '&quot;') + '">' + escapeHtml(launchPrompt.substring(0, 300)) + (launchPrompt.length > 300 ? '...' : '') + '</div>';
-      } else {
-        var html = '<strong>MCP config written.</strong> Run this command in a terminal:<br>';
-        html += '<div class="launch-prompt-box" onclick="copyText(this)" data-text="' + escapeHtml(data.command).replace(/"/g, '&quot;') + '">' + escapeHtml(data.command) + '</div>';
-        html += '<br>Then paste this prompt:<br>';
-        html += '<div class="launch-prompt-box" onclick="copyText(this)" data-text="' + escapeHtml(launchPrompt).replace(/"/g, '&quot;') + '">' + escapeHtml(launchPrompt.substring(0, 300)) + (launchPrompt.length > 300 ? '...' : '') + '</div>';
-        resultEl.innerHTML = html;
-      }
+      var html = '<strong>MCP config written.</strong> Run this command in a terminal:<br>';
+      html += '<div class="launch-prompt-box" onclick="copyText(this)" data-text="' + escapeHtml(data.command || '').replace(/"/g, '&quot;') + '">' + escapeHtml(data.command || '') + '</div>';
+      html += '<br>Then paste this prompt:<br>';
+      html += '<div class="launch-prompt-box" onclick="copyText(this)" data-text="' + escapeHtml(launchPrompt).replace(/"/g, '&quot;') + '">' + escapeHtml(launchPrompt.substring(0, 300)) + (launchPrompt.length > 300 ? '...' : '') + '</div>';
+      resultEl.innerHTML = html;
       startLaunchWatcher(agentName);
     }
   }).catch(function(err) {
@@ -11130,7 +11150,7 @@ function doLaunchAll() {
 
     var agentPrompt = w.prompt || 'You are agent "' + w.name + '". Use the register tool to register as "' + w.name + '", then use listen() to join the conversation.';
 
-    lttFetch('/api/launch', {
+    lttFetch('/api/launch' + projectParam(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cli: selectedCli, project_dir: projectDir || undefined, agent_name: w.name, prompt: agentPrompt })
@@ -11141,7 +11161,7 @@ function doLaunchAll() {
       } else {
         w.state = 'launched';
         // Copy prompt to clipboard for current agent
-        navigator.clipboard.writeText(agentPrompt).catch(function() {});
+        writeClipboard(agentPrompt).catch(function() {});
       }
       renderLaunchStatusTracker();
       idx++;
@@ -11201,6 +11221,7 @@ function startLaunchWatchAll() {
       var resultEl = document.getElementById('launch-result');
       var regCount = _launchWatchers.filter(function(w) { return w.state === 'registered'; }).length;
       var failCount = _launchWatchers.filter(function(w) { return w.state === 'failed'; }).length;
+      if (!resultEl) return;
       if (failCount === 0) {
         resultEl.className = 'launch-result success';
         resultEl.innerHTML = 'All ' + regCount + ' agent(s) registered and online!';
@@ -11214,6 +11235,7 @@ function startLaunchWatchAll() {
 
 function renderLaunchStatusTracker() {
   var tracker = document.getElementById('launch-status-tracker');
+  if (!tracker) return;
   if (!_launchWatchers.length) {
     tracker.style.display = 'none';
     return;
@@ -11222,8 +11244,8 @@ function renderLaunchStatusTracker() {
   var h = '<div style="font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Launch Status</div>';
   for (var i = 0; i < _launchWatchers.length; i++) {
     var w = _launchWatchers[i];
-    var launchingLabel = w.cli === 'cursor' ? 'Writing MCP config...' : 'Opening terminal...';
-    var launchedLabel = w.cli === 'cursor' ? 'Open Cursor \u2014 paste prompt' : 'Terminal open \u2014 paste prompt';
+    var launchingLabel = w.cli === 'cursor' ? 'Launching Cursor Agent...' : 'Opening terminal...';
+    var launchedLabel = w.cli === 'cursor' ? 'Cursor Agent launched' : 'Terminal open — prompt sent';
     var stateLabel = { pending: 'Waiting...', launching: launchingLabel, launched: launchedLabel, registered: 'Online', failed: 'Failed' }[w.state] || w.state;
     if (w.state === 'failed' && w.error) stateLabel = 'Failed: ' + w.error;
     h += '<div class="launch-status-item">' +

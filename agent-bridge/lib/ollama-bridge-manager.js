@@ -3,19 +3,22 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { execFile, execFileSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const {
   buildRolePrompt,
   getRoleProfile,
   validateAgentName: validateLaunchAgentName,
 } = require('./agent-launch-profiles');
+const {
+  execTmux,
+  findExecutable,
+  launchInTmux,
+} = require('./tmux-cli-launcher');
 
 const ENDPOINT_ID_RE = /^[a-zA-Z0-9_-]{1,40}$/;
 const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$/;
-const SESSION_RE = /^[A-Za-z0-9_-]+$/;
 const RUNTIMES = new Set(['ollama', 'claude']);
 const START_TIMEOUT_MS = 10000;
-const EXEC_TIMEOUT_MS = 5000;
 const MODEL_FETCH_TIMEOUT_MS = 7000;
 
 function readJson(file, fallback) {
@@ -28,19 +31,6 @@ function writeJsonAtomic(file, value) {
   const tmp = `${file}.tmp.${process.pid}`;
   fs.writeFileSync(tmp, JSON.stringify(value, null, 2) + '\n');
   fs.renameSync(tmp, file);
-}
-
-function execTmux(args, timeout = EXEC_TIMEOUT_MS) {
-  return new Promise((resolve, reject) => {
-    execFile('tmux', args, { timeout, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) {
-        error.message = (stderr || error.message || 'tmux command failed').trim();
-        reject(error);
-        return;
-      }
-      resolve(String(stdout || '').trim());
-    });
-  });
 }
 
 function validateEndpoint(raw) {
@@ -270,12 +260,6 @@ function validateModel(model) {
   return value;
 }
 
-function getSessionName(dataDir) {
-  const config = getConfig(dataDir);
-  const configured = config.terminal && config.terminal.tmux_session;
-  return typeof configured === 'string' && SESSION_RE.test(configured) ? configured : 'neohive';
-}
-
 function agentNameIsLive(dataDir, name) {
   const agents = readJson(path.join(dataDir, 'agents.json'), {});
   const agent = agents[name];
@@ -287,14 +271,6 @@ function agentNameIsLive(dataDir, name) {
   try { process.kill(agent.pid, 0); return true; } catch { return false; }
 }
 
-async function ensureSession(sessionName, projectDir) {
-  try {
-    await execTmux(['has-session', '-t', sessionName]);
-  } catch {
-    await execTmux(['new-session', '-d', '-s', sessionName, '-n', 'main', '-c', projectDir]);
-  }
-}
-
 async function waitForRuntime(dataDir, instanceId) {
   const started = Date.now();
   while (Date.now() - started < START_TIMEOUT_MS) {
@@ -303,18 +279,6 @@ async function waitForRuntime(dataDir, instanceId) {
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
   throw new Error('Ollama agent did not register within 10 seconds');
-}
-
-function findExecutable(name) {
-  const pathEntries = String(process.env.PATH || '').split(path.delimiter).filter(Boolean);
-  for (const entry of pathEntries) {
-    const candidate = path.join(entry, name);
-    try {
-      fs.accessSync(candidate, fs.constants.X_OK);
-      return candidate;
-    } catch {}
-  }
-  return null;
 }
 
 function buildClaudeLaunchArgs({ dataDir, endpointUrl, claudePath, name, model, role, skills, prompt }) {
@@ -355,8 +319,6 @@ async function startInstance({ dataDir, projectDir, packageDir, name, model, end
     item.name.toLowerCase() === safeName.toLowerCase() && ['starting', 'running', 'working'].includes(item.status));
   if (active) throw new Error(`Managed Ollama agent "${safeName}" is already running`);
 
-  const sessionName = getSessionName(dataDir);
-  await ensureSession(sessionName, projectDir);
   const instanceId = crypto.randomBytes(12).toString('hex');
   const windowName = `${safeRuntime === 'claude' ? 'claude-ollama' : 'ollama'}-${safeName}`.slice(0, 50);
   const runtimeScript = path.join(packageDir, 'scripts', 'ollama-agent.js');
@@ -388,14 +350,15 @@ async function startInstance({ dataDir, projectDir, packageDir, name, model, end
       '--system-prompt', generatedPrompt,
     ];
   }
-  const output = await execTmux([
-    'new-window', '-d', '-P', '-F', '#{window_id}\t#{pane_id}',
-    '-t', sessionName, '-n', windowName, '-c', projectDir,
-    'env', ...envArgs,
-  ]);
-  const [windowId, paneId] = output.split('\t');
-  if (!windowId || !paneId) throw new Error('tmux did not return the new window and pane IDs');
-  await execTmux(['set-option', '-w', '-t', windowId, '@neohive_managed_instance', instanceId]);
+  const window = await launchInTmux({
+    dataDir,
+    projectDir,
+    windowName,
+    envArgs,
+    tagOption: '@neohive_managed_instance',
+    tagValue: instanceId,
+    select: false,
+  });
 
   const registry = loadRegistry(dataDir);
   const instance = {
@@ -407,10 +370,10 @@ async function startInstance({ dataDir, projectDir, packageDir, name, model, end
     model: safeModel,
     endpoint_id: endpoint.id,
     endpoint_name: endpoint.name,
-    tmux_session: sessionName,
-    tmux_window_id: windowId,
-    tmux_pane_id: paneId,
-    tmux_window_name: windowName,
+    tmux_session: window.sessionName,
+    tmux_window_id: window.windowId,
+    tmux_pane_id: window.paneId,
+    tmux_window_name: window.windowName,
     status: 'starting',
     started_at: new Date().toISOString(),
   };
