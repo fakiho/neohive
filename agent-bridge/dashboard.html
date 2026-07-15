@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Neohive | Multi-Agent Coordination Dashboard</title>
 <link rel="icon" href="favicon.png" type="image/png" sizes="16x16">
-<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -4458,7 +4458,7 @@
 <div class="header">
   <div class="header-left">
     <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
-    <img src="logo.svg" width="40" height="40" alt="" aria-hidden="true" style="flex-shrink:0">
+    <img src="/logo.svg" width="40" height="40" alt="" aria-hidden="true" style="flex-shrink:0">
     <div class="logo">NeoHive</div>
     <!-- Hidden stat elements for JS compatibility -->
     <span id="stat-messages" style="display:none">0</span>
@@ -8392,6 +8392,7 @@ var BUILT_IN_AVATARS = [
 
 var editingAgent = '';
 var selectedAvatar = '';
+var profileStatsRequestId = 0;
 
 // ---- Character Designer state ----
 var cdCurrentTab = 'body';
@@ -8552,6 +8553,9 @@ function cdRandomize() {
 function openProfileEditor() {
   var agent = cachedAgents[editingAgent];
   if (!editingAgent || !agent) return;
+  var agentName = editingAgent;
+  profileStatsRequestId += 1;
+  var requestId = profileStatsRequestId;
 
   document.getElementById('profile-popup').classList.remove('open');
 
@@ -8579,28 +8583,44 @@ function openProfileEditor() {
     '<div style="' + statCell + '">Sent: <b style="color:var(--text)">' + sent + '</b></div>' +
     '<div style="' + statCell + '">Received: <b style="color:var(--text)">' + received + '</b></div>' +
     '<div style="' + statCell + '">Provider: <b style="color:var(--text)">' + escapeHtml(agent.provider || 'unknown') + '</b></div>' +
-    '<div style="' + statCell + '">Branch: <b style="color:var(--text)">' + escapeHtml(agent.branch || 'main') + '</b></div>';
+    '<div style="' + statCell + '">Branch: <b style="color:var(--text)">' + escapeHtml(agent.branch || 'main') + '</b></div>' +
+    '<div id="pe-token-usage" style="display:contents"><div style="grid-column:1/-1;color:var(--text-muted);padding-top:8px">Calculating session usage...</div></div>';
   document.getElementById('pe-stats-container').innerHTML = statsHtml;
 
   var pq = projectParam();
   lttFetch('/api/token-usage' + pq).then(function(r) { return r.json(); }).then(function(data) {
-    if (!data || !data.agents || !data.agents[editingAgent]) return;
-    var tu = data.agents[editingAgent];
-    var tokenHtml = 
-      '<div style="grid-column:1/-1;margin-top:8px;font-weight:800;color:var(--text);font-size:11px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:4px">Token Usage (<span style="color:var(--accent);font-weight:600">' + escapeHtml(tu.model || 'unknown') + '</span>)</div>' +
+    if (requestId !== profileStatsRequestId || editingAgent !== agentName) return;
+    var usageEl = document.getElementById('pe-token-usage');
+    if (!usageEl) return;
+    if (!data || !data.agents || !data.agents[agentName]) {
+      usageEl.innerHTML = '<div style="grid-column:1/-1;color:var(--text-muted);padding-top:8px">No session usage is available for this agent.</div>';
+      return;
+    }
+    var tu = data.agents[agentName];
+    var costLabel = 'API cost unavailable';
+    if (tu.cost_status === 'local') {
+      costLabel = 'API cost: Local';
+    } else if (tu.cost_status === 'priced' && typeof tu.estimated_cost_usd === 'number') {
+      costLabel = 'API cost: $' + tu.estimated_cost_usd.toFixed(tu.estimated_cost_usd < 0.01 ? 4 : 2);
+    }
+    usageEl.innerHTML =
+      '<div style="grid-column:1/-1;margin-top:8px;font-weight:800;color:var(--text);font-size:11px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:4px">Token Usage · Model: <span style="color:var(--accent);font-weight:600;text-transform:none">' + escapeHtml(tu.model || 'unknown') + '</span></div>' +
       '<div style="' + statCell + '">Input: <b style="color:var(--text)">' + (tu.input_tokens || 0).toLocaleString() + '</b></div>' +
       '<div style="' + statCell + '">Output: <b style="color:var(--text)">' + (tu.output_tokens || 0).toLocaleString() + '</b></div>' +
       '<div style="' + statCell + '">Cache: <b style="color:var(--text)">' + ((tu.cache_creation_tokens || 0) + (tu.cache_read_tokens || 0)).toLocaleString() + '</b></div>' +
-      '<div style="background:var(--accent-dim);color:var(--accent);padding:7px 10px;border-radius:6px;border:1px solid var(--accent);font-weight:700">Cost: $' + (tu.estimated_cost_usd || 0).toFixed(2) + '</div>';
-    var el = document.getElementById('pe-stats-container');
-    if (el) el.innerHTML += tokenHtml;
-  }).catch(function() {});
+      '<div style="background:var(--accent-dim);color:var(--accent);padding:7px 10px;border-radius:6px;border:1px solid var(--accent);font-weight:700">' + costLabel + '</div>';
+  }).catch(function() {
+    if (requestId !== profileStatsRequestId || editingAgent !== agentName) return;
+    var usageEl = document.getElementById('pe-token-usage');
+    if (usageEl) usageEl.innerHTML = '<div style="grid-column:1/-1;color:var(--text-muted);padding-top:8px">Session usage could not be loaded.</div>';
+  });
 
   document.getElementById('char-designer').classList.add('open');
   document.getElementById('cd-backdrop').classList.add('open');
 }
 
 function closeProfileEditor() {
+  profileStatsRequestId += 1;
   document.getElementById('char-designer').classList.remove('open');
   document.getElementById('cd-backdrop').classList.remove('open');
 }
@@ -10513,7 +10533,7 @@ function updateUnifiedLaunchForm() {
     runtimeHint.textContent = runtime === 'ollama-claude'
       ? 'Runs Claude Code against the selected Ollama model in managed tmux.'
       : runtime === 'ollama-responder'
-        ? 'Runs the lightweight Neohive message responder in managed tmux.'
+        ? 'Runs a lightweight responder for Neohive messages and direct terminal chat.'
         : runtime === 'cursor'
           ? 'Writes Cursor MCP configuration and copies the prompt.'
           : 'Generates the role prompt and prepares the selected CLI.';

@@ -36,8 +36,23 @@ async function main() {
   );
   const backend = launchProfiles.getRoleProfile('backend');
   assert(backend.skills.includes('nodejs'));
-  assert.match(launchProfiles.buildRolePrompt('backend', 'LocalCoder'), /Register as "LocalCoder"/);
+  const backendPrompt = launchProfiles.buildRolePrompt('backend', 'LocalCoder');
+  assert.match(backendPrompt, /Register as "LocalCoder"/);
   rejects(() => launchProfiles.buildRolePrompt('', 'LocalCoder'), /supported agent role/);
+  const claudeArgs = ollama.buildClaudeLaunchArgs({
+    dataDir: '/tmp/neohive',
+    endpointUrl: 'http://127.0.0.1:11434',
+    claudePath: '/usr/bin/claude',
+    name: 'LocalCoder',
+    model: 'qwen3.5:9b',
+    role: 'backend',
+    skills: backend.skills,
+    prompt: backendPrompt,
+  });
+  assert.strictEqual(claudeArgs[claudeArgs.length - 1], backendPrompt);
+  const systemPrompt = claudeArgs[claudeArgs.indexOf('--append-system-prompt') + 1];
+  assert.match(systemPrompt, /Neohive MCP register tool directly/);
+  assert(!systemPrompt.includes(backendPrompt), 'role prompt should not be duplicated in the system prompt');
 
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'neohive-ollama-test-'));
   const modelServer = http.createServer((req, res) => {
@@ -83,8 +98,11 @@ async function main() {
       instances: [
         { id: 'aaaaaaaaaaaaaaaa', name: 'Stopped', status: 'stopped', tmux_window_id: '@99991' },
         { id: 'bbbbbbbbbbbbbbbb', name: 'Dead', status: 'running', tmux_window_id: '@99992' },
+        { id: 'cccccccccccccccc', name: 'QueueBot', runtime: 'ollama', status: 'running', tmux_window_id: '@99993' },
       ],
     }));
+    assert.strictEqual(ollama.isManagedResponder(dataDir, 'QueueBot'), true);
+    assert.strictEqual(ollama.isManagedResponder(dataDir, 'Dead'), false);
     assert.deepStrictEqual(ollama.listInstances(dataDir), []);
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dataDir, 'ollama-bridges.json'), 'utf8')).instances, []);
   } finally {

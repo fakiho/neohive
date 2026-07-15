@@ -182,6 +182,15 @@ function saveRegistry(dataDir, registry) {
   writeJsonAtomic(registryFile(dataDir), registry);
 }
 
+function isManagedResponder(dataDir, agentName) {
+  const name = String(agentName || '');
+  return loadRegistry(dataDir).instances.some((instance) =>
+    instance &&
+    instance.name === name &&
+    instance.runtime === 'ollama' &&
+    !['stopped', 'failed'].includes(instance.status));
+}
+
 function isFreshRuntime(runtime) {
   const timestamp = Date.parse(runtime && runtime.last_activity);
   return Number.isFinite(timestamp) && Date.now() - timestamp < 30000;
@@ -308,6 +317,27 @@ function findExecutable(name) {
   return null;
 }
 
+function buildClaudeLaunchArgs({ dataDir, endpointUrl, claudePath, name, model, role, skills, prompt }) {
+  const skillText = skills.length ? skills.join(', ') : 'general';
+  const systemPrompt = [
+    `You are Neohive agent ${name} with role ${role || 'agent'} and skills ${skillText}.`,
+    'Do not use the Agent tool to register and do not spawn a setup subagent.',
+    `When the role prompt asks you to register, call the Neohive MCP register tool directly with name "${name}" and skills [${skillText}].`,
+    'Follow the supplied role prompt exactly, then remain in the Neohive listen loop.',
+  ].join('\n\n');
+  return [
+    `NEOHIVE_DATA_DIR=${dataDir}`,
+    'ANTHROPIC_AUTH_TOKEN=ollama',
+    'ANTHROPIC_API_KEY=',
+    `ANTHROPIC_BASE_URL=${endpointUrl}`,
+    claudePath,
+    '--model', model,
+    '--disallowedTools', 'Agent',
+    '--append-system-prompt', systemPrompt,
+    prompt,
+  ];
+}
+
 async function startInstance({ dataDir, projectDir, packageDir, name, model, endpointId, runtime, role }) {
   const safeName = validateAgentName(name);
   const safeModel = validateModel(model);
@@ -334,25 +364,16 @@ async function startInstance({ dataDir, projectDir, packageDir, name, model, end
   if (safeRuntime === 'claude') {
     const claudePath = findExecutable('claude');
     if (!claudePath) throw new Error('Claude Code is not installed or not available on PATH');
-    const skillText = safeSkills.length ? safeSkills.join(', ') : 'general';
-    const systemPrompt = [
-      `You are Neohive agent ${safeName} with role ${safeRole || 'agent'} and skills ${skillText}.`,
-      'Do not use the Agent tool to register and do not spawn a setup subagent.',
-      `Call the Neohive MCP register tool directly with name "${safeName}" and skills [${skillText}].`,
-      'Then call the Neohive get_briefing tool and the Neohive listen tool. Remain in the listen loop.',
-      generatedPrompt,
-    ].filter(Boolean).join('\n\n');
-    envArgs = [
-      `NEOHIVE_DATA_DIR=${dataDir}`,
-      'ANTHROPIC_AUTH_TOKEN=ollama',
-      'ANTHROPIC_API_KEY=',
-      `ANTHROPIC_BASE_URL=${endpoint.url}`,
+    envArgs = buildClaudeLaunchArgs({
+      dataDir,
+      endpointUrl: endpoint.url,
       claudePath,
-      '--model', safeModel,
-      '--disallowedTools', 'Agent',
-      '--append-system-prompt', systemPrompt,
-      `Call the Neohive MCP register tool directly now for "${safeName}" with skills ${skillText}. Do not use the Agent tool. Then get_briefing and listen.`,
-    ];
+      name: safeName,
+      model: safeModel,
+      role: safeRole,
+      skills: safeSkills,
+      prompt: generatedPrompt,
+    });
   } else {
     if (!fs.existsSync(runtimeScript)) throw new Error('Packaged Ollama runtime is missing');
     envArgs = [
@@ -472,8 +493,10 @@ module.exports = {
   normalizeModels,
   listModels,
   requireAvailableModel,
+  buildClaudeLaunchArgs,
   upsertEndpoint,
   removeEndpoint,
+  isManagedResponder,
   listInstances,
   startInstance,
   stopInstance,

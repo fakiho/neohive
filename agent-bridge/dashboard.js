@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const readline = require('readline');
 const { spawn } = require('child_process');
 const { upsertNeohiveMcpInToml } = require('./lib/codex-neohive-toml');
 const pkg = require(path.join(__dirname, 'package.json'));
@@ -238,6 +239,7 @@ const LOGO_FILE = path.join(__dirname, 'logo.svg');
 const LOGO_SVG_FILE = path.join(__dirname, 'logo.svg');
 const FAVICON_FILE = path.join(__dirname, 'favicon.png');
 const PROJECTS_FILE = path.join(__dirname, 'projects.json');
+const PUBLIC_ASSET_PATHS = new Set(['/favicon.png', '/logo.svg', '/logo.png', '/design-system.css']);
 
 // --- Multi-project support ---
 
@@ -805,38 +807,96 @@ const TOKEN_PRICING = {
   'claude-sonnet-4-6': { input: 3.00, output: 15.00, cache_write: 3.75, cache_read: 0.30 },
   'claude-haiku-4-5': { input: 0.80, output: 4.00, cache_write: 1.00, cache_read: 0.08 },
 };
+const sessionUsageCache = new Map();
 
-function parseSessionUsage(sessionFile, maxBytes) {
-  const usage = { input_tokens: 0, output_tokens: 0, cache_creation_tokens: 0, cache_read_tokens: 0, messages: 0, model: null };
+function usageValues(raw) {
+  return {
+    input_tokens: Number(raw && raw.input_tokens) || 0,
+    output_tokens: Number(raw && raw.output_tokens) || 0,
+    cache_creation_tokens: Number(raw && raw.cache_creation_input_tokens) || 0,
+    cache_read_tokens: Number(raw && raw.cache_read_input_tokens) || 0,
+  };
+}
+
+function mergeUsageValues(current, next) {
+  if (!current) return next;
+  return {
+    input_tokens: Math.max(current.input_tokens, next.input_tokens),
+    output_tokens: Math.max(current.output_tokens, next.output_tokens),
+    cache_creation_tokens: Math.max(current.cache_creation_tokens, next.cache_creation_tokens),
+    cache_read_tokens: Math.max(current.cache_read_tokens, next.cache_read_tokens),
+  };
+}
+
+async function parseSessionUsage(sessionFile) {
+  let cacheKey = null;
   try {
-    const stat = fs.statSync(sessionFile);
-    // For huge files, only read the last portion to avoid memory issues
-    const readSize = Math.min(stat.size, maxBytes || 5 * 1024 * 1024); // 5MB max
-    const fd = fs.openSync(sessionFile, 'r');
-    const buf = Buffer.alloc(readSize);
-    fs.readSync(fd, buf, 0, readSize, Math.max(0, stat.size - readSize));
-    fs.closeSync(fd);
-    const content = buf.toString('utf8');
-    // Find complete lines (skip partial first line if we started mid-file)
-    const lines = content.split('\n');
-    if (stat.size > readSize) lines.shift(); // skip potentially partial first line
-    for (const line of lines) {
-      if (!line.trim() || !line.includes('"usage"')) continue;
+    const stat = await fs.promises.stat(sessionFile);
+    cacheKey = `${sessionFile}:${stat.size}:${stat.mtimeMs}`;
+    const cached = sessionUsageCache.get(cacheKey);
+    if (cached) return Object.assign({}, cached);
+  } catch {}
+  const usage = {
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_creation_tokens: 0,
+    cache_read_tokens: 0,
+    messages: 0,
+    model: null,
+    estimated_cost_usd: 0,
+    cost_status: 'priced',
+  };
+  const messages = new Map();
+  let sequence = 0;
+  try {
+    const lines = readline.createInterface({
+      input: fs.createReadStream(sessionFile, { encoding: 'utf8' }),
+      crlfDelay: Infinity,
+    });
+    for await (const line of lines) {
+      if (!line.includes('"usage"')) continue;
       try {
         const entry = JSON.parse(line);
-        if (entry.type === 'assistant' && entry.message && entry.message.usage) {
-          const u = entry.message.usage;
-          usage.input_tokens += u.input_tokens || 0;
-          usage.output_tokens += u.output_tokens || 0;
-          usage.cache_creation_tokens += u.cache_creation_input_tokens || 0;
-          usage.cache_read_tokens += u.cache_read_input_tokens || 0;
-          usage.messages++;
-          if (entry.message.model) usage.model = entry.message.model;
-        }
-      } catch { /* skip unparseable lines */ }
+        if (entry.type !== 'assistant' || !entry.message || !entry.message.usage) continue;
+        const model = typeof entry.message.model === 'string' ? entry.message.model : null;
+        const key = entry.message.id || entry.uuid || `line-${sequence++}`;
+        const previous = messages.get(key);
+        messages.set(key, {
+          model: model || previous && previous.model || null,
+          usage: mergeUsageValues(previous && previous.usage, usageValues(entry.message.usage)),
+        });
+        if (model) usage.model = model;
+      } catch { /* skip malformed transcript lines */ }
     }
-  } catch (e) { /* session file unreadable */ }
-  return usage;
+  } catch { return usage; }
+
+  for (const message of messages.values()) {
+    const values = message.usage;
+    usage.input_tokens += values.input_tokens;
+    usage.output_tokens += values.output_tokens;
+    usage.cache_creation_tokens += values.cache_creation_tokens;
+    usage.cache_read_tokens += values.cache_read_tokens;
+    usage.messages++;
+    const pricing = TOKEN_PRICING[message.model];
+    if (!pricing) {
+      usage.cost_status = 'unavailable';
+      continue;
+    }
+    usage.estimated_cost_usd += (
+      values.input_tokens * pricing.input +
+      values.output_tokens * pricing.output +
+      values.cache_creation_tokens * pricing.cache_write +
+      values.cache_read_tokens * pricing.cache_read
+    ) / 1000000;
+  }
+  if (usage.cost_status === 'unavailable') usage.estimated_cost_usd = null;
+  if (cacheKey) {
+    sessionUsageCache.set(cacheKey, Object.assign({}, usage));
+    while (sessionUsageCache.size > 100) {
+      sessionUsageCache.delete(sessionUsageCache.keys().next().value);
+    }
+  }
+  return Object.assign({}, usage);
 }
 
 /**
@@ -863,15 +923,19 @@ function scoreSessionsByProximity(projectSessionDir, agentStartedAt) {
   return scored;
 }
 
-function apiTokenUsage(query) {
+async function apiTokenUsage(query) {
   const projectPath = query.get('project') || null;
   const dataDir = resolveDataDir(projectPath);
   const agents = readJson(filePath('agents.json', projectPath));
   const home = os.homedir();
   const sessionsDir = path.join(home, '.claude', 'sessions');
-  const projectAbsPath = projectPath ? path.resolve(projectPath) : path.resolve(process.cwd());
+  const projectAbsPath = projectPath
+    ? path.resolve(projectPath)
+    : path.basename(dataDir) === '.neohive' ? path.dirname(dataDir) : path.resolve(process.cwd());
   const projectSlug = projectAbsPath.replace(/\//g, '-');
   const projectSessionDir = path.join(home, '.claude', 'projects', projectSlug);
+  const managedRegistry = readJson(path.join(dataDir, 'ollama-bridges.json')) || {};
+  const managedInstances = Array.isArray(managedRegistry.instances) ? managedRegistry.instances : [];
 
   const result = { agents: {}, total_cost_usd: 0, total_tokens: 0 };
 
@@ -941,9 +1005,14 @@ function apiTokenUsage(query) {
   for (const [name, sessionFile] of Object.entries(agentSessions)) {
     try {
       const info = agents[name];
-      const usage = parseSessionUsage(sessionFile);
-      const pricing = TOKEN_PRICING[usage.model] || TOKEN_PRICING['claude-opus-4-6'];
-      const cost = (usage.input_tokens * pricing.input + usage.output_tokens * pricing.output + usage.cache_creation_tokens * pricing.cache_write + usage.cache_read_tokens * pricing.cache_read) / 1000000;
+      const usage = await parseSessionUsage(sessionFile);
+      const managed = managedInstances.find((instance) =>
+        instance && instance.name === name && ['starting', 'running', 'working'].includes(instance.status));
+      if (managed) {
+        usage.model = managed.model || usage.model;
+        usage.estimated_cost_usd = 0;
+        usage.cost_status = 'local';
+      }
 
       result.agents[name] = {
         model: usage.model,
@@ -952,15 +1021,18 @@ function apiTokenUsage(query) {
         cache_creation_tokens: usage.cache_creation_tokens,
         cache_read_tokens: usage.cache_read_tokens,
         total_tokens: usage.input_tokens + usage.output_tokens + usage.cache_creation_tokens + usage.cache_read_tokens,
-        estimated_cost_usd: Math.round(cost * 100) / 100,
+        estimated_cost_usd: usage.estimated_cost_usd == null
+          ? null
+          : Math.round(usage.estimated_cost_usd * 1000000) / 1000000,
+        cost_status: usage.cost_status,
         messages: usage.messages,
         pid: info.pid,
       };
-      result.total_cost_usd += cost;
+      if (usage.estimated_cost_usd != null) result.total_cost_usd += usage.estimated_cost_usd;
       result.total_tokens += result.agents[name].total_tokens;
     } catch { /* skip */ }
   }
-  result.total_cost_usd = Math.round(result.total_cost_usd * 100) / 100;
+  result.total_cost_usd = Math.round(result.total_cost_usd * 1000000) / 1000000;
   return result;
 }
 
@@ -1381,8 +1453,11 @@ async function apiInjectMessage(body, query) {
     timestamp: now,
   };
 
-  // Tmux-mapped agents are reachable directly through their terminal — deliver
-  // there instead of the MCP message queue. NOT both: injected text never goes
+  // Interactive CLI agents mapped to tmux are reachable directly through their
+  // terminal — deliver there instead of the MCP message queue. Managed Ollama
+  // responders are queue-only Node workers: their pane is an activity log and
+  // stdin is not a CLI prompt, so they must always fall through to messages.jsonl.
+  // NOT both: injected text never goes
   // through listen()'s consumed-tracking, so queuing it too would just mean
   // it gets redelivered (and re-processed) the next time the agent calls
   // listen() for any other reason. Unmapped agents are completely unaffected
@@ -1391,6 +1466,7 @@ async function apiInjectMessage(body, query) {
   let targetPid = null;
   let targetListeningSince = null;
   let targetAgentAlive = null; // null = agent/agents.json missing entirely, not just dead
+  const targetQueueOnly = ollamaBridgeManager.isManagedResponder(dataDir, body.to);
   try {
     const agentsFile = path.join(dataDir, 'agents.json');
     if (fs.existsSync(agentsFile)) {
@@ -1434,6 +1510,7 @@ async function apiInjectMessage(body, query) {
   // listen() right now" rather than "last tool that was ever invoked".
   if (
     targetTmux &&
+    !targetQueueOnly &&
     !targetListeningSince &&
     (await tmuxAgentState.verifyPaneMapping(targetPid, targetTmux.pane_id).catch(() => false)) &&
     (await tmuxAgentState.isPaneSafeToInject(targetTmux.pane_id).catch(() => false))
@@ -2418,7 +2495,7 @@ const ROUTE_TABLE = new Map([
   [routeKey('GET', '/api/server-processes'), (req, res) => jsonOk(res, apiServerProcesses())],
   [routeKey('DELETE', '/api/server-processes'), (req, res) => jsonOk(res, killOrphanedServerProcesses())],
   [routeKey('GET', '/api/stats'),           (req, res, url) => jsonOk(res, apiStats(url.searchParams))],
-  [routeKey('GET', '/api/token-usage'),     (req, res, url) => jsonOk(res, apiTokenUsage(url.searchParams))],
+  [routeKey('GET', '/api/token-usage'),     async (req, res, url) => jsonOk(res, await apiTokenUsage(url.searchParams))],
   [routeKey('GET', '/api/coordinator-mode'),(req, res, url) => {
     const config = readJson(filePath('config.json', url.searchParams.get('project') || null));
     jsonOk(res, { mode: config.coordinator_mode || 'autonomous', config });
@@ -2473,8 +2550,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // LAN auth token — required for non-localhost requests when LAN mode is active
-  if (LAN_MODE) {
+  // LAN auth token — required for non-localhost requests when LAN mode is active.
+  // Public presentation assets are exempt because browser subresource requests do
+  // not inherit the ?token= query string from the authenticated dashboard URL.
+  const isPublicAsset = req.method === 'GET' && PUBLIC_ASSET_PATHS.has(url.pathname);
+  if (LAN_MODE && !isPublicAsset) {
     const host = (req.headers.host || '').replace(/:\d+$/, '');
     const isLocalhost = host === 'localhost' || host === '127.0.0.1';
     if (!isLocalhost) {
@@ -2849,7 +2929,7 @@ const server = http.createServer(async (req, res) => {
     }
     else if (url.pathname === '/api/token-usage' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(apiTokenUsage(url.searchParams)));
+      res.end(JSON.stringify(await apiTokenUsage(url.searchParams)));
     }
     else if (url.pathname === '/api/coordinator-mode' && req.method === 'GET') {
       const projectPath = url.searchParams.get('project') || null;

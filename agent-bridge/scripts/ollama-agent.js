@@ -6,6 +6,7 @@ const path = require('path');
 const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
+const readline = require('readline');
 
 const { DATA_DIR, sanitizeName, ensureDataDir } = require('../lib/config');
 const { hubRegisterAgent, hubUnregisterAgent, touchHeartbeat } = require('../lib/agents');
@@ -58,11 +59,17 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function callOllama(endpoint, model, systemPrompt, prompt) {
+function logText(value, maxLength = 4000) {
+  const text = String(value || '').trim();
+  return text.length > maxLength ? text.slice(0, maxLength) + '\n[output truncated]' : text;
+}
+
+function callOllama(endpoint, model, systemPrompt, prompt, history) {
   return new Promise((resolve, reject) => {
     const url = new URL('/api/chat', endpoint);
     const messages = [];
     if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+    if (Array.isArray(history)) messages.push(...history);
     messages.push({ role: 'user', content: prompt });
     const body = JSON.stringify({ model, messages, stream: false });
     const transport = url.protocol === 'https:' ? https : http;
@@ -134,6 +141,9 @@ async function main() {
   const consumedFile = path.join(DATA_DIR, `consumed-${name}.json`);
   let stopping = false;
   let cleaned = false;
+  let terminal = null;
+  let requestQueue = Promise.resolve();
+  let terminalHistory = [];
 
   function writeRuntime(status, extra) {
     writeJsonAtomic(runtimeFile, Object.assign({
@@ -150,6 +160,7 @@ async function main() {
     if (cleaned) return;
     cleaned = true;
     stopping = true;
+    if (terminal) terminal.close();
     hubUnregisterAgent(name);
     try { fs.unlinkSync(runtimeFile); } catch {}
     try { fs.unlinkSync(stopFile); } catch {}
@@ -163,6 +174,62 @@ async function main() {
   if (registration.error) throw new Error(registration.error);
   writeRuntime('running', { started_at: new Date().toISOString() });
   console.log(`[${name}] Ollama agent running with ${model} at ${endpoint}`);
+  console.log(`[${name}] Type a message and press Enter to chat. Use /exit to stop.`);
+
+  function enqueueRequest(work) {
+    const result = requestQueue.then(work, work);
+    requestQueue = result.catch(() => {});
+    return result;
+  }
+
+  if (process.stdin.isTTY) {
+    terminal = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: true,
+      prompt: 'You> ',
+    });
+    terminal.prompt();
+    terminal.on('line', (line) => {
+      const prompt = line.trim();
+      if (!prompt) {
+        terminal.prompt();
+        return;
+      }
+      if (prompt === '/exit' || prompt === '/quit') {
+        cleanup();
+        process.exit(0);
+        return;
+      }
+
+      terminal.pause();
+      writeRuntime('working', { request_from: 'terminal' });
+      enqueueRequest(async () => {
+        try {
+          const response = await callOllama(endpoint, model, systemPrompt, prompt, terminalHistory);
+          terminalHistory.push(
+            { role: 'user', content: prompt },
+            { role: 'assistant', content: response });
+          while (
+            terminalHistory.length > 20 ||
+            terminalHistory.reduce((total, message) => total + message.content.length, 0) > 40000
+          ) {
+            terminalHistory.splice(0, 2);
+          }
+          console.log(`\n${name}> ${logText(response)}`);
+        } catch (error) {
+          console.error(`\n[${name}] Ollama request failed: ${error.message}`);
+        } finally {
+          touchHeartbeat(name);
+          writeRuntime('running');
+          if (!stopping) {
+            terminal.resume();
+            terminal.prompt();
+          }
+        }
+      });
+    });
+  }
 
   let lastHeartbeat = 0;
   while (!stopping) {
@@ -187,12 +254,17 @@ async function main() {
 
     for (const message of pending) {
       if (stopping || fs.existsSync(stopFile)) break;
+      if (message.from === '__system__') continue;
       writeRuntime('working', { request_from: message.from });
+      console.log(`\n[${name}] ${message.from}: ${logText(message.content)}`);
       try {
-        const response = await callOllama(endpoint, model, systemPrompt, message.content);
+        const response = await enqueueRequest(() =>
+          callOllama(endpoint, model, systemPrompt, message.content));
         appendMessage(name, message.from, response);
+        console.log(`[${name}] -> ${message.from}: ${logText(response)}`);
       } catch (error) {
         appendMessage(name, message.from, `Error calling Ollama: ${error.message}`);
+        console.error(`[${name}] Ollama request failed: ${error.message}`);
       }
       touchHeartbeat(name);
       writeRuntime('running');
