@@ -425,7 +425,7 @@ function saveAgentsNoLock(agents) {
 
 // Public: acquires lock, writes atomically, releases. For external callers without a lock.
 function saveAgents(agents) {
-  lockAgentsFile();
+  if (!lockAgentsFile()) throw new Error('saveAgents: could not acquire agents lock (live owner holds it)');
   try { saveAgentsNoLock(agents); } finally { unlockAgentsFile(); }
 }
 
@@ -684,7 +684,12 @@ function buildMessageResponse(msg, consumedIds) {
   try {
     const myTasks = getTasks().filter(t => t.assignee === registeredName && (t.status === 'pending' || t.status === 'in_progress'));
     if (myTasks.length > 0) {
-      taskReminder = { pending: myTasks.filter(t => t.status === 'pending').length, in_progress: myTasks.filter(t => t.status === 'in_progress').length, tasks: myTasks.map(t => ({ id: t.id, title: t.title, status: t.status })) };
+      const tasks = myTasks.map(t => {
+        const entry = { id: t.id, title: t.title, status: t.status };
+        if (!t.external_ref) entry.story_hint = 'no story ref — spin one up with bmad-create-story?';
+        return entry;
+      });
+      taskReminder = { pending: myTasks.filter(t => t.status === 'pending').length, in_progress: myTasks.filter(t => t.status === 'in_progress').length, tasks };
     }
   } catch (e) { log.debug('task reminder in listen failed:', e.message); }
 
@@ -729,115 +734,91 @@ function buildMessageResponse(msg, consumedIds) {
   };
 }
 
-// Auto-compact messages.jsonl when it gets too large
-// Keeps only unconsumed messages, moves everything else to history-only
+// Auto-compact messages.jsonl when it gets too large.
+// Hold the messages-file lock across read→archive→rename so no concurrent
+// append can be lost. All appenders use withFileLock(msgFile).
 function autoCompact() {
   const msgFile = getMessagesFile(currentBranch);
   if (!fs.existsSync(msgFile)) return;
-  try {
-    const content = fs.readFileSync(msgFile, 'utf8').trim();
-    if (!content) return;
-    const lines = content.split(/\r?\n/);
-    if (lines.length < 500) return; // only compact when large
 
-    const messages = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  withFileLock(msgFile, () => {
+    try {
+      const content = fs.readFileSync(msgFile, 'utf8').trim();
+      if (!content) return;
+      const lines = content.split(/\r?\n/);
+      if (lines.length < 500) return;
 
-    // Collect consumed IDs — for __group__ messages, check ALL registered agents (alive + dead)
-    // This prevents message loss when agents reconnect after a crash
-    const agents = getAgents();
-    const allAgentNames = Object.keys(agents);
-    const retentionMs = (parseInt(process.env.NEOHIVE_RETENTION_HOURS) || SERVER_CONFIG.RETENTION_DEFAULT_HOURS) * 3600000;
-    const allConsumed = new Set();
-    const perAgentConsumed = {};
-    if (fs.existsSync(DATA_DIR)) {
-      for (const f of fs.readdirSync(DATA_DIR)) {
-        if (f.startsWith('consumed-') && f.endsWith('.json')) {
-          const agentName = f.replace('consumed-', '').replace('.json', '');
-          try {
-            const ids = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
-            perAgentConsumed[agentName] = new Set(ids);
-            ids.forEach(id => allConsumed.add(id));
-          } catch (e) { log.debug("consumed ID read failed:", e.message); }
+      const messages = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+
+      const agents = getAgents();
+      const allAgentNames = Object.keys(agents);
+      const retentionMs = (parseInt(process.env.NEOHIVE_RETENTION_HOURS) || SERVER_CONFIG.RETENTION_DEFAULT_HOURS) * 3600000;
+      const allConsumed = new Set();
+      const perAgentConsumed = {};
+      if (fs.existsSync(DATA_DIR)) {
+        for (const f of fs.readdirSync(DATA_DIR)) {
+          if (f.startsWith('consumed-') && f.endsWith('.json')) {
+            const agentName = f.replace('consumed-', '').replace('.json', '');
+            try {
+              const ids = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
+              perAgentConsumed[agentName] = new Set(ids);
+              ids.forEach(id => allConsumed.add(id));
+            } catch (e) { log.debug("consumed ID read failed:", e.message); }
+          }
         }
       }
-    }
 
-    // Keep messages that are NOT fully consumed
-    // For __group__ messages: consumed when ALL registered agents consumed OR message exceeds retention period
-    // For direct messages: consumed when the recipient has consumed it
-    const now = Date.now();
-    const active = messages.filter(m => {
-      if (m.to === '__group__') {
-        // Time-based retention: critical messages get 2x retention
-        const msgTime = new Date(m.timestamp).getTime();
-        const msgPriority = classifyPriority(m);
-        const effectiveRetention = msgPriority === 'critical' ? retentionMs * 2 : retentionMs;
-        if (msgTime < Date.now() - effectiveRetention) return false;
-        // Check ALL registered agents (alive + dead) to prevent loss on reconnect
-        return !allAgentNames.every(n => n === m.from || (perAgentConsumed[n] && perAgentConsumed[n].has(m.id)));
+      const active = messages.filter(m => {
+        if (m.to === '__group__') {
+          const msgTime = new Date(m.timestamp).getTime();
+          const msgPriority = classifyPriority(m);
+          const effectiveRetention = msgPriority === 'critical' ? retentionMs * 2 : retentionMs;
+          if (msgTime < Date.now() - effectiveRetention) return false;
+          return !allAgentNames.every(n => n === m.from || (perAgentConsumed[n] && perAgentConsumed[n].has(m.id)));
+        }
+        if (!allConsumed.has(m.id)) return true;
+        return false;
+      });
+
+      const archived = messages.filter(m => !active.includes(m));
+      if (archived.length > 0) {
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const archiveFile = path.join(DATA_DIR, `archive-${dateStr}.jsonl`);
+        const archiveContent = archived.map(m => JSON.stringify(m)).join('\n') + '\n';
+        // If archive write fails, abort — do not delete unarchived messages
+        const archiveResult = withFileLock(archiveFile, () => {
+          try { fs.appendFileSync(archiveFile, archiveContent); return true; }
+          catch (e) { log.error('autoCompact archive write failed:', e.message); return false; }
+        });
+        if (!archiveResult) return;
       }
-      // Direct: standard check
-      if (!allConsumed.has(m.id)) return true;
-      return false;
-    });
 
-    // Scale fix: archive consumed messages to date-based files before removing
-    const archived = messages.filter(m => !active.includes(m));
-    if (archived.length > 0) {
-      const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-      const archiveFile = path.join(DATA_DIR, `archive-${dateStr}.jsonl`);
-      const archiveContent = archived.map(m => JSON.stringify(m)).join('\n') + '\n';
-      try { fs.appendFileSync(archiveFile, archiveContent); } catch (e) { log.error('autoCompact archive write failed:', e.message); }
-    }
-
-    // Rewrite messages.jsonl atomically — write to temp file then rename
-    // Capture pre-compaction size to detect messages appended during compaction
-    const preCompactSize = Buffer.byteLength(content, 'utf8') + 1; // +1 for trailing newline trimmed earlier
-    const newContent = active.map(m => JSON.stringify(m)).join('\n') + (active.length ? '\n' : '');
-    const tmpFile = msgFile + '.tmp';
-    fs.writeFileSync(tmpFile, newContent);
-    // Check for messages appended after our initial read
-    let lateMessages = '';
-    try {
-      const currentSize = fs.statSync(msgFile).size;
-      if (currentSize > preCompactSize) {
-        const fd = fs.openSync(msgFile, 'r');
-        const lateBuf = Buffer.alloc(currentSize - preCompactSize);
-        fs.readSync(fd, lateBuf, 0, lateBuf.length, preCompactSize);
-        fs.closeSync(fd);
-        lateMessages = lateBuf.toString('utf8');
+      const newContent = active.map(m => JSON.stringify(m)).join('\n') + (active.length ? '\n' : '');
+      const tmpFile = `${msgFile}.tmp.${process.pid}.${Date.now()}`;
+      fs.writeFileSync(tmpFile, newContent);
+      try {
+        fs.renameSync(tmpFile, msgFile);
+      } catch {
+        try { fs.unlinkSync(tmpFile); } catch {}
+        return;
       }
-    } catch (e) { log.debug('late message check during compaction:', e.message); }
-    try {
-      fs.renameSync(tmpFile, msgFile);
-    } catch {
-      // Rename can fail on Windows if another process has the file open
-      // Clean up temp file and abort compaction — will retry next cycle
-      try { fs.unlinkSync(tmpFile); } catch {}
-      return;
-    }
-    // Re-append any messages that arrived during compaction
-    if (lateMessages.trim()) {
-      withFileLock(msgFile, () => { fs.appendFileSync(msgFile, lateMessages); });
-      log.info('Re-appended ' + lateMessages.trim().split('\n').length + ' messages that arrived during compaction');
-    }
-    lastReadOffset = fs.statSync(msgFile).size;
+      lastReadOffset = fs.statSync(msgFile).size;
 
-    // Trim consumed ID files — keep only IDs still in active messages
-    const activeIds = new Set(active.map(m => m.id));
-    for (const f of fs.readdirSync(DATA_DIR)) {
-      if (f.startsWith('consumed-') && f.endsWith('.json')) {
-        try {
-          const ids = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
-          const trimmed = ids.filter(id => activeIds.has(id));
-          const _ctf = path.join(DATA_DIR, f);
-          const _cttmp = `${_ctf}.tmp.${process.pid}.${Date.now()}`;
-          fs.writeFileSync(_cttmp, JSON.stringify(trimmed));
-          fs.renameSync(_cttmp, _ctf);
-        } catch (e) { log.debug('consumed trim failed:', e.message); }
+      const activeIds = new Set(active.map(m => m.id));
+      for (const f of fs.readdirSync(DATA_DIR)) {
+        if (f.startsWith('consumed-') && f.endsWith('.json')) {
+          try {
+            const ids = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
+            const trimmed = ids.filter(id => activeIds.has(id));
+            const _ctf = path.join(DATA_DIR, f);
+            const _cttmp = `${_ctf}.tmp.${process.pid}.${Date.now()}`;
+            fs.writeFileSync(_cttmp, JSON.stringify(trimmed));
+            fs.renameSync(_cttmp, _ctf);
+          } catch (e) { log.debug('consumed trim failed:', e.message); }
+        }
       }
-    }
-  } catch (e) { log.warn('autoCompact failed:', e.message); }
+    } catch (e) { log.warn('autoCompact failed:', e.message); }
+  });
 }
 
 // --- Permissions helpers ---
@@ -1494,7 +1475,7 @@ function toolRegister(name, provider = null, skills = null) {
   ensureDataDir();
   migrateIfNeeded(); // run data migrations on first register
   sanitizeName(name);
-  lockAgentsFile();
+  if (!lockAgentsFile()) return { error: 'Registration temporarily locked. Another agent is writing — retry in a moment.' };
 
   try {
     const agents = getAgents(true);
@@ -1755,7 +1736,7 @@ function setListening(isListening) {
   }
   
   try {
-    lockAgentsFile();
+    if (!lockAgentsFile()) { log.warn("setListening: lock held by live owner, skipping write"); return; }
     try {
       const agents = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'));
       if (agents[registeredName]) {
@@ -5039,8 +5020,9 @@ function watchdogCheck() {
   } catch (e) { log.warn("stale lock cleanup failed:", e.message); }
 
   if (agentsChanged) {
-    lockAgentsFile();
-    try { saveAgentsNoLock(agents); } finally { unlockAgentsFile(); }
+    if (lockAgentsFile()) {
+      try { saveAgentsNoLock(agents); } finally { unlockAgentsFile(); }
+    } else { log.warn('watchdog: agents lock held by live owner, skipping write'); }
   }
   if (workflowsChanged) saveWorkflows(workflows);
 }
@@ -5786,15 +5768,17 @@ function toolForkConversation(fromMessageId, branchName) {
   currentBranch = branchName;
   lastReadOffset = 0;
   try {
-    lockAgentsFile();
-    try {
-      const agents = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'));
-      if (agents[registeredName]) {
-        agents[registeredName].branch = branchName;
-        agents[registeredName].last_activity = new Date().toISOString();
-        saveAgentsNoLock(agents);
-      }
-    } finally { unlockAgentsFile(); }
+    if (!lockAgentsFile()) { log.warn("fork: lock held by live owner, skipping branch write"); }
+    else {
+      try {
+        const agents = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'));
+        if (agents[registeredName]) {
+          agents[registeredName].branch = branchName;
+          agents[registeredName].last_activity = new Date().toISOString();
+          saveAgentsNoLock(agents);
+        }
+      } finally { unlockAgentsFile(); }
+    }
   } catch (e) { log.warn("auto role rebalance failed:", e.message); }
 
   return { success: true, branch: branchName, forked_from: branches[branchName].forked_from, messages_copied: forkedHistory.length };
@@ -5810,15 +5794,17 @@ function toolSwitchBranch(branchName) {
   currentBranch = branchName;
   lastReadOffset = 0;
   try {
-    lockAgentsFile();
-    try {
-      const agents = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'));
-      if (agents[registeredName]) {
-        agents[registeredName].branch = branchName;
-        agents[registeredName].last_activity = new Date().toISOString();
-        saveAgentsNoLock(agents);
-      }
-    } finally { unlockAgentsFile(); }
+    if (!lockAgentsFile()) { log.warn("switchBranch: lock held by live owner, skipping branch write"); }
+    else {
+      try {
+        const agents = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'));
+        if (agents[registeredName]) {
+          agents[registeredName].branch = branchName;
+          agents[registeredName].last_activity = new Date().toISOString();
+          saveAgentsNoLock(agents);
+        }
+      } finally { unlockAgentsFile(); }
+    }
   } catch (e) { log.warn("quality lead failover failed:", e.message); }
 
   return { success: true, branch: branchName, message: `Switched to branch "${branchName}". Read offset reset.` };
@@ -7959,8 +7945,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         _agents[registeredName].status = _listenTools.has(name) ? 'listening' : 'working';
         _agents[registeredName].current_tool = name;
         _agents[registeredName].last_activity = new Date().toISOString();
-        lockAgentsFile();
-        try { saveAgentsNoLock(_agents); } finally { unlockAgentsFile(); }
+        if (lockAgentsFile()) {
+          try { saveAgentsNoLock(_agents); } finally { unlockAgentsFile(); }
+        }
       }
     }
 
@@ -8328,8 +8315,9 @@ process.on('exit', () => {
       const agents = getAgents();
       if (agents[registeredName]) {
         delete agents[registeredName];
-        lockAgentsFile();
-        try { saveAgentsNoLock(agents); } finally { unlockAgentsFile(); }
+        if (lockAgentsFile()) {
+          try { saveAgentsNoLock(agents); } finally { unlockAgentsFile(); }
+        }
       }
     } catch (e) { log.error('agent cleanup on exit failed:', e.message); }
   }
@@ -8447,16 +8435,18 @@ function startPushServer() {
     // If agent is already registered (auto-reclaim scenario), write push_port now
     if (registeredName) {
       try {
-        lockAgentsFile();
-        const agents = getAgents(true);
-        if (agents[registeredName]) {
-          agents[registeredName].push_port = pushPort;
-          saveAgents(agents);
+        if (!lockAgentsFile()) { log.debug('[push] lock held, skipping push_port write'); }
+        else {
+          try {
+            const agents = getAgents(true);
+            if (agents[registeredName]) {
+              agents[registeredName].push_port = pushPort;
+              saveAgentsNoLock(agents);
+            }
+          } finally { unlockAgentsFile(); }
         }
       } catch (e) {
         log.debug('[push] Failed to write push_port to agents.json:', e.message);
-      } finally {
-        unlockAgentsFile();
       }
     }
   });
