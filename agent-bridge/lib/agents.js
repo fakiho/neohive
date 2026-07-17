@@ -73,17 +73,15 @@ function getAgents(force = false) {
 // Internal: atomic write only. Must be called while already holding lockAgentsFile().
 function saveAgentsNoLock(agents) {
   const data = JSON.stringify(agents);
-  if (data && data.length > 2) {
-    const tmp = `${AGENTS_FILE}.tmp.${process.pid}.${Date.now()}`;
-    fs.writeFileSync(tmp, data);
-    fs.renameSync(tmp, AGENTS_FILE);
-  }
+  const tmp = `${AGENTS_FILE}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(tmp, data);
+  fs.renameSync(tmp, AGENTS_FILE);
   invalidateCache('agents');
 }
 
 // Public: acquires lock, writes atomically, releases. For external callers.
 function saveAgents(agents) {
-  lockAgentsFile();
+  if (!lockAgentsFile()) throw new Error('saveAgents: could not acquire agents lock (live owner holds it)');
   try { saveAgentsNoLock(agents); } finally { unlockAgentsFile(); }
 }
 
