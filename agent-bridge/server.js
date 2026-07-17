@@ -16,14 +16,28 @@ const _log = require('./lib/logger');
 const _state = require('./lib/state');
 const _config = require('./lib/config');
 const _fileIo = require('./lib/file-io');
-const { cachedRead, invalidateCache, lockAgentsFile, unlockAgentsFile, lockConfigFile, unlockConfigFile, withFileLock, readJsonl, readJsonlFromOffset, tailReadJsonl, readJsonFile, writeJsonFile, registerFileCacheKey } = _fileIo;
+const { cachedRead, invalidateCache, lockAgentsFile, unlockAgentsFile, withFileLock, readJsonl, readJsonlFromOffset, tailReadJsonl, readJsonFile, writeJsonFile, registerFileCacheKey } = _fileIo;
 const _agents = require('./lib/agents');
 const _messaging = require('./lib/messaging');
 const _audit = require('./lib/audit');
 const _compact = require('./lib/compact');
 const { readIdeActivity, applyIdeActivityHint } = require('./lib/ide-activity');
+const bmadProvider = require('./lib/bmad-provider');
 
 const DATA_DIR = _config.DATA_DIR;
+const PROJECT_ROOT = process.env.NEOHIVE_PROJECT_ROOT
+  ? path.resolve(process.env.NEOHIVE_PROJECT_ROOT)
+  : bmadProvider.projectRootFromDataDir(DATA_DIR, process.cwd());
+const methodologyInspectionCache = new Map();
+
+function inspectProjectMethodology(options) {
+  const key = JSON.stringify(options || {});
+  const cached = methodologyInspectionCache.get(key);
+  if (cached && Date.now() - cached.at < 2000) return cached.status;
+  const status = bmadProvider.inspectProject(PROJECT_ROOT, DATA_DIR, options);
+  methodologyInspectionCache.set(key, { at: Date.now(), status });
+  return status;
+}
 
 // Initialize audit logging
 _audit.init(DATA_DIR);
@@ -147,15 +161,11 @@ let pushPort = null; // local HTTP port for receiving push messages from dashboa
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
 function getConfig() {
-  if (!fs.existsSync(CONFIG_FILE)) return {};
-  try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; }
+  return _config.getConfig();
 }
 
-// lockConfigFile, unlockConfigFile imported from lib/file-io.js
-
-function saveConfig(config) {
-  ensureDataDir();
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config));
+function mutateConfig(mutator) {
+  return _config.mutateConfig(mutator);
 }
 
 function isGroupMode() {
@@ -192,14 +202,10 @@ function getManagedConfig() {
 }
 
 function saveManagedConfig(managed) {
-  lockConfigFile();
-  try {
-    const config = getConfig();
+  mutateConfig((config) => {
     config.managed = managed;
-    saveConfig(config);
-  } finally {
-    unlockConfigFile();
-  }
+    return config;
+  });
 }
 
 // Send a system message to a specific agent (written to messages + history)
@@ -1879,22 +1885,28 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
     // Auto-elect manager: first agent to send a message becomes manager if none claimed
     // Uses config lock to prevent two agents both becoming manager simultaneously
     if (!managed.manager) {
-      lockConfigFile();
-      try {
-        const freshManaged = getManagedConfig();
+      let freshManaged;
+      let elected = false;
+      mutateConfig((config) => {
+        freshManaged = config.managed || {
+          manager: null,
+          phase: 'discussion',
+          floor: 'closed',
+          turn_queue: [],
+          turn_current: null,
+          phase_history: [],
+        };
         if (!freshManaged.manager) {
           freshManaged.manager = registeredName;
           freshManaged.floor = 'closed';
-          const config = getConfig();
           config.managed = freshManaged;
-          saveConfig(config);
-          broadcastSystemMessage(`[SYSTEM] ${registeredName} is now the manager (auto-elected). Wait to be addressed.`, registeredName);
-          managed = freshManaged;
-        } else {
-          managed = freshManaged; // another process won the race
+          elected = true;
         }
-      } finally {
-        unlockConfigFile();
+        return config;
+      });
+      managed = freshManaged;
+      if (elected) {
+        broadcastSystemMessage(`[SYSTEM] ${registeredName} is now the manager (auto-elected). Wait to be addressed.`, registeredName);
       }
     }
 
@@ -2652,21 +2664,24 @@ function toolSetConversationMode(mode) {
     }
   }
 
-  const config = getConfig();
-  config.conversation_mode = mode;
-  if (mode === 'group' && !config.group_cooldown) config.group_cooldown = 3000;
+  mutateConfig((config) => {
+    config.conversation_mode = mode;
+    if (mode === 'group' && !config.group_cooldown) config.group_cooldown = 3000;
+    if (mode === 'managed') {
+      config.managed = {
+        manager: null,
+        phase: 'discussion',
+        floor: 'closed',
+        turn_queue: [],
+        turn_current: null,
+        phase_history: [{ phase: 'discussion', set_at: new Date().toISOString(), set_by: registeredName }],
+      };
+    }
+    return config;
+  });
   if (mode === 'managed') {
-    config.managed = {
-      manager: null,
-      phase: 'discussion',
-      floor: 'closed',
-      turn_queue: [],
-      turn_current: null,
-      phase_history: [{ phase: 'discussion', set_at: new Date().toISOString(), set_by: registeredName }],
-    };
     broadcastSystemMessage(`[SYSTEM] Managed conversation mode activated by ${registeredName}. Wait for a manager to be assigned.`, registeredName);
   }
-  saveConfig(config);
 
   // Notify all agents about mode change (managed mode already broadcasts above)
   if (mode !== 'managed') {
@@ -2687,39 +2702,45 @@ function toolClaimManager() {
   if (!registeredName) return { error: 'You must call register() first' };
   if (!isManagedMode()) return { error: 'Not in managed mode. Call set_conversation_mode("managed") first.' };
 
-  lockConfigFile();
-  try {
-    const managed = getManagedConfig();
-
+  let managed;
+  let claimError = null;
+  mutateConfig((config) => {
+    managed = config.managed || {
+      manager: null,
+      phase: 'discussion',
+      floor: 'closed',
+      turn_queue: [],
+      turn_current: null,
+      phase_history: [],
+    };
     // Check if manager already exists and is alive
     if (managed.manager && managed.manager !== registeredName) {
       const agents = getAgents();
       if (agents[managed.manager] && isPidAlive(agents[managed.manager].pid, agents[managed.manager].last_activity)) {
-        return { error: `Manager "${managed.manager}" is already active. Only one manager at a time.` };
+        claimError = `Manager "${managed.manager}" is already active. Only one manager at a time.`;
+        return config;
       }
       // Previous manager is dead — allow takeover
     }
 
     managed.manager = registeredName;
     managed.floor = 'closed'; // manager controls the floor
-    const config = getConfig();
     config.managed = managed;
-    saveConfig(config);
+    return config;
+  });
+  if (claimError) return { error: claimError };
 
-    broadcastSystemMessage(
-      `[SYSTEM] ${registeredName} is now the manager. Wait to be addressed. Do NOT send messages until given the floor.`,
-      registeredName
-    );
+  broadcastSystemMessage(
+    `[SYSTEM] ${registeredName} is now the manager. Wait to be addressed. Do NOT send messages until given the floor.`,
+    registeredName
+  );
 
-    return {
-      success: true,
-      message: `You are now the manager. Use yield_floor() to give agents turns, set_phase() to move through phases, and broadcast() for announcements.`,
-      phase: managed.phase,
-      floor: managed.floor,
-    };
-  } finally {
-    unlockConfigFile();
-  }
+  return {
+    success: true,
+    message: `You are now the manager. Use yield_floor() to give agents turns, set_phase() to move through phases, and broadcast() for announcements.`,
+    phase: managed.phase,
+    floor: managed.floor,
+  };
 }
 
 function toolYieldFloor(to, prompt = null) {
@@ -7329,6 +7350,7 @@ const _knowledgeCtx = {
     getDecisions, getKB, getProgressData, getCompressed, getLocks, getConfig,
     generateId, writeJsonFile, readJsonFile, touchActivity, tailReadJsonl,
     getHistoryFile, getAgents, isPidAlive, getProfiles, getTasks, cachedRead,
+    inspectMethodology: inspectProjectMethodology,
   },
   files: { DECISIONS_FILE, KB_FILE, PROGRESS_FILE, COMPRESSED_FILE },
 };
@@ -7391,6 +7413,36 @@ const _messagingCtx = {
   files: { ACKS_FILE },
 };
 const messaging = require('./tools/messaging')(_messagingCtx);
+
+const methodologies = require('./tools/methodologies')({
+  state: { get registeredName() { return registeredName; } },
+  helpers: {
+    inspectMethodology: inspectProjectMethodology,
+    runtimeDiagnostics: bmadProvider.runtimeDiagnostics,
+    dataDir: DATA_DIR,
+  },
+});
+
+// Warn at startup if the active MCP process is missing BMad tools
+(function checkBmadRuntimeCompatibility() {
+  try {
+    const diag = bmadProvider.runtimeDiagnostics(DATA_DIR);
+    if (diag.missing_bmad_tools_in_installed_mcp && diag.missing_bmad_tools_in_installed_mcp.length) {
+      log.warn(
+        '[neohive] BMad tools are defined in the working tree but the active MCP process was launched from ' +
+        (diag.installed_mcp_dir || 'an installed package') +
+        ' which does not include them. Missing tools: ' +
+        diag.missing_bmad_tools_in_installed_mcp.join(', ') +
+        '. Restart the MCP from the working tree or publish a new release to activate BMad tools.'
+      );
+    } else if (diag.stale_runtime) {
+      log.warn(
+        '[neohive] Active MCP version (' + diag.installed_mcp_version + ') differs from working tree (' +
+        diag.working_tree_version + '). Restart the MCP process to pick up working-tree changes.'
+      );
+    }
+  } catch {}
+}());
 
 // --- MCP Server setup ---
 
@@ -7624,6 +7676,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       ...system.definitions,
       // --- Workflow tools (from tools/workflows.js) ---
       ...workflows.definitions,
+      // --- Project methodology context ---
+      ...methodologies.definitions,
       // --- Phase 4: Branching ---
       {
         name: 'fork_conversation',
@@ -7817,7 +7871,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // send_message is exempt so blocked agents can escalate to coordinator before calling listen()
     // messages is exempt (unified query tool — replaces check_messages/consume_messages)
     // lock_file and unlock_file are safety housekeeping, not comms — exempt from the listen counter
-    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'wait_for_reply', 'update_profile', 'list_agents', 'add_rule', 'remove_rule', 'toggle_rule', 'list_rules', 'send_message', 'messages', 'lock_file', 'unlock_file']);
+    const listenExemptTools = new Set(['register', 'get_briefing', 'get_guide', 'listen', 'wait_for_reply', 'update_profile', 'list_agents', 'add_rule', 'remove_rule', 'toggle_rule', 'list_rules', 'send_message', 'messages', 'lock_file', 'unlock_file', 'methodology_status', 'methodology_next_action', 'methodology_artifacts', 'methodology_diagnostics']);
     if (listenExemptTools.has(name)) {
       if (name === 'listen' || name === 'wait_for_reply') {
         consecutiveNonListenCalls = 0;
@@ -7950,6 +8004,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'advance_workflow':
       case 'workflow_status':
         result = workflows.handlers[name](args || {});
+        break;
+      case 'methodology_status':
+      case 'methodology_next_action':
+      case 'methodology_artifacts':
+      case 'methodology_diagnostics':
+        result = methodologies.handlers[name](args || {});
         break;
       case 'fork_conversation':
         result = toolForkConversation(args?.from_message_id, args.branch_name);
@@ -8196,7 +8256,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // Clean up agent registration on exit for instant status updates
 process.on('exit', () => {
   unlockAgentsFile(); // Clean up any held lock
-  unlockConfigFile();
   if (registeredName) {
     try {
       // Save final status to workspace before exit
