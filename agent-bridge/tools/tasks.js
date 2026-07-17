@@ -5,6 +5,17 @@
 
 const fs = require('fs');
 const { invalidateCache, readJsonFile, withFileLock } = require('../lib/file-io');
+const { classifyTaskSize } = require('../lib/task-classification');
+
+// Epic 3 / Story 3.2 (FR6, AD-6): opt-in, per-project enforcement rule marker.
+// A rule only gates create_task when ALL of: active, category 'workflow',
+// scope_role is 'coordinator' or 'lead', and its text carries this marker
+// (set via add_rule — rules.json is project-local, so this is inherently
+// per-project and OFF by default when no such rule exists — NFR2).
+// Anchored, namespaced marker so an unrelated rule that merely mentions the phrase
+// in prose can't accidentally activate enforcement. The rule text must contain the
+// explicit token [bmad-story-enforcement] (optionally with :flag to select flag mode).
+const ENFORCEMENT_RULE_MARKER = /\[bmad-story-enforcement(?::(reject|flag))?\]/i;
 
 const ACTIVE_EXTERNAL_REF_STATUSES = new Set(['pending', 'in_progress', 'in_review', 'blocked']);
 
@@ -31,7 +42,7 @@ module.exports = function (ctx) {
     getWorkspace, saveWorkspace, appendNotification,
     getWorkflows, saveWorkflows, saveWorkflowCheckpoint, findReadySteps,
     getMessagesFile, getHistoryFile, logViolation, cachedRead,
-    enqueueDurableDelivery,
+    enqueueDurableDelivery, getRules,
   } = helpers;
 
   const {
@@ -93,6 +104,36 @@ module.exports = function (ctx) {
       return { error: 'size must be "small" or "roadmap"' };
     }
 
+    // Epic 3 / Story 3.2+3.3 (FR6/FR7, AD-6/AD-7, NFR1/NFR2): opt-in enforcement gate.
+    // Fast lane (FR7): a task classified 'small' is NEVER touched by this block —
+    // the classification check below short-circuits before any rule lookup, so
+    // small-work create_task has zero added work/latency vs baseline, rule on or off.
+    const profiles = getProfiles();
+    const sizeCandidate = { created_by: state.registeredName, size, bmad_story_id: bmadStoryId || null };
+    let shadowWorkFlag = null;
+    if (classifyTaskSize(sizeCandidate, profiles) === 'roadmap' && !sizeCandidate.bmad_story_id) {
+      const myRole = ((profiles[state.registeredName] && profiles[state.registeredName].role) || '').toString().toLowerCase();
+      if (myRole === 'coordinator' || myRole === 'lead') {
+        const rules = typeof getRules === 'function' ? getRules() : [];
+        const enforcementRule = rules.find(r => r && r.active && r.category === 'workflow' &&
+          (r.scope_role === 'coordinator' || r.scope_role === 'lead') &&
+          ENFORCEMENT_RULE_MARKER.test(r.text || ''));
+        if (enforcementRule) {
+          // Mode comes ONLY from the explicit token [bmad-story-enforcement:flag];
+          // default is reject. A stray "flag" word elsewhere in the text is ignored.
+          const markerMatch = ENFORCEMENT_RULE_MARKER.exec(enforcementRule.text || '');
+          const action = (markerMatch && markerMatch[1] && markerMatch[1].toLowerCase() === 'flag') ? 'flag' : 'reject';
+          if (action === 'reject') {
+            return {
+              error: 'Roadmap-sized task requires a bmad_story_id link (project enforcement rule active). Link it via bmad_story_id, or create it with size:"small" to use the fast lane.',
+              rule_id: enforcementRule.id,
+            };
+          }
+          shadowWorkFlag = { rule_id: enforcementRule.id };
+        }
+      }
+    }
+
     const agents = getAgents();
     const otherAgents = Object.keys(agents).filter(n => n !== state.registeredName);
 
@@ -114,6 +155,11 @@ module.exports = function (ctx) {
       bmad_story_id: bmadStoryId || null,
     };
     if (size === 'small' || size === 'roadmap') task.size = size;
+    if (shadowWorkFlag) {
+      task.flagged = true;
+      task.flag_reason = 'shadow_work_enforcement';
+      logViolation('shadow_work_flagged', state.registeredName, `Task "${title}" created without bmad_story_id under active enforcement rule ${shadowWorkFlag.rule_id}.`);
+    }
 
     const tasks = readTasksFresh(TASKS_FILE);
     if (tasks.length >= 1000) return { error: 'Task limit reached (max 1000). Complete or remove existing tasks first.' };
@@ -152,6 +198,7 @@ module.exports = function (ctx) {
     const result = { success: true, task_id: task.id, assignee: task.assignee, next_action: 'Call listen() to receive updates.' };
     if (task.external_ref) result.external_ref = task.external_ref;
     if (taskChannel) result.channel = taskChannel;
+    if (task.flagged) result.flagged = true;
     return result;
   }
 

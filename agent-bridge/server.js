@@ -7372,6 +7372,7 @@ const _tasksCtx = {
     getWorkflows, saveWorkflows, saveWorkflowCheckpoint, findReadySteps,
     getMessagesFile, getHistoryFile, logViolation, cachedRead,
     enqueueDurableDelivery: delivery.internalEnqueue,
+    getRules,
   },
   files: { TASKS_FILE, REVIEWS_FILE, DEPS_FILE },
 };
