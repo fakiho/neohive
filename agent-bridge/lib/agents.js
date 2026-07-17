@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const log = require('./logger');
 const {
   DATA_DIR, AGENTS_FILE, PROFILES_FILE, ACKS_FILE,
   sanitizeName, generateToken, ensureDataDir,
@@ -69,12 +70,21 @@ function getAgents(force = false) {
   }, 1500);
 }
 
-function saveAgents(agents) {
+// Internal: atomic write only. Must be called while already holding lockAgentsFile().
+function saveAgentsNoLock(agents) {
   const data = JSON.stringify(agents);
   if (data && data.length > 2) {
-    fs.writeFileSync(AGENTS_FILE, data);
+    const tmp = `${AGENTS_FILE}.tmp.${process.pid}.${Date.now()}`;
+    fs.writeFileSync(tmp, data);
+    fs.renameSync(tmp, AGENTS_FILE);
   }
   invalidateCache('agents');
+}
+
+// Public: acquires lock, writes atomically, releases. For external callers.
+function saveAgents(agents) {
+  lockAgentsFile();
+  try { saveAgentsNoLock(agents); } finally { unlockAgentsFile(); }
 }
 
 function heartbeatFile(name) { return path.join(DATA_DIR, `heartbeat-${name}.json`); }
@@ -97,8 +107,10 @@ function touchHeartbeat(name, type = null) {
       data.listen_history = data.listen_history.slice(0, 10);
       data.last_listen_call = new Date(nowTs).toISOString();
     }
-    fs.writeFileSync(file, JSON.stringify(data));
-  } catch {}
+    const tmp = `${file}.tmp.${process.pid}.${Date.now()}`;
+    fs.writeFileSync(tmp, JSON.stringify(data));
+    fs.renameSync(tmp, file);
+  } catch (e) { log.debug('touchHeartbeat failed:', e.message); }
 }
 
 function getAcks() {
@@ -116,7 +128,9 @@ function getProfiles() {
 function saveProfiles(profiles) {
   withFileLock(PROFILES_FILE, () => {
     invalidateCache('profiles');
-    fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles));
+    const tmp = `${PROFILES_FILE}.tmp.${process.pid}.${Date.now()}`;
+    fs.writeFileSync(tmp, JSON.stringify(profiles));
+    fs.renameSync(tmp, PROFILES_FILE);
   });
 }
 
@@ -195,7 +209,7 @@ function hubRegisterAgent(name, provider = null, skills = null) {
       token,
       started_at: now,
     };
-    saveAgents(all);
+    saveAgentsNoLock(all);
     const profiles = getProfiles();
     if (!profiles[name]) {
       profiles[name] = { display_name: name, avatar: '', bio: '', role: '', created_at: now };
@@ -242,7 +256,7 @@ function hubUnregisterAgent(name) {
       };
     }
     delete all[safeName];
-    saveAgents(all);
+    saveAgentsNoLock(all);
     try {
       fs.unlinkSync(heartbeatFile(safeName));
     } catch {
@@ -254,9 +268,32 @@ function hubUnregisterAgent(name) {
   }
 }
 
+// AC-10: On cold start, detect and recover corrupt agents.json
+function checkAndRepairAgentsFile() {
+  if (!fs.existsSync(AGENTS_FILE)) return;
+  try {
+    JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'));
+  } catch (e) {
+    log.warn('agents.json is corrupt, reinitialising from heartbeat files:', e.message);
+    const recovered = {};
+    try {
+      for (const f of fs.readdirSync(DATA_DIR).filter(n => n.startsWith('heartbeat-') && n.endsWith('.json'))) {
+        const name = f.slice(10, -5);
+        try {
+          const hb = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
+          recovered[name] = { pid: hb.pid || 0, last_activity: hb.last_activity || new Date().toISOString(), provider: 'unknown', skills: [] };
+        } catch {}
+      }
+    } catch {}
+    saveAgents(recovered);
+    invalidateCache('agents');
+  }
+}
+
 module.exports = {
   isPidAlive, setAutonomousModeCheck,
-  getAgents, saveAgents,
+  getAgents, saveAgents, saveAgentsNoLock,
+  checkAndRepairAgentsFile,
   heartbeatFile, touchHeartbeat,
   getAcks,
   getProfiles, saveProfiles,

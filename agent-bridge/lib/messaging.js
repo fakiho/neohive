@@ -7,7 +7,19 @@ const {
   getMessagesFile, getHistoryFile, generateId, ensureDataDir,
   validateContentSize, TASKS_FILE, DECISIONS_FILE, KB_FILE, PROGRESS_FILE, LOCKS_FILE,
 } = config;
-const { readJsonFile, tailReadJsonl } = require('./file-io');
+const { readJsonFile, tailReadJsonl, withFileLock, classifyFsError } = require('./file-io');
+
+function safeAppend(filePath, line) {
+  withFileLock(filePath, () => {
+    try {
+      fs.appendFileSync(filePath, line);
+    } catch (e) {
+      const classified = classifyFsError(e);
+      if (classified) { const err = new Error(classified.message); err.code = classified.code; throw err; }
+      throw e;
+    }
+  });
+}
 const { getAgents, isPidAlive, getProfiles } = require('./agents');
 const compact = require('./compact');
 
@@ -49,8 +61,10 @@ function sendSystemMessage(toAgent, content) {
     system: true,
   };
   ensureDataDir();
-  fs.appendFileSync(getMessagesFile(recipientBranch), JSON.stringify(msg) + '\n');
-  fs.appendFileSync(getHistoryFile(recipientBranch), JSON.stringify(msg) + '\n');
+  const _smMf = getMessagesFile(recipientBranch);
+  const _smHf = getHistoryFile(recipientBranch);
+  safeAppend(_smMf, JSON.stringify(msg) + '\n');
+  safeAppend(_smHf, JSON.stringify(msg) + '\n');
 }
 
 // Match server.js: [STATUS] broadcasts are history/dashboard-only (not agent inbox).
@@ -71,10 +85,12 @@ function broadcastSystemMessage(content, excludeAgent = null) {
   };
   if (excludeAgent) msg.exclude_agent = excludeAgent;
   ensureDataDir();
+  const _bsMf = getMessagesFile(state.currentBranch);
+  const _bsHf = getHistoryFile(state.currentBranch);
   if (!isHistoryOnlySystemStatus(content)) {
-    fs.appendFileSync(getMessagesFile(state.currentBranch), JSON.stringify(msg) + '\n');
+    safeAppend(_bsMf, JSON.stringify(msg) + '\n');
   }
-  fs.appendFileSync(getHistoryFile(state.currentBranch), JSON.stringify(msg) + '\n');
+  safeAppend(_bsHf, JSON.stringify(msg) + '\n');
 }
 
 // Read new lines from messages.jsonl starting at a byte offset
@@ -160,8 +176,8 @@ function hubSendUserMessage(fromName, content, to, reply_to, _channel) {
   ensureDataDir();
   const mf = getMessagesFile(branch);
   const hf = getHistoryFile(branch);
-  fs.appendFileSync(mf, JSON.stringify(msg) + '\n');
-  fs.appendFileSync(hf, JSON.stringify(msg) + '\n');
+  safeAppend(mf, JSON.stringify(msg) + '\n');
+  safeAppend(hf, JSON.stringify(msg) + '\n');
   return { success: true, id: msg.id };
 }
 

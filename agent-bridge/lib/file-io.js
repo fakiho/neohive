@@ -79,18 +79,32 @@ function registerFileCacheKey(file, cacheKey) {
   _fileCacheKeys[file] = cacheKey;
 }
 
+// Classify OS errors into structured MCP-surfaceable errors (AC-5/6/12)
+function classifyFsError(e) {
+  if (e.code === 'ENOSPC') return { code: 'STORAGE_FULL', message: 'Disk is full — write aborted.' };
+  if (e.code === 'EACCES' || e.code === 'EPERM') return { code: 'PERMISSION_DENIED', message: `Permission denied on ${e.path || 'file'}.` };
+  return null;
+}
+
 function writeJsonFile(file, data) {
   ensureDataDir();
   const str = JSON.stringify(data);
   if (str && str.length > 0) {
-    // Use file lock to prevent concurrent write corruption
-    const lockPath = file + '.lock';
-    let locked = false;
-    try { fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' }); locked = true; } catch {}
+    const tmp = `${file}.tmp.${process.pid}.${Date.now()}`;
     try {
-      fs.writeFileSync(file, str);
-    } finally {
-      if (locked) try { fs.unlinkSync(lockPath); } catch {}
+      fs.writeFileSync(tmp, str);
+    } catch (e) {
+      const classified = classifyFsError(e);
+      if (classified) { const err = new Error(classified.message); err.code = classified.code; throw err; }
+      throw e;
+    }
+    try {
+      fs.renameSync(tmp, file);
+    } catch (e) {
+      try { fs.unlinkSync(tmp); } catch {}
+      const classified = classifyFsError(e);
+      if (classified) { const err = new Error(classified.message); err.code = classified.code; throw err; }
+      throw e;
     }
     const cacheKey = _fileCacheKeys[file];
     if (cacheKey) invalidateCache(cacheKey);
@@ -110,6 +124,13 @@ function lockAgentsFile() {
     try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, backoff); } catch {}
     backoff = Math.min(backoff * 2, 500);
   }
+  // Force-break only after confirming owner PID is dead (AC-8)
+  try {
+    const ownerPid = parseInt(fs.readFileSync(AGENTS_LOCK, 'utf8').trim(), 10);
+    if (ownerPid && ownerPid !== process.pid) {
+      try { process.kill(ownerPid, 0); return false; } catch {}
+    }
+  } catch {}
   try { fs.unlinkSync(AGENTS_LOCK); } catch {}
   try { fs.writeFileSync(AGENTS_LOCK, String(process.pid), { flag: 'wx' }); return true; } catch {}
   return false;
@@ -149,7 +170,7 @@ function withFileLock(filePath, fn) {
         }
       } catch {}
       try { fs.unlinkSync(lockPath); } catch {}
-      try { fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' }); } catch { return fn(); }
+      try { fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' }); } catch { return null; }
       break;
     }
   }
@@ -163,4 +184,5 @@ module.exports = {
   lockAgentsFile, unlockAgentsFile,
   lockConfigFile, unlockConfigFile,
   withFileLock,
+  classifyFsError,
 };

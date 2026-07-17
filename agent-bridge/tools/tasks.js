@@ -4,12 +4,27 @@
 // Extracted from server.js as part of modular tool architecture.
 
 const fs = require('fs');
+const { invalidateCache, readJsonFile, withFileLock } = require('../lib/file-io');
+
+const ACTIVE_EXTERNAL_REF_STATUSES = new Set(['pending', 'in_progress', 'in_review', 'blocked']);
+
+function readTasksFresh(file) {
+  const tasks = readJsonFile(file);
+  return Array.isArray(tasks) ? tasks : [];
+}
+
+function saveTasksLocked(file, tasks) {
+  const tmp = `${file}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(tmp, JSON.stringify(tasks));
+  fs.renameSync(tmp, file);
+  invalidateCache('tasks');
+}
 
 module.exports = function (ctx) {
   const { state, helpers, files } = ctx;
 
   const {
-    getTasks, saveTasks, getAgents, isPidAlive, generateId, writeJsonFile,
+    getTasks, getAgents, isPidAlive, generateId, writeJsonFile,
     broadcastSystemMessage, sendSystemMessage, touchActivity, fireEvent,
     ensureDataDir, getProfiles, getReviews, getReputation, getDeps,
     getChannelsData, saveChannelsData, isGroupMode,
@@ -24,7 +39,12 @@ module.exports = function (ctx) {
 
   // --- Create Task ---
 
-  function toolCreateTask(title, description, assignee) {
+  function toolCreateTask(title, description, assignee, externalRef) {
+    ensureDataDir();
+    return withFileLock(TASKS_FILE, () => toolCreateTaskLocked(title, description, assignee, externalRef));
+  }
+
+  function toolCreateTaskLocked(title, description, assignee, externalRef) {
     if (!state.registeredName) return { error: 'You must call register() first' };
     description = description || '';
     assignee = assignee || null;
@@ -32,6 +52,9 @@ module.exports = function (ctx) {
     if (!title || !title.trim()) return { error: 'Task title cannot be empty' };
     if (title.length > 200) return { error: 'Task title too long (max 200 characters)' };
     if (description.length > 5000) return { error: 'Task description too long (max 5000 characters)' };
+    if (externalRef && (typeof externalRef !== 'string' || !/^bmad:(?:story|artifact|gate):[A-Za-z0-9._:-]{1,200}$/.test(externalRef))) {
+      return { error: 'external_ref must be a namespaced BMad story, artifact, or gate ID' };
+    }
 
     const agents = getAgents();
     const otherAgents = Object.keys(agents).filter(n => n !== state.registeredName);
@@ -50,9 +73,15 @@ module.exports = function (ctx) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       notes: [],
+      external_ref: externalRef || null,
     };
 
-    ensureDataDir();
+    const tasks = readTasksFresh(TASKS_FILE);
+    if (tasks.length >= 1000) return { error: 'Task limit reached (max 1000). Complete or remove existing tasks first.' };
+    if (externalRef && tasks.some((item) =>
+      item && item.external_ref === externalRef && ACTIVE_EXTERNAL_REF_STATUSES.has(item.status))) {
+      return { error: `An active task already uses external_ref "${externalRef}". Complete it before creating another assignment.` };
+    }
 
     // Task-channel auto-binding: with 5+ agents and an assignee, auto-create a task channel
     let taskChannel = null;
@@ -75,13 +104,12 @@ module.exports = function (ctx) {
       task.channel = taskChannel;
     }
 
-    const tasks = getTasks();
-    if (tasks.length >= 1000) return { error: 'Task limit reached (max 1000). Complete or remove existing tasks first.' };
     tasks.push(task);
-    saveTasks(tasks);
+    saveTasksLocked(TASKS_FILE, tasks);
     touchActivity();
 
     const result = { success: true, task_id: task.id, assignee: task.assignee, next_action: 'Call listen() to receive updates.' };
+    if (task.external_ref) result.external_ref = task.external_ref;
     if (taskChannel) result.channel = taskChannel;
     return result;
   }
@@ -89,15 +117,24 @@ module.exports = function (ctx) {
   // --- Update Task ---
 
   function toolUpdateTask(taskId, status, notes) {
+    ensureDataDir();
+    return withFileLock(TASKS_FILE, () => toolUpdateTaskLocked(taskId, status, notes));
+  }
+
+  function toolUpdateTaskLocked(taskId, status, notes) {
     if (!state.registeredName) return { error: 'You must call register() first' };
     notes = notes || null;
 
     const validStatuses = ['pending', 'in_progress', 'in_review', 'done', 'blocked', 'blocked_permanent'];
     if (!validStatuses.includes(status)) return { error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` };
 
-    const tasks = getTasks();
+    const tasks = readTasksFresh(TASKS_FILE);
     const task = tasks.find(t => t.id === taskId);
     if (!task) return { error: `Task not found: ${taskId}` };
+    if (task.external_ref && ACTIVE_EXTERNAL_REF_STATUSES.has(status) && tasks.some((item) =>
+      item && item.id !== task.id && item.external_ref === task.external_ref && ACTIVE_EXTERNAL_REF_STATUSES.has(item.status))) {
+      return { error: `Another active task already uses external_ref "${task.external_ref}". Complete it before reactivating this assignment.` };
+    }
 
     // Prevent race condition: can't claim a task already in_progress by another agent
     if (status === 'in_progress' && task.status === 'in_progress' && task.assignee && task.assignee !== state.registeredName) {
@@ -116,7 +153,7 @@ module.exports = function (ctx) {
       task.status = 'blocked_permanent';
       task.updated_at = new Date().toISOString();
       task.block_reason = `Circuit breaker: ${task.attempt_agents.length} agents attempted and failed (${task.attempt_agents.join(', ')})`;
-      saveTasks(tasks);
+      saveTasksLocked(TASKS_FILE, tasks);
       broadcastSystemMessage(`[CIRCUIT BREAKER] Task "${task.title}" permanently blocked after ${task.attempt_agents.length} agents failed. Needs human review.`);
       touchActivity();
       return { success: true, task_id: task.id, status: 'blocked_permanent', circuit_breaker: true, message: 'Task permanently blocked — too many agents failed. Needs human review.' };
@@ -151,7 +188,7 @@ module.exports = function (ctx) {
           writeJsonFile(REVIEWS_FILE, reviews);
           task.status = 'in_review';
           task.updated_at = new Date().toISOString();
-          saveTasks(tasks);
+          saveTasksLocked(TASKS_FILE, tasks);
           broadcastSystemMessage(`[REVIEW GATE] ${state.registeredName} tried to mark "${task.title}" done but no review exists. Auto-created review ${reviewId}. A reviewer must approve before this task can be completed.`, state.registeredName);
           logViolation('review_gate_blocked', state.registeredName, `Task "${task.title}" (${task.id}) blocked — no approved review. Auto-created ${reviewId}.`);
           touchActivity();
@@ -174,7 +211,7 @@ module.exports = function (ctx) {
       task.notes.push({ by: state.registeredName, text: notes, at: new Date().toISOString() });
     }
 
-    saveTasks(tasks);
+    saveTasksLocked(TASKS_FILE, tasks);
     touchActivity();
 
     // Auto-status: update agent's workspace status on task state changes
@@ -256,8 +293,10 @@ module.exports = function (ctx) {
                   const handoffContent = `[Workflow "${wf.name}"] Step ${ns.id} assigned to you: ${ns.description}`;
                   state.messageSeq++;
                   const hMsg = { id: generateId(), seq: state.messageSeq, from: state.registeredName, to: ns.assignee, content: handoffContent, timestamp: new Date().toISOString(), type: 'handoff' };
-                  fs.appendFileSync(getMessagesFile(state.currentBranch), JSON.stringify(hMsg) + '\n');
-                  fs.appendFileSync(getHistoryFile(state.currentBranch), JSON.stringify(hMsg) + '\n');
+                  const _hmf = getMessagesFile(state.currentBranch);
+                  const _hhf = getHistoryFile(state.currentBranch);
+                  withFileLock(_hmf, () => { fs.appendFileSync(_hmf, JSON.stringify(hMsg) + '\n'); });
+                  withFileLock(_hhf, () => { fs.appendFileSync(_hhf, JSON.stringify(hMsg) + '\n'); });
                 }
               }
             }
@@ -401,6 +440,7 @@ module.exports = function (ctx) {
           title: { type: 'string', description: 'Short task title', maxLength: 200 },
           description: { type: 'string', description: 'Detailed task description', maxLength: 5000 },
           assignee: { type: 'string', description: 'Agent to assign to (optional, auto-assigns with 2 agents)', maxLength: 50 },
+          external_ref: { type: 'string', description: 'Optional authoritative BMad reference such as bmad:story:story-one', maxLength: 230 },
         },
         required: ['title'],
         additionalProperties: false,
@@ -441,7 +481,7 @@ module.exports = function (ctx) {
 
   // Handler dispatch map
   const handlers = {
-    create_task: function (args) { return toolCreateTask(args.title, args.description, args.assignee); },
+    create_task: function (args) { return toolCreateTask(args.title, args.description, args.assignee, args.external_ref); },
     update_task: function (args) { return toolUpdateTask(args.task_id, args.status, args.notes); },
     list_tasks: function (args) { return toolListTasks(args.status, args.assignee); },
     suggest_task: function () { return toolSuggestTask(); },

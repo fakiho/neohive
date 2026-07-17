@@ -224,8 +224,10 @@ function sendSystemMessage(toAgent, content) {
     system: true,
   };
   ensureDataDir();
-  fs.appendFileSync(getMessagesFile(recipientBranch), JSON.stringify(msg) + '\n');
-  fs.appendFileSync(getHistoryFile(recipientBranch), JSON.stringify(msg) + '\n');
+  const _ssmMf = getMessagesFile(recipientBranch);
+  const _ssmHf = getHistoryFile(recipientBranch);
+  withFileLock(_ssmMf, () => { fs.appendFileSync(_ssmMf, JSON.stringify(msg) + '\n'); });
+  withFileLock(_ssmHf, () => { fs.appendFileSync(_ssmHf, JSON.stringify(msg) + '\n'); });
 }
 
 // Liveness [STATUS] lines are dashboard/history-only — skip messages.jsonl so agents never see them in listen/check/consume.
@@ -249,10 +251,12 @@ function broadcastSystemMessage(content, excludeAgent = null) {
   if (excludeAgent) msg.exclude_agent = excludeAgent;
   ensureDataDir();
   const historyOnly = isHistoryOnlySystemStatus(content);
+  const _bsmMf = getMessagesFile(currentBranch);
+  const _bsmHf = getHistoryFile(currentBranch);
   if (!historyOnly) {
-    fs.appendFileSync(getMessagesFile(currentBranch), JSON.stringify(msg) + '\n');
+    withFileLock(_bsmMf, () => { fs.appendFileSync(_bsmMf, JSON.stringify(msg) + '\n'); });
   }
-  fs.appendFileSync(getHistoryFile(currentBranch), JSON.stringify(msg) + '\n');
+  withFileLock(_bsmHf, () => { fs.appendFileSync(_bsmHf, JSON.stringify(msg) + '\n'); });
 }
 
 // Rate limiting — prevent broadcast storms and message flooding
@@ -351,7 +355,10 @@ function saveConsumedIds(agentName, ids) {
   if (ids.size > 500) {
     trimConsumedIds(agentName, ids);
   }
-  fs.writeFileSync(consumedFile(agentName), JSON.stringify([...ids]));
+  const _cf = consumedFile(agentName);
+  const _cfTmp = `${_cf}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(_cfTmp, JSON.stringify([...ids]));
+  fs.renameSync(_cfTmp, _cf);
 }
 
 // Prune consumed IDs: remove IDs no longer present in messages.jsonl
@@ -403,14 +410,23 @@ function getAgents() {
   }, 1500);
 }
 
-function saveAgents(agents) {
+// Internal: atomic write only. Must be called while already holding lockAgentsFile().
+function saveAgentsNoLock(agents) {
   const data = JSON.stringify(agents);
   if (data && data.length > 2) {
-    fs.writeFileSync(AGENTS_FILE, data);
+    const tmp = `${AGENTS_FILE}.tmp.${process.pid}.${Date.now()}`;
+    fs.writeFileSync(tmp, data);
+    fs.renameSync(tmp, AGENTS_FILE);
   } else {
     log.debug('[neohive/agents.json] skipped write (empty {}): ' + AGENTS_FILE);
   }
   invalidateCache('agents');
+}
+
+// Public: acquires lock, writes atomically, releases. For external callers without a lock.
+function saveAgents(agents) {
+  lockAgentsFile();
+  try { saveAgentsNoLock(agents); } finally { unlockAgentsFile(); }
 }
 
 // --- Per-agent heartbeat files (scale fix: eliminates agents.json write contention at 100+ agents) ---
@@ -802,7 +818,7 @@ function autoCompact() {
     }
     // Re-append any messages that arrived during compaction
     if (lateMessages.trim()) {
-      fs.appendFileSync(msgFile, lateMessages);
+      withFileLock(msgFile, () => { fs.appendFileSync(msgFile, lateMessages); });
       log.info('Re-appended ' + lateMessages.trim().split('\n').length + ' messages that arrived during compaction');
     }
     lastReadOffset = fs.statSync(msgFile).size;
@@ -814,7 +830,10 @@ function autoCompact() {
         try {
           const ids = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
           const trimmed = ids.filter(id => activeIds.has(id));
-          fs.writeFileSync(path.join(DATA_DIR, f), JSON.stringify(trimmed));
+          const _ctf = path.join(DATA_DIR, f);
+          const _cttmp = `${_ctf}.tmp.${process.pid}.${Date.now()}`;
+          fs.writeFileSync(_cttmp, JSON.stringify(trimmed));
+          fs.renameSync(_cttmp, _ctf);
         } catch (e) { log.debug('consumed trim failed:', e.message); }
       }
     }
@@ -860,7 +879,9 @@ function markAsRead(agentName, messageId) {
     const receipts = getReadReceipts();
     if (!receipts[messageId]) receipts[messageId] = {};
     receipts[messageId][agentName] = new Date().toISOString();
-    fs.writeFileSync(READ_RECEIPTS_FILE, JSON.stringify(receipts));
+    const _rrtmp = `${READ_RECEIPTS_FILE}.tmp.${process.pid}.${Date.now()}`;
+    fs.writeFileSync(_rrtmp, JSON.stringify(receipts));
+    fs.renameSync(_rrtmp, READ_RECEIPTS_FILE);
   });
 }
 
@@ -959,7 +980,9 @@ function getProfiles() {
 function saveProfiles(profiles) {
   withFileLock(PROFILES_FILE, () => {
     invalidateCache('profiles');
-    fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles));
+    const tmp = `${PROFILES_FILE}.tmp.${process.pid}.${Date.now()}`;
+    fs.writeFileSync(tmp, JSON.stringify(profiles));
+    fs.renameSync(tmp, PROFILES_FILE);
   });
 }
 
@@ -977,7 +1000,10 @@ function getWorkspace(agentName) {
 
 function saveWorkspace(agentName, data) {
   ensureWorkspacesDir();
-  fs.writeFileSync(path.join(WORKSPACES_DIR, `${sanitizeName(agentName)}.json`), JSON.stringify(data));
+  const wsFile = path.join(WORKSPACES_DIR, `${sanitizeName(agentName)}.json`);
+  const wsTmp = `${wsFile}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(wsTmp, JSON.stringify(data));
+  fs.renameSync(wsTmp, wsFile);
 }
 
 // --- Workflow helpers ---
@@ -992,7 +1018,9 @@ function getWorkflows() {
 function saveWorkflows(workflows) {
   withFileLock(WORKFLOWS_FILE, () => {
     invalidateCache('workflows');
-    fs.writeFileSync(WORKFLOWS_FILE, JSON.stringify(workflows));
+    const tmp = `${WORKFLOWS_FILE}.tmp.${process.pid}.${Date.now()}`;
+    fs.writeFileSync(tmp, JSON.stringify(workflows));
+    fs.renameSync(tmp, WORKFLOWS_FILE);
   });
 }
 
@@ -1228,7 +1256,9 @@ function getBranches() {
 
 function saveBranches(branches) {
   withFileLock(BRANCHES_FILE, () => {
-    fs.writeFileSync(BRANCHES_FILE, JSON.stringify(branches));
+    const tmp = `${BRANCHES_FILE}.tmp.${process.pid}.${Date.now()}`;
+    fs.writeFileSync(tmp, JSON.stringify(branches));
+    fs.renameSync(tmp, BRANCHES_FILE);
   });
 }
 
@@ -1505,7 +1535,7 @@ function toolRegister(name, provider = null, skills = null) {
     if (process.env.CLAUDE_SESSION_ID) agentEntry.claude_session_id = process.env.CLAUDE_SESSION_ID;
     if (pushPort) agentEntry.push_port = pushPort;
     agents[name] = agentEntry;
-    saveAgents(agents);
+    saveAgentsNoLock(agents);
     registeredName = name;
     registeredToken = token;
 
@@ -1733,7 +1763,7 @@ function setListening(isListening) {
         if (isListening) {
           agents[registeredName].last_listened_at = new Date().toISOString();
         }
-        saveAgents(agents);
+        saveAgentsNoLock(agents);
       }
     } finally { unlockAgentsFile(); }
   } catch (e) { log.debug("register workspace status failed:", e.message); }
@@ -2034,9 +2064,9 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
   }
 
   if (!deliveredViaTmux) {
-    fs.appendFileSync(msgFile, JSON.stringify(msg) + '\n');
+    withFileLock(msgFile, () => { fs.appendFileSync(msgFile, JSON.stringify(msg) + '\n'); });
   }
-  fs.appendFileSync(histFile, JSON.stringify(msg) + '\n');
+  withFileLock(histFile, () => { fs.appendFileSync(histFile, JSON.stringify(msg) + '\n'); });
   touchActivity();
   lastSentAt = Date.now();
 
@@ -2201,8 +2231,10 @@ function toolBroadcast(content) {
       timestamp: new Date().toISOString(),
       broadcast: true,
     };
-    fs.appendFileSync(getMessagesFile(currentBranch), JSON.stringify(msg) + '\n');
-    fs.appendFileSync(getHistoryFile(currentBranch), JSON.stringify(msg) + '\n');
+    const _bcMf = getMessagesFile(currentBranch);
+    const _bcHf = getHistoryFile(currentBranch);
+    withFileLock(_bcMf, () => { fs.appendFileSync(_bcMf, JSON.stringify(msg) + '\n'); });
+    withFileLock(_bcHf, () => { fs.appendFileSync(_bcHf, JSON.stringify(msg) + '\n'); });
     touchActivity();
     lastSentAt = Date.now();
     sendsSinceLastListen++;
@@ -5006,7 +5038,10 @@ function watchdogCheck() {
     if (locksChanged) writeJsonFile(LOCKS_FILE, locks);
   } catch (e) { log.warn("stale lock cleanup failed:", e.message); }
 
-  if (agentsChanged) saveAgents(agents);
+  if (agentsChanged) {
+    lockAgentsFile();
+    try { saveAgentsNoLock(agents); } finally { unlockAgentsFile(); }
+  }
   if (workflowsChanged) saveWorkflows(workflows);
 }
 
@@ -5757,7 +5792,7 @@ function toolForkConversation(fromMessageId, branchName) {
       if (agents[registeredName]) {
         agents[registeredName].branch = branchName;
         agents[registeredName].last_activity = new Date().toISOString();
-        saveAgents(agents);
+        saveAgentsNoLock(agents);
       }
     } finally { unlockAgentsFile(); }
   } catch (e) { log.warn("auto role rebalance failed:", e.message); }
@@ -5781,7 +5816,7 @@ function toolSwitchBranch(branchName) {
       if (agents[registeredName]) {
         agents[registeredName].branch = branchName;
         agents[registeredName].last_activity = new Date().toISOString();
-        saveAgents(agents);
+        saveAgentsNoLock(agents);
       }
     } finally { unlockAgentsFile(); }
   } catch (e) { log.warn("quality lead failover failed:", e.message); }
@@ -7924,7 +7959,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         _agents[registeredName].status = _listenTools.has(name) ? 'listening' : 'working';
         _agents[registeredName].current_tool = name;
         _agents[registeredName].last_activity = new Date().toISOString();
-        saveAgents(_agents);
+        lockAgentsFile();
+        try { saveAgentsNoLock(_agents); } finally { unlockAgentsFile(); }
       }
     }
 
@@ -8292,7 +8328,8 @@ process.on('exit', () => {
       const agents = getAgents();
       if (agents[registeredName]) {
         delete agents[registeredName];
-        saveAgents(agents);
+        lockAgentsFile();
+        try { saveAgentsNoLock(agents); } finally { unlockAgentsFile(); }
       }
     } catch (e) { log.error('agent cleanup on exit failed:', e.message); }
   }
@@ -8429,6 +8466,7 @@ function startPushServer() {
 async function main() {
   try {
     ensureDataDir();
+    _agents.checkAndRepairAgentsFile();
   } catch (e) {
     console.error('ERROR: Cannot create .neohive/ directory: ' + e.message);
     console.error('Fix: Run "npx neohive doctor" to diagnose the issue.');

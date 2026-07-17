@@ -7,6 +7,9 @@ const state = require('./state');
 const { DATA_DIR, getMessagesFile, sanitizeName } = require('./config');
 const { getAgents, isPidAlive } = require('./agents');
 
+const COMPACT_LEASE_FILE = path.join(DATA_DIR, 'compact.lease');
+const COMPACT_LEASE_TTL_MS = 30000;
+
 // --- Consumed ID tracking ---
 
 function consumedFile(agentName) {
@@ -28,7 +31,10 @@ function saveConsumedIds(agentName, ids) {
   if (ids.size > 500) {
     trimConsumedIds(agentName, ids);
   }
-  fs.writeFileSync(consumedFile(agentName), JSON.stringify([...ids]));
+  const file = consumedFile(agentName);
+  const tmp = `${file}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(tmp, JSON.stringify([...ids]));
+  fs.renameSync(tmp, file);
 }
 
 function trimConsumedIds(agentName, ids) {
@@ -50,9 +56,39 @@ function trimConsumedIds(agentName, ids) {
 
 // --- Auto-compact ---
 
+function tryAcquireCompactLease() {
+  try {
+    const leaseData = { pid: process.pid, ts: Date.now() };
+    fs.writeFileSync(COMPACT_LEASE_FILE, JSON.stringify(leaseData), { flag: 'wx' });
+    return true;
+  } catch {
+    // Lease file already exists — check if we can force-break it
+    try {
+      const existing = JSON.parse(fs.readFileSync(COMPACT_LEASE_FILE, 'utf8'));
+      // Never preempt a live owner, regardless of TTL
+      if (existing.pid && existing.pid !== process.pid) {
+        try { process.kill(existing.pid, 0); return false; } catch {}
+        // Owner PID is dead — fall through to force-break
+      }
+      // Only force-break an expired lease with a dead owner
+      if (Date.now() - existing.ts < COMPACT_LEASE_TTL_MS && existing.pid === process.pid) {
+        return true; // we already hold it
+      }
+      fs.unlinkSync(COMPACT_LEASE_FILE);
+      fs.writeFileSync(COMPACT_LEASE_FILE, JSON.stringify({ pid: process.pid, ts: Date.now() }), { flag: 'wx' });
+      return true;
+    } catch { return false; }
+  }
+}
+
+function releaseCompactLease() {
+  try { fs.unlinkSync(COMPACT_LEASE_FILE); } catch {}
+}
+
 function autoCompact() {
   const msgFile = getMessagesFile(state.currentBranch);
   if (!fs.existsSync(msgFile)) return;
+  if (!tryAcquireCompactLease()) return;
   try {
     const content = fs.readFileSync(msgFile, 'utf8').trim();
     if (!content) return;
@@ -94,11 +130,14 @@ function autoCompact() {
       const dateStr = new Date().toISOString().slice(0, 10);
       const archiveFile = path.join(DATA_DIR, `archive-${dateStr}.jsonl`);
       const archiveContent = archived.map(m => JSON.stringify(m)).join('\n') + '\n';
-      try { fs.appendFileSync(archiveFile, archiveContent); } catch (e) { log.error('autoCompact archive write failed:', e.message); }
+      try {
+        const { withFileLock } = require('./file-io');
+        withFileLock(archiveFile, () => { fs.appendFileSync(archiveFile, archiveContent); });
+      } catch (e) { log.error('autoCompact archive write failed:', e.message); }
     }
 
     const newContent = active.map(m => JSON.stringify(m)).join('\n') + (active.length ? '\n' : '');
-    const tmpFile = msgFile + '.tmp';
+    const tmpFile = `${msgFile}.tmp.${process.pid}.${Date.now()}`;
     fs.writeFileSync(tmpFile, newContent);
     try {
       fs.renameSync(tmpFile, msgFile);
@@ -112,13 +151,17 @@ function autoCompact() {
     for (const f of fs.readdirSync(DATA_DIR)) {
       if (f.startsWith('consumed-') && f.endsWith('.json')) {
         try {
-          const ids = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
+          const fp = path.join(DATA_DIR, f);
+          const ids = JSON.parse(fs.readFileSync(fp, 'utf8'));
           const trimmed = ids.filter(id => activeIds.has(id));
-          fs.writeFileSync(path.join(DATA_DIR, f), JSON.stringify(trimmed));
+          const tmp = `${fp}.tmp.${process.pid}.${Date.now()}`;
+          fs.writeFileSync(tmp, JSON.stringify(trimmed));
+          fs.renameSync(tmp, fp);
         } catch (e) { log.debug('consumed trim failed:', e.message); }
       }
     }
   } catch (e) { log.warn('autoCompact failed:', e.message); }
+  finally { releaseCompactLease(); }
 }
 
 module.exports = {
