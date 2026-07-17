@@ -7404,6 +7404,8 @@ const _knowledgeCtx = {
     generateId, writeJsonFile, readJsonFile, touchActivity, tailReadJsonl,
     getHistoryFile, getAgents, isPidAlive, getProfiles, getTasks, cachedRead,
     inspectMethodology: inspectProjectMethodology,
+    listArtifacts: bmadProvider.listArtifacts,
+    projectRoot: PROJECT_ROOT,
   },
   files: { DECISIONS_FILE, KB_FILE, PROGRESS_FILE, COMPRESSED_FILE },
 };
@@ -8053,6 +8055,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'kb_write':
       case 'kb_read':
       case 'kb_list':
+      case 'kb_mirror':
       case 'update_progress':
       case 'get_progress':
       case 'get_compressed_history':

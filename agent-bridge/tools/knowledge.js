@@ -4,6 +4,8 @@
 // Extracted from server.js as part of modular tool architecture.
 
 const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
 module.exports = function (ctx) {
   const { state, helpers, files } = ctx;
@@ -12,6 +14,7 @@ module.exports = function (ctx) {
     getDecisions, getKB, getProgressData, getCompressed, getLocks, getConfig,
     generateId, writeJsonFile, readJsonFile, touchActivity, tailReadJsonl,
     getHistoryFile, getAgents, isPidAlive, getProfiles, getTasks, cachedRead,
+    inspectMethodology, listArtifacts, projectRoot,
   } = helpers;
 
   const { DECISIONS_FILE, KB_FILE, PROGRESS_FILE, COMPRESSED_FILE } = files;
@@ -53,8 +56,11 @@ module.exports = function (ctx) {
     if (typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > 102400) return { error: 'Content exceeds 100KB' };
 
     const kb = getKB();
+    // Check the cap BEFORE mutating the cached object — a new key that would exceed
+    // the limit must not leave a phantom entry in the in-memory cache (amplified by
+    // kb_mirror writing many keys in one action).
+    if (!(key in kb) && Object.keys(kb).length >= 100) return { error: 'Knowledge base full (max 100 keys)' };
     kb[key] = { content, updated_by: state.registeredName, updated_at: new Date().toISOString() };
-    if (Object.keys(kb).length > 100) return { error: 'Knowledge base full (max 100 keys)' };
     writeJsonFile(KB_FILE, kb);
     touchActivity();
     return { success: true, key, size: content.length, total_keys: Object.keys(kb).length };
@@ -78,6 +84,82 @@ module.exports = function (ctx) {
     return {
       keys: Object.keys(kb).map(k => ({ key: k, updated_by: kb[k].updated_by, updated_at: kb[k].updated_at, size: kb[k].content.length })),
       total: Object.keys(kb).length,
+    };
+  }
+
+  // --- BMad kb mirror (AD-4 / FR4 / Story 2.2) ---
+  // One-way, on-demand, idempotent upsert: reads PRD/architecture/decision BMad
+  // artifacts and writes one kb entry per artifact via the existing kb_write path.
+  // Never writes back to the BMad files. No polling — this only runs when invoked.
+
+  const MIRROR_KB_CONTENT_LIMIT = 100 * 1024 - 2048; // stay under kb_write's 100KB cap after header overhead
+
+  function isMirrorTarget(artifact) {
+    if (artifact.kind === 'prd' || artifact.kind === 'architecture') return true;
+    return /decision/i.test(artifact.relative_path || '');
+  }
+
+  function mirrorKeyFor(artifact) {
+    // kb keys must be 1-50 alphanumeric/underscore/hyphen/dot chars (kb_write's schema),
+    // so the source path is embedded in the kb entry content rather than used verbatim
+    // as the key. The key itself is a deterministic hash of the source path, which is
+    // what makes re-running the mirror an upsert (same path -> same key) instead of a
+    // duplicate insert.
+    const hash = crypto.createHash('sha1').update(artifact.relative_path).digest('hex').slice(0, 16);
+    return `bmad_mirror_${artifact.kind}_${hash}`;
+  }
+
+  function toolKBMirror() {
+    if (!state.registeredName) return { error: 'You must call register() first' };
+    if (typeof listArtifacts !== 'function' || !projectRoot) {
+      return { success: true, mirrored: 0, skipped: 0, artifacts_found: 0, message: 'BMad artifact listing unavailable — no-op.' };
+    }
+
+    let artifacts;
+    try {
+      artifacts = listArtifacts(projectRoot, { hash: false }) || [];
+    } catch {
+      artifacts = [];
+    }
+
+    const targets = artifacts.filter(isMirrorTarget);
+    if (targets.length === 0) {
+      // NFR4: inert / clean no-op on non-BMad projects (or ones with no matching artifacts).
+      return { success: true, mirrored: 0, skipped: 0, artifacts_found: artifacts.length, message: 'No PRD/architecture/decision BMad artifacts found — nothing to mirror.' };
+    }
+
+    const mirrored = [];
+    const skipped = [];
+    for (const artifact of targets) {
+      const absolute = path.join(projectRoot, artifact.path);
+      let raw;
+      try {
+        raw = fs.readFileSync(absolute, 'utf8');
+      } catch (e) {
+        skipped.push({ path: artifact.path, reason: 'read_failed' });
+        continue;
+      }
+      const truncated = Buffer.byteLength(raw, 'utf8') > MIRROR_KB_CONTENT_LIMIT;
+      const body = truncated ? raw.slice(0, MIRROR_KB_CONTENT_LIMIT) + '\n...[truncated]' : raw;
+      const content = `[BMad Mirror] source: ${artifact.path} | kind: ${artifact.kind} | mirrored_at: ${new Date().toISOString()}\n---\n${body}`;
+      const key = mirrorKeyFor(artifact);
+      const result = toolKBWrite(key, content);
+      if (result.error) {
+        skipped.push({ path: artifact.path, reason: result.error });
+      } else {
+        mirrored.push({ path: artifact.path, kind: artifact.kind, key });
+      }
+    }
+
+    touchActivity();
+    return {
+      success: true,
+      mirrored: mirrored.length,
+      skipped: skipped.length,
+      artifacts_found: artifacts.length,
+      entries: mirrored,
+      skipped_entries: skipped,
+      message: `Mirrored ${mirrored.length} BMad artifact(s) into the kb (one-way; BMad files are authoritative and were not modified).`,
     };
   }
 
@@ -209,6 +291,25 @@ module.exports = function (ctx) {
 
     const myActiveTasks = tasks.filter(t => t.status !== 'done' && t.assignee === state.registeredName);
     const myCompletedCount = tasks.filter(t => t.status === 'done' && t.assignee === state.registeredName).length;
+    let methodology = null;
+    try {
+      const status = typeof inspectMethodology === 'function'
+        ? inspectMethodology({ preflight: false, hashArtifacts: false })
+        : null;
+      if (status && (status.installed || status.enabled)) {
+        methodology = {
+          id: status.id,
+          label: status.label,
+          installed: status.installed,
+          enabled: status.enabled,
+          compatible: status.compatible,
+          version: status.version,
+          mode: status.settings && status.settings.mode,
+          next_action: status.next_action,
+          artifact_count: status.artifact_count,
+        };
+      }
+    } catch {}
 
     return {
       briefing: true,
@@ -223,6 +324,7 @@ module.exports = function (ctx) {
       progress,
       your_tasks: myActiveTasks.map(t => ({ id: t.id, title: t.title, status: t.status })),
       your_completed: myCompletedCount,
+      methodology,
       next_action: myActiveTasks.length > 0
         ? `You have ${myActiveTasks.length} active task(s). Continue working, then call listen().`
         : 'Call listen() to receive messages and start working.',
@@ -268,6 +370,11 @@ module.exports = function (ctx) {
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     },
     {
+      name: 'kb_mirror',
+      description: 'Mirror PRD/architecture/decision BMad artifacts into the shared kb (one entry per artifact, upserted by source path so re-running updates rather than duplicates). One-way only — reads BMad files, never writes back to them. No-op if no matching BMad artifacts exist.',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    },
+    {
       name: 'update_progress',
       description: 'Update progress on a feature or milestone. Shown in dashboard and briefings.',
       inputSchema: { type: 'object', properties: { feature: { type: 'string', description: 'Feature or milestone name (1-100 chars)' }, percent: { type: 'number', description: 'Completion percentage (0-100)' }, notes: { type: 'string', description: 'Optional progress notes' } }, required: ['feature', 'percent'], additionalProperties: false },
@@ -290,6 +397,7 @@ module.exports = function (ctx) {
     kb_write: function (args) { return toolKBWrite(args.key, args.content); },
     kb_read: function (args) { return toolKBRead(args.key); },
     kb_list: function () { return toolKBList(); },
+    kb_mirror: function () { return toolKBMirror(); },
     update_progress: function (args) { return toolUpdateProgress(args.feature, args.percent, args.notes); },
     get_progress: function () { return toolGetProgress(); },
     get_compressed_history: function () { return toolGetCompressedHistory(); },

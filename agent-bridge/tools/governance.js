@@ -122,16 +122,80 @@ module.exports = function (ctx) {
 
   const REVIEW_FEEDBACK_MIN_LENGTH = 50;
 
-  function toolSubmitReview(reviewId, status, feedback) {
+  // --- AD-5 / FR5 / Story 2.3: route bmad-code-review findings into reviews.json,
+  // keyed by task_id with git-branch fallback (additive metadata on the existing
+  // review shape — not a new store). Reuses submit_review's write path.
+  function resolveOrCreateRoutedReview(reviews, taskId, branch) {
+    let review = null;
+    // Only route onto a still-open (pending) review; never silently overwrite or
+    // reopen an already-decided one — if all matches are terminal, fall through to
+    // auto-create a fresh review round below.
+    const isOpen = (r) => r && r.status === 'pending';
+    if (taskId) review = reviews.find(r => r.task_id === taskId && isOpen(r));
+    if (!review && branch) review = reviews.find(r => r.branch === branch && isOpen(r));
+    if (!review && taskId) {
+      // Fall back to the pre-existing brittle title-substring match (kept, not removed)
+      // so linkage still works before this review has been tagged with task_id.
+      const tasks = getTasks();
+      const task = tasks.find(t => t.id === taskId);
+      if (task && task.title) {
+        review = reviews.find(r => r.file && r.file.includes(task.title) && isOpen(r));
+      }
+    }
+    if (review) return { review, created: false };
+
+    // Degrade gracefully: no matching review exists — attach/create one rather than
+    // dropping findings silently (AD-5).
+    const tasks = getTasks();
+    const task = taskId ? tasks.find(t => t.id === taskId) : null;
+    const fileRef = (task && task.title) || (branch ? `branch:${branch}` : (taskId ? `task:${taskId}` : 'unknown'));
+    // Auto-created reviews are routed findings, not peer review requests — avoid the
+    // self-review check tripping on the routing agent by attributing authorship to the
+    // task's assignee (or a neutral placeholder) rather than the submitting agent.
+    let requestedBy = (task && task.assignee) || 'bmad-code-review';
+    if (requestedBy === state.registeredName) requestedBy = 'bmad-code-review';
+    const created = {
+      id: 'rev_' + generateId(),
+      file: fileRef,
+      description: 'Auto-attached by bmad-code-review routing (no prior review request found).',
+      status: 'pending',
+      requested_by: requestedBy,
+      requested_at: new Date().toISOString(),
+      reviewer: null,
+      feedback: null,
+      task_id: taskId || null,
+      branch: branch || null,
+      auto_created: true,
+    };
+    reviews.push(created);
+    return { review: created, created: true };
+  }
+
+  function toolSubmitReview(reviewId, status, feedback, taskId, branch) {
     if (!state.registeredName) return { error: 'You must call register() first' };
 
     const validStatuses = ['approved', 'changes_requested'];
     if (!validStatuses.includes(status)) return { error: `Status must be: ${validStatuses.join(' or ')}` };
 
     const reviews = getReviews();
-    const review = reviews.find(r => r.id === reviewId);
+    let review = reviewId ? reviews.find(r => r.id === reviewId) : null;
+    let routed = false;
+    let routedCreated = false;
+    if (!review && (taskId || branch)) {
+      const resolved = resolveOrCreateRoutedReview(reviews, taskId, branch);
+      review = resolved.review;
+      routed = true;
+      routedCreated = resolved.created;
+    }
     if (!review) return { error: `Review not found: ${reviewId}` };
-    if (review.requested_by === state.registeredName) return { error: 'Cannot review your own code.' };
+    // Additive key: tag the review with task_id/branch so future lookups are reliable
+    // (title-substring match stays as a fallback, per AD-5 — not removed).
+    if (taskId && !review.task_id) review.task_id = taskId;
+    if (branch && !review.branch) review.branch = branch;
+    // Self-review guard applies to any PRE-EXISTING review (including one resolved by
+    // task_id/branch routing) — only genuinely auto-created routed reviews are exempt,
+    // and those never carry the submitter as requested_by (see resolveOrCreateRoutedReview).
+    if (!routedCreated && review.requested_by === state.registeredName) return { error: 'Cannot review your own code.' };
 
     // Enforce substantive feedback — rubber-stamping is not allowed
     const feedbackText = (feedback || '').trim();
@@ -173,7 +237,8 @@ module.exports = function (ctx) {
       writeJsonFile(REPUTATION_FILE, rep);
 
       const tasks = getTasks();
-      const relatedTask = tasks.find(t => t.title && review.file && t.title.includes(review.file)) ||
+      const relatedTask = (review.task_id && tasks.find(t => t.id === review.task_id)) ||
+                          tasks.find(t => t.title && review.file && t.title.includes(review.file)) ||
                           tasks.find(t => t.assignee === review.requested_by && t.status === 'in_progress');
       if (relatedTask) {
         relatedTask.retry_expected = true;
@@ -216,7 +281,8 @@ module.exports = function (ctx) {
     const reviewNextAction = review.status === 'approved'
       ? 'Call listen() to continue.'
       : 'Call listen() — the author will fix and resubmit.';
-    const result = { success: true, review_id: reviewId, status: review.status, next_action: reviewNextAction };
+    const result = { success: true, review_id: review.id, status: review.status, next_action: reviewNextAction };
+    if (routed) result.routed = true;
     if (review.review_round) result.review_round = review.review_round;
     if (review.auto_approved) result.auto_approved = true;
     return result;
@@ -410,8 +476,8 @@ module.exports = function (ctx) {
     },
     {
       name: 'submit_review',
-      description: 'Submit a code review — approve or request changes. You MUST read the file under review before calling this. Feedback is required (minimum 50 chars) and must describe specific findings — what you read, what issues you found or confirmed. Rubber-stamp approvals are rejected.',
-      inputSchema: { type: 'object', properties: { review_id: { type: 'string', description: 'Review ID', maxLength: 50 }, status: { type: 'string', enum: ['approved', 'changes_requested'], description: 'Review result' }, feedback: { type: 'string', description: 'Your findings from reading the file (required, min 50 chars). Describe what you read and what you found — bugs, security issues, correctness, or confirmation that the code is clean.', maxLength: 2000, minLength: 50 } }, required: ['review_id', 'status', 'feedback'], additionalProperties: false },
+      description: 'Submit a code review — approve or request changes. You MUST read the file under review before calling this. Feedback is required (minimum 50 chars) and must describe specific findings — what you read, what issues you found or confirmed. Rubber-stamp approvals are rejected. Instead of review_id, you may pass task_id (with an optional branch fallback) to route findings (e.g. from bmad-code-review) into the review tied to that task; if no matching review exists yet, one is auto-attached so findings are never dropped.',
+      inputSchema: { type: 'object', properties: { review_id: { type: 'string', description: 'Review ID (omit if routing by task_id/branch)', maxLength: 50 }, status: { type: 'string', enum: ['approved', 'changes_requested'], description: 'Review result' }, feedback: { type: 'string', description: 'Your findings from reading the file (required, min 50 chars). Describe what you read and what you found — bugs, security issues, correctness, or confirmation that the code is clean.', maxLength: 2000, minLength: 50 }, task_id: { type: 'string', description: 'Route to the review tied to this task (used when review_id is omitted, e.g. bmad-code-review routing).', maxLength: 50 }, branch: { type: 'string', description: 'Git branch fallback key when no task_id is available.', maxLength: 200 } }, required: ['status', 'feedback'], additionalProperties: false },
     },
     // Rules
     {
@@ -475,7 +541,7 @@ module.exports = function (ctx) {
     cast_vote: function (args) { return toolCastVote(args.vote_id, args.choice); },
     vote_status: function (args) { return toolVoteStatus(args.vote_id); },
     request_review: function (args) { return toolRequestReview(args.file_path, args.description); },
-    submit_review: function (args) { return toolSubmitReview(args.review_id, args.status, args.feedback); },
+    submit_review: function (args) { return toolSubmitReview(args.review_id, args.status, args.feedback, args.task_id, args.branch); },
     add_rule: function (args) { return toolAddRule(args.text, args.category, args.scope); },
     list_rules: function () { return toolListRules(); },
     remove_rule: function (args) { return toolRemoveRule(args.rule_id); },
