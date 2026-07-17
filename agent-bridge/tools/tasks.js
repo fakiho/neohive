@@ -31,6 +31,7 @@ module.exports = function (ctx) {
     getWorkspace, saveWorkspace, appendNotification,
     getWorkflows, saveWorkflows, saveWorkflowCheckpoint, findReadySteps,
     getMessagesFile, getHistoryFile, logViolation, cachedRead,
+    enqueueDurableDelivery,
   } = helpers;
 
   const {
@@ -39,12 +40,45 @@ module.exports = function (ctx) {
 
   // --- Create Task ---
 
-  function toolCreateTask(title, description, assignee, externalRef) {
+  function toolCreateTask(title, description, assignee, externalRef, bmadStoryId, size) {
     ensureDataDir();
-    return withFileLock(TASKS_FILE, () => toolCreateTaskLocked(title, description, assignee, externalRef));
+    // Durable-delivery enqueue happens AFTER the TASKS_FILE lock is released
+    // (never nested inside it) to keep a single, provable lock order: any
+    // caller only ever holds at most one of {TASKS_FILE lock, deliveries lock}
+    // at a time, so the two can never deadlock against each other.
+    const result = withFileLock(TASKS_FILE, () => toolCreateTaskLocked(title, description, assignee, externalRef, bmadStoryId, size));
+    if (result && result.success && result.assignee && result.assignee !== state.registeredName && typeof enqueueDurableDelivery === 'function') {
+      // Idempotency key is scoped to this specific task_id: it dedupes a
+      // retried enqueue call for the SAME already-created task (e.g. this
+      // exact code path re-running after a partial failure). It does NOT
+      // dedupe separate create_task() calls — each call mints a new task_id
+      // and is a genuinely new assignment, so it durably enqueues separately
+      // by design.
+      const idempotencyKey = `task_assignment:${result.task_id}`;
+      const enqueueResult = enqueueDurableDelivery({
+        recipient: result.assignee,
+        payload: { type: 'task_assignment', task_id: result.task_id, title, description: description || '' },
+        kind: 'task',
+        idempotencyKey,
+        messageId: result.task_id,
+      });
+      // The task itself is already persisted at this point — never fail
+      // create_task over a backing-delivery problem. Surface it as a
+      // structured, additive field instead of silently succeeding, so a
+      // caller/monitor can retry using the same idempotency_key.
+      if (enqueueResult && enqueueResult.ok === false) {
+        result.durable_delivery = {
+          error: enqueueResult.error,
+          code: enqueueResult.code,
+          idempotency_key: idempotencyKey,
+          retry_hint: 'The task was created successfully. Retry backing delivery with the same idempotency_key; it will not duplicate once it succeeds.',
+        };
+      }
+    }
+    return result;
   }
 
-  function toolCreateTaskLocked(title, description, assignee, externalRef) {
+  function toolCreateTaskLocked(title, description, assignee, externalRef, bmadStoryId, size) {
     if (!state.registeredName) return { error: 'You must call register() first' };
     description = description || '';
     assignee = assignee || null;
@@ -54,6 +88,9 @@ module.exports = function (ctx) {
     if (description.length > 5000) return { error: 'Task description too long (max 5000 characters)' };
     if (externalRef && (typeof externalRef !== 'string' || !/^bmad:(?:story|artifact|gate):[A-Za-z0-9._:-]{1,200}$/.test(externalRef))) {
       return { error: 'external_ref must be a namespaced BMad story, artifact, or gate ID' };
+    }
+    if (size !== undefined && size !== null && size !== 'small' && size !== 'roadmap') {
+      return { error: 'size must be "small" or "roadmap"' };
     }
 
     const agents = getAgents();
@@ -74,7 +111,9 @@ module.exports = function (ctx) {
       updated_at: new Date().toISOString(),
       notes: [],
       external_ref: externalRef || null,
+      bmad_story_id: bmadStoryId || null,
     };
+    if (size === 'small' || size === 'roadmap') task.size = size;
 
     const tasks = readTasksFresh(TASKS_FILE);
     if (tasks.length >= 1000) return { error: 'Task limit reached (max 1000). Complete or remove existing tasks first.' };
@@ -108,6 +147,8 @@ module.exports = function (ctx) {
     saveTasksLocked(TASKS_FILE, tasks);
     touchActivity();
 
+    // Durable backing record for the assignment (if any) is enqueued by the
+    // toolCreateTask wrapper AFTER this lock releases — see there for why.
     const result = { success: true, task_id: task.id, assignee: task.assignee, next_action: 'Call listen() to receive updates.' };
     if (task.external_ref) result.external_ref = task.external_ref;
     if (taskChannel) result.channel = taskChannel;
@@ -118,12 +159,42 @@ module.exports = function (ctx) {
 
   function toolUpdateTask(taskId, status, notes) {
     ensureDataDir();
-    return withFileLock(TASKS_FILE, () => toolUpdateTaskLocked(taskId, status, notes));
+    // Same lock-order rule as toolCreateTask: durable-delivery enqueues for
+    // any workflow-handoffs triggered by this update happen AFTER the
+    // TASKS_FILE lock is released, never nested inside it. The locked
+    // function collects them in `_pendingDurableHandoffs` and we drain +
+    // strip that internal field here before returning to the caller.
+    const result = withFileLock(TASKS_FILE, () => toolUpdateTaskLocked(taskId, status, notes));
+    if (result && Array.isArray(result._pendingDurableHandoffs)) {
+      const pending = result._pendingDurableHandoffs;
+      delete result._pendingDurableHandoffs;
+      if (typeof enqueueDurableDelivery === 'function') {
+        const failures = [];
+        for (const req of pending) {
+          const enqueueResult = enqueueDurableDelivery(req);
+          if (enqueueResult && enqueueResult.ok === false) {
+            failures.push({
+              error: enqueueResult.error,
+              code: enqueueResult.code,
+              idempotency_key: req.idempotencyKey,
+              recipient: req.recipient,
+              retry_hint: 'The workflow handoff message was already sent. Retry backing delivery with the same idempotency_key; it will not duplicate once it succeeds.',
+            });
+          }
+        }
+        if (failures.length > 0) result.durable_delivery_errors = failures;
+      }
+    }
+    return result;
   }
 
   function toolUpdateTaskLocked(taskId, status, notes) {
     if (!state.registeredName) return { error: 'You must call register() first' };
     notes = notes || null;
+    // Collected during this locked section, drained by toolUpdateTask AFTER
+    // the lock releases (see there) — never call enqueueDurableDelivery
+    // directly from within this function.
+    const pendingDurableHandoffs = [];
 
     const validStatuses = ['pending', 'in_progress', 'in_review', 'done', 'blocked', 'blocked_permanent'];
     if (!validStatuses.includes(status)) return { error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` };
@@ -297,6 +368,18 @@ module.exports = function (ctx) {
                   const _hhf = getHistoryFile(state.currentBranch);
                   withFileLock(_hmf, () => { fs.appendFileSync(_hmf, JSON.stringify(hMsg) + '\n'); });
                   withFileLock(_hhf, () => { fs.appendFileSync(_hhf, JSON.stringify(hMsg) + '\n'); });
+
+                  // Durable backing record for the handoff, keyed by workflow+step so
+                  // re-running this advance (e.g. after a crash/retry) never double-enqueues.
+                  // The message above remains the sole visible notification. Actually
+                  // enqueued by toolUpdateTask after this lock releases (see there).
+                  pendingDurableHandoffs.push({
+                    recipient: ns.assignee,
+                    payload: { type: 'workflow_handoff', workflow_id: wf.id, step_id: ns.id, workflow_name: wf.name, description: ns.description, message_id: hMsg.id },
+                    kind: 'handoff',
+                    idempotencyKey: `handoff:${wf.id}:${ns.id}`,
+                    messageId: `${wf.id}:${ns.id}`,
+                  });
                 }
               }
             }
@@ -335,7 +418,9 @@ module.exports = function (ctx) {
       : status === 'in_progress' ? `Do the work on "${task.title}", then call update_task("${task.id}", "done") when finished.`
       : status === 'blocked' ? 'Send a message explaining the blocker, then call listen().'
       : 'Call listen() to receive updates.';
-    return { success: true, task_id: task.id, status: task.status, title: task.title, next_action: nextAction };
+    const finalResult = { success: true, task_id: task.id, status: task.status, title: task.title, next_action: nextAction };
+    if (pendingDurableHandoffs.length > 0) finalResult._pendingDurableHandoffs = pendingDurableHandoffs;
+    return finalResult;
   }
 
   // --- List Tasks ---
@@ -428,6 +513,90 @@ module.exports = function (ctx) {
     };
   }
 
+  // --- Link Task to BMad Story ---
+
+  function toolLinkTaskToStory(taskId, storyFilePath) {
+    if (!state.registeredName) return { error: 'You must call register() first' };
+    if (!taskId || typeof taskId !== 'string') return { error: 'task_id is required' };
+    if (!storyFilePath || typeof storyFilePath !== 'string') return { error: 'story_file_path is required' };
+
+    const nodePath = require('path');
+
+    // Resolve project root canonically (resolves symlinks)
+    const projectRoot = (() => {
+      try { return fs.realpathSync(nodePath.dirname(require.resolve('../package.json'))); }
+      catch { return nodePath.resolve(__dirname, '..'); }
+    })();
+
+    // Resolve candidate path: relative paths are relative to project root
+    const candidate = nodePath.isAbsolute(storyFilePath)
+      ? storyFilePath
+      : nodePath.join(projectRoot, storyFilePath);
+
+    if (!fs.existsSync(candidate)) return { error: `Story file not found: ${storyFilePath}` };
+
+    // Canonicalize (resolves symlinks) — must be inside project root
+    let absPath;
+    try { absPath = fs.realpathSync(candidate); }
+    catch { return { error: `Cannot resolve story file path: ${storyFilePath}` }; }
+
+    const rel = nodePath.relative(projectRoot, absPath);
+    if (rel.startsWith('..') || nodePath.isAbsolute(rel)) {
+      return { error: 'story_file_path must resolve to a file inside the project root' };
+    }
+
+    return withFileLock(TASKS_FILE, () => {
+      const tasks = readTasksFresh(TASKS_FILE);
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return { error: `Task not found: ${taskId}` };
+
+      const prevStoryId = task.bmad_story_id || null;
+      task.bmad_story_id = storyFilePath;
+      task.updated_at = new Date().toISOString();
+      saveTasksLocked(TASKS_FILE, tasks);
+
+      // Write 'Related Task' comment to the story file (idempotent, locked)
+      const marker = `<!-- Related Task: ${taskId} -->`;
+      const storyContent = fs.readFileSync(absPath, 'utf8');
+      if (!storyContent.includes(marker)) {
+        const appendResult = withFileLock(absPath, () => {
+          try {
+            fs.appendFileSync(absPath, `\n${marker}\n`);
+            return true;
+          } catch (e) {
+            return { appendError: e.message };
+          }
+        });
+
+        // B3: if lock denied or append failed, rollback task's bmad_story_id
+        const failed = !appendResult || (appendResult && appendResult.appendError);
+        if (failed) {
+          const errorMsg = appendResult && appendResult.appendError
+            ? `Story file append failed: ${appendResult.appendError}`
+            : 'Story file lock denied — could not write Related Task comment';
+          // Rollback under the same TASKS_FILE lock (already held)
+          task.bmad_story_id = prevStoryId;
+          task.updated_at = new Date().toISOString();
+          saveTasksLocked(TASKS_FILE, tasks);
+          return {
+            error: errorMsg,
+            task_id: taskId,
+            rolled_back: true,
+            previous_story_id: prevStoryId,
+          };
+        }
+      }
+
+      return {
+        success: true,
+        task_id: taskId,
+        story_file_path: storyFilePath,
+        previous_story_id: prevStoryId,
+        next_action: 'Call listen() to continue.',
+      };
+    });
+  }
+
   // --- MCP tool definitions ---
 
   const definitions = [
@@ -441,6 +610,8 @@ module.exports = function (ctx) {
           description: { type: 'string', description: 'Detailed task description', maxLength: 5000 },
           assignee: { type: 'string', description: 'Agent to assign to (optional, auto-assigns with 2 agents)', maxLength: 50 },
           external_ref: { type: 'string', description: 'Optional authoritative BMad reference such as bmad:story:story-one', maxLength: 230 },
+          bmad_story_id: { type: 'string', description: 'Optional path to a linked BMad story file', maxLength: 500 },
+          size: { type: 'string', description: 'Optional explicit size override for roadmap-size classification', enum: ['small', 'roadmap'] },
         },
         required: ['title'],
         additionalProperties: false,
@@ -477,14 +648,28 @@ module.exports = function (ctx) {
       description: 'Get a task suggestion based on your strengths, pending tasks, open reviews, and blocked dependencies. Helps you find the most useful thing to do next.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     },
+    {
+      name: 'link_task_to_story',
+      description: 'Link a Neohive task to a BMad story file, bidirectionally: writes bmad_story_id on the task and appends a Related Task comment to the story file.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string', description: 'Task ID to link', maxLength: 50 },
+          story_file_path: { type: 'string', description: 'Relative or absolute path to the BMad story .md file', maxLength: 500 },
+        },
+        required: ['task_id', 'story_file_path'],
+        additionalProperties: false,
+      },
+    },
   ];
 
   // Handler dispatch map
   const handlers = {
-    create_task: function (args) { return toolCreateTask(args.title, args.description, args.assignee, args.external_ref); },
+    create_task: function (args) { return toolCreateTask(args.title, args.description, args.assignee, args.external_ref, args.bmad_story_id, args.size); },
     update_task: function (args) { return toolUpdateTask(args.task_id, args.status, args.notes); },
     list_tasks: function (args) { return toolListTasks(args.status, args.assignee); },
     suggest_task: function () { return toolSuggestTask(); },
+    link_task_to_story: function (args) { return toolLinkTaskToStory(args.task_id, args.story_file_path); },
   };
 
   return { definitions, handlers };

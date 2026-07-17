@@ -15,6 +15,10 @@ const tmuxAgentState = require('./lib/tmux-agent-state');
 const ollamaBridgeManager = require('./lib/ollama-bridge-manager');
 const agentLaunchProfiles = require('./lib/agent-launch-profiles');
 const tmuxCliLauncher = require('./lib/tmux-cli-launcher');
+const methodologyProvider = require('./lib/methodology-provider');
+const bmadProvider = require('./lib/bmad-provider');
+const { classifyTaskSize, isShadowWork } = require('./lib/task-classification');
+const { mutateProjectConfig } = require('./lib/project-config');
 
 function findCursorProjectRootWithNeohive(startDir) {
   let dir = path.resolve(startDir);
@@ -2065,6 +2069,28 @@ function mcpNodeCommand() {
   return process.execPath;
 }
 
+function upsertNeohiveCodexEnv(config, dataDir, projectDir) {
+  const header = '[mcp_servers.neohive.env]';
+  const values = {
+    NEOHIVE_DATA_DIR: dataDir,
+    NEOHIVE_PROJECT_ROOT: projectDir,
+  };
+  let index = config.indexOf(header);
+  if (index === -1) {
+    const separator = config.endsWith('\n') ? '' : '\n';
+    return config + separator + header + '\n' +
+      Object.entries(values).map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join('\n') + '\n';
+  }
+  const end = config.indexOf('\n[', index + header.length);
+  let section = config.slice(index, end === -1 ? config.length : end);
+  for (const [key, value] of Object.entries(values)) {
+    const line = `${key} = ${JSON.stringify(value)}`;
+    const pattern = new RegExp(`^${key}\\s*=.*$`, 'm');
+    section = pattern.test(section) ? section.replace(pattern, line) : section.replace(/\s*$/, '') + '\n' + line + '\n';
+  }
+  return config.slice(0, index) + section + (end === -1 ? '' : config.slice(end));
+}
+
 function ensureMCPConfig(cli, serverPath, projectDir) {
   const abDir = path.join(projectDir, '.neohive').replace(/\\/g, '/');
   if (cli === 'claude') {
@@ -2073,10 +2099,13 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
     if (fs.existsSync(mcpConfigPath)) {
       try { mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8')); if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {}; } catch {}
     }
-    if (!mcpConfig.mcpServers['neohive']) {
-      mcpConfig.mcpServers['neohive'] = { command: mcpNodeCommand(), args: [serverPath], env: { NEOHIVE_DATA_DIR: abDir } };
-      fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
-    }
+    const existing = mcpConfig.mcpServers['neohive'] || {};
+    mcpConfig.mcpServers['neohive'] = Object.assign({}, existing, {
+      command: mcpNodeCommand(),
+      args: [serverPath],
+      env: Object.assign({}, existing.env, { NEOHIVE_DATA_DIR: abDir, NEOHIVE_PROJECT_ROOT: projectDir }),
+    });
+    fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
   } else if (cli === 'gemini') {
     const geminiDir = path.join(projectDir, '.gemini');
     const settingsPath = path.join(geminiDir, 'settings.json');
@@ -2085,10 +2114,13 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
     if (fs.existsSync(settingsPath)) {
       try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); if (!settings.mcpServers) settings.mcpServers = {}; } catch {}
     }
-    if (!settings.mcpServers['neohive']) {
-      settings.mcpServers['neohive'] = { command: mcpNodeCommand(), args: [serverPath], env: { NEOHIVE_DATA_DIR: abDir } };
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
-    }
+    const existing = settings.mcpServers['neohive'] || {};
+    settings.mcpServers['neohive'] = Object.assign({}, existing, {
+      command: mcpNodeCommand(),
+      args: [serverPath],
+      env: Object.assign({}, existing.env, { NEOHIVE_DATA_DIR: abDir, NEOHIVE_PROJECT_ROOT: projectDir }),
+    });
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
   } else if (cli === 'codex') {
     const codexDir = path.join(projectDir, '.codex');
     const configPath = path.join(codexDir, 'config.toml');
@@ -2096,7 +2128,7 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
     let config = '';
     if (fs.existsSync(configPath)) config = fs.readFileSync(configPath, 'utf8');
     const envSection =
-      `[mcp_servers.neohive.env]\nNEOHIVE_DATA_DIR = ${JSON.stringify(abDir)}\n`;
+      `[mcp_servers.neohive.env]\nNEOHIVE_DATA_DIR = ${JSON.stringify(abDir)}\nNEOHIVE_PROJECT_ROOT = ${JSON.stringify(projectDir)}\n`;
     const hadNeohive = config.includes('[mcp_servers.neohive]');
     config = upsertNeohiveMcpInToml(config, {
       command: mcpNodeCommand(),
@@ -2104,6 +2136,7 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
       timeout: 300,
       envSection: hadNeohive ? undefined : envSection,
     });
+    config = upsertNeohiveCodexEnv(config, abDir, projectDir);
     fs.writeFileSync(configPath, config);
   } else if (cli === 'cursor') {
     const cursorDir = path.join(projectDir, '.cursor');
@@ -2113,20 +2146,19 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
     if (fs.existsSync(mcpConfigPath)) {
       try { mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8')); if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {}; } catch {}
     }
-    if (!mcpConfig.mcpServers['neohive']) {
-      mcpConfig.mcpServers['neohive'] = {
-        command: mcpNodeCommand(),
-        args: [serverPath],
-        env: { NEOHIVE_DATA_DIR: abDir },
-        timeout: 300,
-      };
-      fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
-    }
+    const existing = mcpConfig.mcpServers['neohive'] || {};
+    mcpConfig.mcpServers['neohive'] = Object.assign({}, existing, {
+      command: mcpNodeCommand(),
+      args: [serverPath],
+      env: Object.assign({}, existing.env, { NEOHIVE_DATA_DIR: abDir, NEOHIVE_PROJECT_ROOT: projectDir }),
+      timeout: existing.timeout || 300,
+    });
+    fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n');
   }
 }
 
 async function apiLaunchAgent(body) {
-  const { cli, project_dir, agent_name, prompt, role } = body;
+  const { cli, project_dir, agent_name, prompt, role, methodology, base_prompt } = body;
   if (!cli || !['claude', 'gemini', 'codex', 'cursor'].includes(cli)) {
     return { error: 'Invalid cli type. Must be: claude, gemini, codex, or cursor' };
   }
@@ -2135,7 +2167,7 @@ async function apiLaunchAgent(body) {
   }
   const projectDir = project_dir
     ? path.resolve(normalizeMonitoredProjectRoot(project_dir))
-    : (path.basename(DEFAULT_DATA_DIR) === '.neohive' ? path.dirname(DEFAULT_DATA_DIR) : process.cwd());
+    : bmadProvider.projectRootFromDataDir(DEFAULT_DATA_DIR, process.cwd());
   if (!fs.existsSync(projectDir)) {
     return { error: 'Project directory does not exist: ' + projectDir };
   }
@@ -2143,10 +2175,29 @@ async function apiLaunchAgent(body) {
   const dataDir = resolveDataDir(project_dir || null);
   const safeName = (agent_name || '').replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 20);
   let launchPrompt;
+  let methodologySelection = null;
   try {
-    launchPrompt = role
-      ? agentLaunchProfiles.buildRolePrompt(role, safeName)
-      : prompt || (safeName ? `You are agent "${safeName}". Use the register tool to register as "${safeName}", then use listen to wait for messages.` : `Register with the neohive MCP tools and use listen to wait for messages.`);
+    const defaultPrompt = safeName ? `You are agent "${safeName}". Use the register tool to register as "${safeName}", then use listen to wait for messages.` : `Register with the neohive MCP tools and use listen to wait for messages.`;
+    const suppliedBasePrompt = base_prompt || (!role ? (prompt || defaultPrompt) : null);
+    if (role || suppliedBasePrompt) {
+      const composed = methodologyProvider.composeLaunchPrompt({
+        role,
+        name: safeName,
+        runtime: cli,
+        methodology,
+        basePrompt: suppliedBasePrompt,
+      });
+      launchPrompt = composed.prompt;
+      methodologySelection = composed.methodology;
+    } else {
+      launchPrompt = defaultPrompt;
+    }
+    if (methodologySelection && methodologySelection.id === 'bmad') {
+      const status = bmadProvider.inspectProject(projectDir, dataDir);
+      if (!status.installed) throw new Error('Install BMad Method in this project before launching a BMad agent');
+      if (!status.compatible) throw new Error(`Installed BMad version is not compatible with v${bmadProvider.SUPPORTED_MAJOR}`);
+      methodologySelection.version = status.version;
+    }
   } catch (error) {
     return { error: error.message };
   }
@@ -2159,7 +2210,18 @@ async function apiLaunchAgent(body) {
     const cliCommands = { claude: 'claude', gemini: 'gemini', codex: 'codex', cursor: 'agent' };
     const cliCmd = cliCommands[cli];
     spawn('cmd', ['/c', 'start', 'cmd', '/k', cliCmd], { cwd: projectDir, shell: false, detached: true, stdio: 'ignore' });
-    return { success: true, launched: true, cli, project_dir: projectDir, prompt: launchPrompt, message: 'Terminal opened. Paste the prompt after the CLI loads.' };
+    return {
+      success: true,
+      launched: true,
+      cli,
+      project_dir: projectDir,
+      prompt: launchPrompt,
+      prompt_supplied: false,
+      manual_prompt_required: true,
+      launch_mode: 'manual-paste',
+      methodology: methodologySelection,
+      message: 'Terminal opened without an initial prompt. Paste the generated prompt after the CLI loads.',
+    };
   }
 
   try {
@@ -2169,6 +2231,7 @@ async function apiLaunchAgent(body) {
       cli,
       agentName: safeName || 'agent',
       prompt: launchPrompt,
+      methodology: methodologySelection,
     });
     return {
       success: true,
@@ -2181,6 +2244,7 @@ async function apiLaunchAgent(body) {
       tmux_pane_id: window.paneId,
       tmux_window_name: window.windowName,
       message: `${window.label} launched in tmux with the generated prompt.`,
+      methodology: methodologySelection,
     };
   } catch (error) {
     return { error: error.message || 'Failed to launch agent in tmux' };
@@ -2189,9 +2253,83 @@ async function apiLaunchAgent(body) {
 
 function ollamaRequestContext(url) {
   const projectPath = url.searchParams.get('project') || null;
-  const dataDir = resolveDataDir(projectPath);
-  const projectDir = projectPath || (path.basename(dataDir) === '.neohive' ? path.dirname(dataDir) : process.cwd());
+  if (projectPath && !validateProjectPath(projectPath)) {
+    throw new Error('Project directory not registered. Add it via the dashboard first.');
+  }
+  const projectDir = projectPath
+    ? normalizeMonitoredProjectRoot(projectPath)
+    : bmadProvider.projectRootFromDataDir(DEFAULT_DATA_DIR, process.cwd());
+  const dataDir = projectPath ? resolveDataDir(projectDir) : DEFAULT_DATA_DIR;
   return { dataDir, projectDir, packageDir: __dirname };
+}
+
+// Story 1.2/1.3 (FR1/FR2, AD-1/AD-2): read-only join of tasks.json against
+// BMad stories/artifacts. Authoritative link is task.bmad_story_id matched
+// to a story's file path; falls back to the external_ref-based assignment
+// bmadProvider.inspectProject already computes. Degrades to empty state on
+// zero stories/zero links instead of crashing (never writes tasks.json or
+// story files).
+function buildBmadTaskLinks(projectDir, dataDir) {
+  const status = bmadProvider.inspectProject(projectDir, dataDir, { preflight: false });
+  const stories = Array.isArray(status.stories) ? status.stories : [];
+  const tasksRaw = readJson(path.join(dataDir, 'tasks.json'));
+  const tasks = Array.isArray(tasksRaw) ? tasksRaw : (tasksRaw && Array.isArray(tasksRaw.tasks) ? tasksRaw.tasks : []);
+  const profiles = readJson(path.join(dataDir, 'profiles.json')) || {};
+
+  function storyMatchesTask(story, task) {
+    if (!task.bmad_story_id || !story.file) return false;
+    const a = String(task.bmad_story_id).replace(/\\/g, '/');
+    const b = String(story.file).replace(/\\/g, '/');
+    return a === b || a.endsWith('/' + b) || b.endsWith('/' + a) || path.basename(a) === path.basename(b);
+  }
+
+  const storyLinks = stories.map((story) => {
+    let linkedTasks = tasks
+      .filter((t) => t && storyMatchesTask(story, t))
+      .map((t) => ({ id: t.id, title: t.title, status: t.status, assignee: t.assignee || null }));
+    let linkSource = linkedTasks.length ? 'bmad_story_id' : null;
+
+    // Fallback: heuristic linkage via external_ref already resolved by
+    // bmadProvider.inspectProject (authoritative-field-first per AD-1).
+    if (!linkedTasks.length && story.assignment && story.assignment.task_id) {
+      const fallback = tasks.find((t) => t && t.id === story.assignment.task_id);
+      if (fallback) {
+        linkedTasks = [{ id: fallback.id, title: fallback.title, status: fallback.status, assignee: fallback.assignee || null }];
+        linkSource = 'heuristic';
+      }
+    }
+
+    return {
+      id: story.id,
+      external_id: story.external_id,
+      title: story.title,
+      status: story.status,
+      link_source: linkSource,
+      linked_tasks: linkedTasks,
+    };
+  });
+
+  // Story 1.3 (FR2): shadow work = roadmap-sized tasks with null/absent
+  // bmad_story_id (AD-2's exact rule — independent of heuristic linkage
+  // shown above, which is display-only for the cross-link view).
+  // NFR4/INV-4: inert on non-BMad projects — only surface shadow work when
+  // the project actually uses BMad. "In use" = installed flag OR any BMad
+  // stories/artifacts present (the test/early case where _bmad-output exists
+  // but the _bmad install dir does not still counts as active).
+  const bmadActive = status.installed || stories.length > 0;
+  const shadowTasks = bmadActive
+    ? tasks
+        .filter((t) => t && isShadowWork(t, profiles))
+        .map((t) => ({ id: t.id, title: t.title, status: t.status, assignee: t.assignee || null, created_by: t.created_by || null }))
+    : [];
+
+  return {
+    stories: storyLinks,
+    shadow_work: {
+      count: shadowTasks.length,
+      tasks: shadowTasks,
+    },
+  };
 }
 
 function writeApiResult(res, result, statusCode) {
@@ -2956,12 +3094,8 @@ const server = http.createServer(async (req, res) => {
         }
         const projectPath = url.searchParams.get('project') || null;
         const dataDir = resolveDataDir(projectPath);
-        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-        const configFile = filePath('config.json', projectPath);
-        await withFileLock(configFile, () => {
-          const config = readJson(configFile);
+        mutateProjectConfig(dataDir, (config) => {
           config.coordinator_mode = newMode;
-          fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
         });
         // Broadcast mode change to all agents + direct message to lead agents
         try {
@@ -3000,12 +3134,8 @@ const server = http.createServer(async (req, res) => {
         const body = await parseBody(req).catch(() => ({}));
         const projectPath = url.searchParams.get('project') || null;
         const dataDir = resolveDataDir(projectPath);
-        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-        const configFile = filePath('config.json', projectPath);
-        await withFileLock(configFile, () => {
-          const config = readJson(configFile);
+        mutateProjectConfig(dataDir, (config) => {
           Object.assign(config, body);
-          fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
         });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true }));
@@ -4167,6 +4297,86 @@ const server = http.createServer(async (req, res) => {
     else if (url.pathname === '/api/launch/roles' && req.method === 'GET') {
       writeApiResult(res, { roles: agentLaunchProfiles.listRoleProfiles() });
     }
+    else if (url.pathname === '/api/launch/preview' && req.method === 'POST') {
+      try {
+        const body = await parseBody(req);
+        const composed = methodologyProvider.composeLaunchPrompt({
+          role: body.role,
+          name: body.agent_name,
+          runtime: body.runtime,
+          methodology: body.methodology,
+          basePrompt: body.base_prompt,
+        });
+        writeApiResult(res, composed);
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    else if (url.pathname === '/api/launch/methodologies' && req.method === 'GET') {
+      writeApiResult(res, methodologyProvider.listMethodologies());
+    }
+    // Optional project methodology setup and read-only lifecycle projection
+    else if (url.pathname === '/api/methodologies/bmad/status' && req.method === 'GET') {
+      try {
+        const context = ollamaRequestContext(url);
+        writeApiResult(res, bmadProvider.inspectProject(context.projectDir, context.dataDir, { hashArtifacts: false }));
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    else if (url.pathname === '/api/methodologies/bmad/artifacts' && req.method === 'GET') {
+      try {
+        const context = ollamaRequestContext(url);
+        const status = bmadProvider.inspectProject(context.projectDir, context.dataDir, { preflight: false });
+        const kind = String(url.searchParams.get('kind') || '').trim();
+        const artifacts = kind ? status.artifacts.filter((item) => item.kind === kind) : status.artifacts;
+        writeApiResult(res, { count: artifacts.length, artifacts });
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    // Story 1.2/1.3 (FR1/FR2, AD-1/AD-2): read-only Story<->Task cross-link
+    // view + shadow-work surfacing. Joins tasks.json (bmad_story_id) with
+    // BMad artifacts/stories from bmadProvider.inspectProject. Zero writes
+    // to tasks.json or story files.
+    else if (url.pathname === '/api/methodologies/bmad/links' && req.method === 'GET') {
+      try {
+        const context = ollamaRequestContext(url);
+        writeApiResult(res, buildBmadTaskLinks(context.projectDir, context.dataDir));
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    else if (url.pathname === '/api/methodologies/bmad/settings' && req.method === 'POST') {
+      try {
+        const context = ollamaRequestContext(url);
+        const body = await parseBody(req);
+        const settings = bmadProvider.saveProjectSettings(context.dataDir, {
+          enabled: body.enabled === true,
+          mode: body.mode,
+          workflow: body.workflow,
+        });
+        writeApiResult(res, { success: true, settings });
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    else if (url.pathname === '/api/methodologies/bmad/install' && req.method === 'POST') {
+      try {
+        const context = ollamaRequestContext(url);
+        const body = await parseBody(req);
+        if (!['install', 'update'].includes(body.action)) throw new Error('Action must be "install" or "update"');
+        const result = await bmadProvider.runInstaller({
+          projectDir: context.projectDir,
+          dataDir: context.dataDir,
+          action: body.action,
+          runtimes: body.runtimes,
+        });
+        writeApiResult(res, result);
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
     // Templates API
     else if (url.pathname === '/api/templates' && req.method === 'GET') {
       let templates = [];
@@ -4249,6 +4459,11 @@ const server = http.createServer(async (req, res) => {
         if (body.runtime === 'claude') {
           ensureMCPConfig('claude', path.join(__dirname, 'server.js').replace(/\\/g, '/'), context.projectDir);
         }
+        if (body.methodology && body.methodology.id === 'bmad') {
+          const status = bmadProvider.inspectProject(context.projectDir, context.dataDir);
+          if (!status.installed) throw new Error('Install BMad Method in this project before launching a BMad agent');
+          if (!status.compatible) throw new Error(`Installed BMad version is not compatible with v${bmadProvider.SUPPORTED_MAJOR}`);
+        }
         const instance = await ollamaBridgeManager.startInstance({
           ...context,
           name: body.name,
@@ -4256,6 +4471,8 @@ const server = http.createServer(async (req, res) => {
           endpointId: body.endpoint_id,
           runtime: body.runtime,
           role: body.role,
+          methodology: body.methodology,
+          basePrompt: body.base_prompt,
         });
         writeApiResult(res, { success: true, instance });
       } catch (error) {
@@ -4509,6 +4726,34 @@ function startFileWatcher() {
 }
 
 startFileWatcher();
+
+// BMad writes nested files outside .neohive/, which fs.watch above cannot
+// observe portably on Linux. Fingerprint installed projects and emit one
+// coalesced methodology event when their authoritative output changes.
+const methodologyFingerprints = new Map();
+setInterval(() => {
+  if (sseClients.size === 0) return;
+  const projectContexts = new Map();
+  const defaultRoot = bmadProvider.projectRootFromDataDir(DEFAULT_DATA_DIR, process.cwd());
+  projectContexts.set(defaultRoot, DEFAULT_DATA_DIR);
+  for (const project of getProjects()) {
+    if (project && project.path) {
+      const projectRoot = normalizeMonitoredProjectRoot(project.path);
+      if (!projectContexts.has(projectRoot)) projectContexts.set(projectRoot, resolveDataDir(projectRoot));
+    }
+  }
+  let changed = false;
+  for (const [projectRoot, dataDir] of projectContexts) {
+    try {
+      const status = bmadProvider.inspectProject(projectRoot, dataDir, { preflight: false, hashArtifacts: false });
+      if (!status.installed && !status.enabled) continue;
+      const previous = methodologyFingerprints.get(projectRoot);
+      methodologyFingerprints.set(projectRoot, status.fingerprint);
+      if (previous && previous !== status.fingerprint) changed = true;
+    } catch {}
+  }
+  if (changed) sseNotifyAll('methodology');
+}, 5000).unref();
 
 // macOS fs.watch() silently stops emitting events when the watched directory is
 // deleted and recreated (e.g. reset --force). The watcher object stays non-null

@@ -23,6 +23,7 @@ const _audit = require('./lib/audit');
 const _compact = require('./lib/compact');
 const { readIdeActivity, applyIdeActivityHint } = require('./lib/ide-activity');
 const bmadProvider = require('./lib/bmad-provider');
+const methodologyProvider = require('./lib/methodology-provider');
 
 const DATA_DIR = _config.DATA_DIR;
 const PROJECT_ROOT = process.env.NEOHIVE_PROJECT_ROOT
@@ -1706,6 +1707,15 @@ function toolRegister(name, provider = null, skills = null) {
 
     if (assignedRole) result.your_role = assignedRole;
     if (isResuming) result.resuming = resumeContext;
+
+    // Story 1.4 (FR3/AD-3): auto-load the mapped BMad persona skill for the
+    // agent's role, if any. Data-driven — no per-call-site mapping. Inert
+    // (no-op, no error) for unmapped/absent roles and non-BMad projects.
+    const personaSkill = methodologyProvider.getPersonaSkillForRole(assignedRole);
+    if (personaSkill && inspectProjectMethodology({}).installed) {
+      result.persona_skill = personaSkill;
+      result.persona_note = `Your role "${assignedRole}" maps to the BMad "${personaSkill}" persona skill — invoke it to load that persona's context.`;
+    }
 
     result.guide = guide;
 
@@ -3955,7 +3965,18 @@ function toolUpdateProfile(displayName, avatar, bio, role) {
   }
   p.updated_at = new Date().toISOString();
   saveProfiles(profiles);
-  return { success: true, profile: p };
+  const result = { success: true, profile: p };
+
+  // Story 1.4 (FR3/AD-3): role-set path also auto-loads the mapped BMad
+  // persona skill. See toolRegister for the register-path equivalent.
+  if (role !== undefined && role !== null) {
+    const personaSkill = methodologyProvider.getPersonaSkillForRole(role);
+    if (personaSkill && inspectProjectMethodology({}).installed) {
+      result.persona_skill = personaSkill;
+      result.persona_note = `Your role "${role}" maps to the BMad "${personaSkill}" persona skill — invoke it to load that persona's context.`;
+    }
+  }
+  return result;
 }
 
 // --- Phase 2: Workspace tools ---
@@ -7325,6 +7346,16 @@ const _governanceCtx = {
 };
 const governance = require('./tools/governance')(_governanceCtx);
 
+const _deliveryCtx = {
+  state: {
+    get registeredName() { return registeredName; },
+    get registeredToken() { return registeredToken; },
+  },
+  helpers: { generateId, ensureDataDir, touchActivity },
+  files: { DATA_DIR },
+};
+const delivery = require('./tools/delivery')(_deliveryCtx);
+
 const _tasksCtx = {
   state: {
     get registeredName() { return registeredName; },
@@ -7340,6 +7371,7 @@ const _tasksCtx = {
     getWorkspace, saveWorkspace, appendNotification,
     getWorkflows, saveWorkflows, saveWorkflowCheckpoint, findReadySteps,
     getMessagesFile, getHistoryFile, logViolation, cachedRead,
+    enqueueDurableDelivery: delivery.internalEnqueue,
   },
   files: { TASKS_FILE, REVIEWS_FILE, DEPS_FILE },
 };
@@ -7682,6 +7714,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       // --- Task tools (from tools/tasks.js) ---
       ...tasks.definitions,
+      // --- Durable delivery tools (from tools/delivery.js) ---
+      ...delivery.definitions,
       // --- Knowledge tools (from tools/knowledge.js) ---
       ...knowledge.definitions,
       {
@@ -7994,7 +8028,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'create_task':
       case 'update_task':
       case 'list_tasks':
+      case 'link_task_to_story':
         result = tasks.handlers[name](args || {});
+        break;
+      case 'enqueue_delivery':
+      case 'claim_deliveries':
+      case 'ack_delivery':
+      case 'fail_delivery':
+      case 'redrive_delivery':
+      case 'list_deliveries':
+      case 'list_dead_letters':
+        result = delivery.handlers[name](args || {});
         break;
       case 'handoff':
         result = toolHandoff(args.to, args.context);

@@ -488,6 +488,13 @@
   .agent-card.stuck { border-color: rgba(239, 68, 68, 0.3); }
   .agent-card.unresponsive { border-color: rgba(249, 115, 22, 0.3); }
 
+  .agent-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
   .agent-name {
     font-weight: 600;
     font-size: 13px;
@@ -495,15 +502,26 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
   }
 
   .agent-subtitle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    margin-top: 1px;
+  }
+
+  .agent-subtitle-text {
     font-size: 11px;
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-top: 1px;
+    min-width: 0;
+    flex: 1;
   }
 
   /* ===== AGENT SKILLS (visible in popup, hidden in card) ===== */
@@ -1816,8 +1834,21 @@
   .nav-sidebar.collapsed .nav-sidebar-label { display: none; }
   .nav-sidebar.collapsed .nav-sidebar-project { display: none; }
   .nav-sidebar.collapsed .nav-sidebar-agents #agents-list { display: none; }
-  .nav-sidebar-spacer { flex: 1; }
-  .nav-sidebar-agents { overflow-y: auto; min-height: 0; }
+  .nav-sidebar-spacer { flex: 1 1 0; min-height: 0; }
+  .nav-sidebar-agents {
+    flex: 1 1 auto;
+    min-height: 45vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .nav-sidebar-agents .nav-sidebar-label {
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 1;
+  }
+  .nav-sidebar-agents #agents-list { flex: 1; }
 
   /* Nav items */
   .nav-item {
@@ -3791,6 +3822,22 @@
   .launch-form-field .field-hint { font-size: 11px; color: var(--text-muted); min-height: 16px; }
   .launch-form-field .field-hint.error { color: var(--red); }
   .launch-form-field .field-hint.success { color: var(--green); }
+  .methodology-panel { margin: 12px 0; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+  .methodology-summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; color: var(--text-dim); }
+  .methodology-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--accent-dim); color: var(--accent); font-size: 10px; font-weight: 700; }
+  .methodology-badge.ok { background: var(--green-dim); color: var(--green); }
+  .methodology-badge.warn { background: var(--yellow-dim); color: var(--yellow); }
+  .methodology-badge.error { background: var(--red-dim); color: var(--red); }
+  .methodology-warning { padding: 9px 10px; margin-top: 8px; border: 1px solid var(--yellow); border-radius: 8px; background: var(--yellow-dim); color: var(--yellow); font-size: 11px; }
+  .methodology-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .methodology-phase { padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+  .methodology-phase-name { font-size: 12px; font-weight: 700; color: var(--text); }
+  .methodology-phase-state { margin-top: 4px; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
+  .methodology-list { display: grid; gap: 6px; margin-top: 8px; }
+  .methodology-list-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font-size: 11px; }
+  .methodology-list-row span:first-child { min-width: 0; overflow-wrap: anywhere; color: var(--text); }
+  .methodology-list-row span:last-child { flex: none; color: var(--text-muted); }
+  @media (max-width: 760px) { .methodology-grid { grid-template-columns: 1fr 1fr; } }
   .ollama-instance-list { display: grid; gap: 8px; margin-top: 14px; }
   .ollama-instance-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
   .ollama-instance-meta { min-width: 0; }
@@ -3803,7 +3850,8 @@
     color: var(--text); line-height: 1.5; max-height: 200px; overflow-y: auto;
     white-space: pre-wrap; cursor: pointer; position: relative; transition: border-color 0.15s;
   }
-  .launch-prompt-output:hover { border-color: var(--accent); }
+  .launch-prompt-output:hover, .launch-prompt-output:focus-visible,
+  .template-card:hover, .template-card:focus-visible { border-color: var(--accent); outline: none; }
   .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
   .template-card {
     background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
@@ -3816,6 +3864,24 @@
   .template-agent-chip {
     font-size: 11px; padding: 2px 8px; border-radius: 6px;
     background: var(--accent-dim); color: var(--accent); font-weight: 500;
+  }
+  .launch-inline-actions { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; }
+  .launch-inline-actions > * { min-width: 0; }
+  @media (max-width: 600px) {
+    .launch-area { padding: 12px; }
+    .launch-section { padding: 14px; }
+    .launch-form-row, .methodology-grid { grid-template-columns: 1fr; }
+    .template-grid { grid-template-columns: minmax(0, 1fr); }
+    .ollama-instance-row, .launch-template-agent, .launch-status-item {
+      align-items: stretch;
+      flex-direction: column;
+      overflow-wrap: anywhere;
+    }
+    .ollama-instance-detail { white-space: normal; overflow: visible; text-overflow: clip; }
+    .ollama-instance-actions, .launch-inline-actions { width: 100%; flex-wrap: wrap; }
+    .ollama-instance-actions .btn, .launch-inline-actions .btn, .template-card > .btn { flex: 1 1 100%; width: 100%; }
+    .launch-template-agent .lta-name { min-width: 0; }
+    .launch-status-item .ls-state { overflow-wrap: anywhere; }
   }
 
   /* ===== RULES VIEW ===== */
@@ -4594,6 +4660,9 @@
       <div class="nav-item" data-view="launch" onclick="switchView('launch')">
         <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v12M2 8h12"/></svg></span><span class="nav-text">Launch</span>
       </div>
+      <div class="nav-item" data-view="bmad" onclick="switchView('bmad')">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg></span><span class="nav-text">BMad</span>
+      </div>
       <div class="nav-item" data-view="terminal" onclick="switchView('terminal')">
         <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4l4 4-4 4M9 12h4"/></svg></span><span class="nav-text">Terminal</span>
       </div>
@@ -4670,6 +4739,7 @@
       <div class="view-tab" id="tab-workflows" onclick="switchView('workflows')">Workflows</div>
       <div class="view-tab" id="tab-plan" onclick="switchView('plan')">Plan</div>
       <div class="view-tab" id="tab-launch" onclick="switchView('launch')">Launch</div>
+      <div class="view-tab" id="tab-bmad" onclick="switchView('bmad')">BMad</div>
       <div class="view-tab" id="tab-rules" onclick="switchView('rules')">Policies</div>
       <div class="view-tab" id="tab-audit-log" onclick="switchView('audit-log')">Audit Log</div>
       <div class="view-tab" id="tab-stats" onclick="switchView('stats')">Stats</div>
@@ -4700,6 +4770,7 @@
     <div class="plan-area" id="plan-area"></div>
     <div class="plan-area" id="monitor-panel" style="display:none"></div>
     <div class="launch-area" id="launch-area"></div>
+    <div class="launch-area" id="bmad-area"></div>
     <div class="rules-area" id="rules-area"></div>
     <div class="audit-log-area" id="audit-log-area" style="display:none; padding:16px 20px; overflow-y:auto; flex:1"></div>
     <div class="stats-area" id="stats-area"></div>
@@ -5240,9 +5311,9 @@ function renderAgents(agents) {
   }
 
   // Group by role
-  var ROLE_ORDER = ['lead', 'backend', 'frontend', 'quality', 'monitor', 'advisor', ''];
-  var ROLE_LABELS = { lead: 'Lead', backend: 'Backend', frontend: 'Frontend', quality: 'Quality', monitor: 'Monitor', advisor: 'Advisor', '': 'Unassigned' };
-  var ROLE_COLORS = { lead: 'var(--nh-accent)', backend: 'var(--nh-amber)', frontend: 'var(--nh-purple)', quality: 'var(--nh-green)', monitor: 'var(--nh-red)', advisor: 'var(--nh-purple)', '': 'var(--nh-text-muted)' };
+  var ROLE_ORDER = ['lead', 'backend', 'frontend', 'quality', 'monitor', 'advisor', 'analyst', 'architect', 'dev', 'pm', 'ux-designer', 'tech-writer', ''];
+  var ROLE_LABELS = { lead: 'Lead', backend: 'Backend', frontend: 'Frontend', quality: 'Quality', monitor: 'Monitor', advisor: 'Advisor', analyst: 'Analyst', architect: 'Architect', dev: 'BMad Dev', pm: 'Product Manager', 'ux-designer': 'UX Designer', 'tech-writer': 'Tech Writer', '': 'Unassigned' };
+  var ROLE_COLORS = { lead: 'var(--nh-accent)', backend: 'var(--nh-amber)', frontend: 'var(--nh-purple)', quality: 'var(--nh-green)', monitor: 'var(--nh-red)', advisor: 'var(--nh-purple)', analyst: 'var(--nh-blue)', architect: 'var(--nh-amber)', dev: 'var(--nh-green)', pm: 'var(--nh-accent)', 'ux-designer': 'var(--nh-purple)', 'tech-writer': 'var(--nh-blue)', '': 'var(--nh-text-muted)' };
   var roleGroups = {};
   for (var g = 0; g < filtered.length; g++) {
     var gname = filtered[g];
@@ -5327,11 +5398,15 @@ function renderAgents(agents) {
         '<div class="agent-top">' +
           avatarHtml +
           '<div class="agent-info">' +
-            '<div class="agent-name">' + escapeHtml(displayName) + '</div>' +
-            '<div class="agent-subtitle">' + escapeHtml(subtitleText) + '</div>' +
+            '<div class="agent-name-row">' +
+              '<div class="agent-name">' + escapeHtml(displayName) + '</div>' +
+              indicatorHtml +
+            '</div>' +
+            '<div class="agent-subtitle">' +
+              '<span class="agent-subtitle-text">' + escapeHtml(subtitleText) + '</span>' +
+              tmuxBadgeHtml(info) +
+            '</div>' +
           '</div>' +
-          indicatorHtml +
-          tmuxBadgeHtml(info) +
           '<button type="button" class="agent-profile-btn" onclick="openAgentProfile(\'' + escapeHtml(name) + '\', event)" title="View agent profile" aria-label="View ' + escapeHtml(displayName) + ' profile"><svg viewBox="0 0 16 16"><circle cx="8" cy="5" r="2.5"/><path d="M3.5 14c.4-3 2-4.5 4.5-4.5S12.1 11 12.5 14"/></svg></button>' +
         '</div>' +
       '</div>';
@@ -5358,8 +5433,15 @@ function renderAgents(agents) {
   }
 
   if (useGrouping) {
-    for (var r = 0; r < ROLE_ORDER.length; r++) {
-      var role = ROLE_ORDER[r];
+    var allRoles = Object.keys(roleGroups).sort(function(a, b) {
+      var ia = ROLE_ORDER.indexOf(a);
+      var ib = ROLE_ORDER.indexOf(b);
+      if (ia === -1) ia = ROLE_ORDER.length;
+      if (ib === -1) ib = ROLE_ORDER.length;
+      return ia !== ib ? ia - ib : a.localeCompare(b);
+    });
+    for (var r = 0; r < allRoles.length; r++) {
+      var role = allRoles[r];
       if (!roleGroups[role] || !roleGroups[role].length) continue;
       var isCollapsed = !!collapsedRoleGroups[role];
       var roleLabel = ROLE_LABELS[role] || role;
@@ -5397,8 +5479,8 @@ function renderAgents(agents) {
       if (pill) { pill.className = 'agent-state-pill ' + pState; pill.textContent = pState; }
       var ctEl = pCard.querySelector('.agent-current-tool');
       if (ctEl) { ctEl.textContent = (pState === 'working' && pInfo.current_tool) ? '\u2699 ' + pInfo.current_tool : ''; }
-      var sub = pCard.querySelector('.agent-subtitle');
-      if (sub) {
+      var subText = pCard.querySelector('.agent-subtitle-text');
+      if (subText) {
         var parts = [];
         if (pInfo.role) parts.push(pInfo.role);
         if (pState === 'offline') parts.push('offline');
@@ -5410,7 +5492,7 @@ function renderAgents(agents) {
           parts.push(timeAgo(pInfo.last_activity));
         }
         var newSub = parts.join(' \u00B7 ');
-        if (sub.textContent !== newSub) sub.textContent = newSub;
+        if (subText.textContent !== newSub) subText.textContent = newSub;
       }
       var newCardClass = 'agent-card' + (pState !== 'working' ? ' ' + pState : '');
       if (pCard.className !== newCardClass) pCard.className = newCardClass;
@@ -5420,8 +5502,8 @@ function renderAgents(agents) {
       if (tb) {
         if (!tmuxBadge) {
           tmuxBadge = document.createElement('span');
-          var agentTop = pCard.querySelector('.agent-top');
-          if (agentTop) agentTop.appendChild(tmuxBadge);
+          var agentSubtitle = pCard.querySelector('.agent-subtitle');
+          if (agentSubtitle) agentSubtitle.appendChild(tmuxBadge);
         }
         if (tmuxBadge) {
           tmuxBadge.className = 'agent-tmux-badge ' + tb.cls;
@@ -5469,7 +5551,6 @@ function openAgentTerminal(agentName, event) {
   if (event) event.stopPropagation();
   var agent = cachedAgents[agentName];
   var tmux = agent && agent.tmux;
-  showProfilePopup(agentName, event);
   if (!tmux || !tmux.mapped || !tmux.pane_id) {
     return;
   }
@@ -6679,12 +6760,13 @@ function relativeTime(ts) {
 
 function copyText(el) {
   var text = el.getAttribute('data-text').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-  navigator.clipboard.writeText(text).then(function() {
+  writeClipboard(text).then(function() {
     el.classList.add('copied');
-    el.querySelector('.copy-hint').textContent = 'copied!';
+    var hint = el.querySelector('.copy-hint');
+    if (hint) hint.textContent = 'copied!';
     setTimeout(function() {
       el.classList.remove('copied');
-      el.querySelector('.copy-hint').textContent = 'click to copy';
+      if (hint) hint.textContent = 'click to copy';
     }, 2000);
   }).catch(function() {});
 }
@@ -6921,7 +7003,7 @@ function switchView(view) {
     navItems[i].classList.toggle('active', navItems[i].getAttribute('data-view') === view);
   }
   // Update old tab active states (kept for compatibility)
-  var tabIds = ['messages','tasks','workspaces','workflows','plan','launch','rules','audit-log','stats','docs'];
+  var tabIds = ['messages','tasks','workspaces','workflows','plan','launch','bmad','rules','audit-log','stats','docs'];
   for (var t = 0; t < tabIds.length; t++) {
     var el = document.getElementById('tab-' + tabIds[t]);
     if (el) el.classList.toggle('active', view === tabIds[t]);
@@ -6935,6 +7017,7 @@ function switchView(view) {
   document.getElementById('plan-area').classList.toggle('visible', view === 'plan');
   document.getElementById('monitor-panel').style.display = view === 'plan' ? 'block' : 'none';
   document.getElementById('launch-area').classList.toggle('visible', view === 'launch');
+  document.getElementById('bmad-area').classList.toggle('visible', view === 'bmad');
   document.getElementById('rules-area').classList.toggle('visible', view === 'rules');
   if (document.getElementById('audit-log-area')) {
     document.getElementById('audit-log-area').classList.toggle('visible', view === 'audit-log');
@@ -6948,13 +7031,19 @@ function switchView(view) {
   var composeBar = document.querySelector('.msg-input-bar');
   if (composeBar) composeBar.style.display = (view === 'messages') ? 'flex' : 'none';
   if (view === 'overview') renderOverview();
-  if (view === 'messages') renderChannelBar(cachedHistory);
+  if (view === 'messages') {
+    renderChannelBar(cachedHistory);
+    autoScroll = true;
+    var msgEl = document.getElementById('messages');
+    if (msgEl) requestAnimationFrame(function() { msgEl.scrollTop = msgEl.scrollHeight; });
+  }
   if (view === 'tasks') fetchTasks();
   if (view === 'workspaces') fetchWorkspaces();
   if (view === 'workflows') fetchWorkflows();
   if (view === 'plan') { fetchPlanStatus(); fetchMonitorHealth(); }
   if (view === 'docs') renderDocs();
   if (view === 'launch') renderLaunchPanel();
+  if (view === 'bmad') renderBmadTab();
   if (view === 'rules') fetchRules();
   if (view === 'audit-log') fetchAuditLog();
   if (view === 'stats') fetchStats();
@@ -9783,21 +9872,27 @@ function loadProjects() {
 
 function switchProject() {
   activeProject = document.getElementById('project-select').value;
+  invalidateLaunchProjectState();
   lastMessageCount = 0;
   setProjectRemoveButtonsVisible(!!activeProject);
   syncMobileProjectSelect();
   loadConversationList();
   poll();
+  if (activeView === 'launch') renderLaunchPanel();
   if (isMobile) closeSidebar();
 }
 
 function mobileSelectProject(val) {
   activeProject = val;
+  invalidateLaunchProjectState();
   lastMessageCount = 0;
   // Sync sidebar select
   document.getElementById('project-select').value = val;
   setProjectRemoveButtonsVisible(!!val);
+  syncMobileProjectSelect();
+  loadConversationList();
   poll();
+  if (activeView === 'launch') renderLaunchPanel();
 }
 
 function syncMobileProjectSelect() {
@@ -9912,10 +10007,12 @@ function removeProject() {
   }).then(function(r) { return r.json(); }).then(function(res) {
     if (res.success) {
       activeProject = '';
+      invalidateLaunchProjectState();
       document.getElementById('project-select').value = '';
       setProjectRemoveButtonsVisible(false);
       loadProjects();
       poll();
+      if (activeView === 'launch') renderLaunchPanel();
       showToast('\u2713', 'Project removed from list');
     } else {
       showToast('!', res.error || 'Could not remove project');
@@ -10360,9 +10457,89 @@ var launchRoleProfiles = [];
 var ROLE_SKILLS = {};
 var ROLE_PROMPTS = {};
 var ollamaModelRequestSeq = 0;
+var launchMethodologies = [];
+var bmadStatus = null;
+var bmadArtifacts = [];
+var launchMethodologySelection = { id: 'none', mode: 'quick', workflow: 'bmad-quick-dev' };
+var launchMethodologyProject = null;
+var launchPreviewSeq = 0;
+var launchPreviewTimer = null;
+var launchRenderSeq = 0;
+var bmadSettingsSeq = 0;
+var bmadInstallSeq = 0;
+var launchActionSeq = 0;
+var launchRenderedProject = null;
+var launchRefreshPending = false;
 
 var _launchWatchers = []; // [{name, cli, prompt, state}] for tracking launch status
 var _launchWatchInterval = null;
+
+function projectParamFor(project) {
+  return project ? '?project=' + encodeURIComponent(project) : '';
+}
+
+function invalidateLaunchProjectState() {
+  launchRenderSeq += 1;
+  launchPreviewSeq += 1;
+  ollamaModelRequestSeq += 1;
+  bmadSettingsSeq += 1;
+  bmadInstallSeq += 1;
+  launchActionSeq += 1;
+  if (launchPreviewTimer) {
+    clearTimeout(launchPreviewTimer);
+    launchPreviewTimer = null;
+  }
+  if (_launchWatchInterval) {
+    clearInterval(_launchWatchInterval);
+    _launchWatchInterval = null;
+  }
+  bmadStatus = null;
+  bmadArtifacts = [];
+  launchMethodologies = [];
+  launchMethodologyProject = null;
+  launchRenderedProject = null;
+  launchRefreshPending = false;
+  launchMethodologySelection = { id: 'none', mode: 'quick', workflow: 'bmad-quick-dev' };
+  _launchWatchers = [];
+  window._generatedLaunchPrompt = '';
+  window._launchExistingNames = [];
+  var launchArea = document.getElementById('launch-area');
+  if (launchArea && activeView === 'launch') {
+    launchArea.innerHTML = '<div class="launch-section"><p style="color:var(--text-dim)">Loading launch data for the selected project...</p></div>';
+  }
+}
+
+function currentLaunchActionContext() {
+  if (launchRefreshPending || launchRenderedProject !== activeProject) {
+    showToast('!', 'Launch data is refreshing for the selected project');
+    return null;
+  }
+  return { project: activeProject, param: projectParamFor(activeProject) };
+}
+
+function validAgentName(name) {
+  return /^[a-zA-Z0-9_-]{1,20}$/.test(String(name || '').trim());
+}
+
+function templateAgentNameError(agents) {
+  var seen = {};
+  for (var i = 0; i < agents.length; i++) {
+    var name = String(agents[i] && agents[i].name || '').trim();
+    if (!validAgentName(name)) {
+      return 'Agent name "' + (name || '(empty)') + '" must be 1-20 letters, numbers, underscores, or hyphens.';
+    }
+    var key = name.toLowerCase();
+    if (seen[key]) return 'Template agent names must be unique (case-insensitive): "' + name + '".';
+    seen[key] = true;
+  }
+  return '';
+}
+
+function normalizedTemplateAgents(agents) {
+  return (agents || []).map(function(agent) {
+    return Object.assign({}, agent, { name: String(agent && agent.name || '').trim() });
+  });
+}
 
 function setLaunchRoleProfiles(profiles) {
   launchRoleProfiles = Array.isArray(profiles) ? profiles : [];
@@ -10376,21 +10553,216 @@ function setLaunchRoleProfiles(profiles) {
   });
 }
 
+function selectedMethodology() {
+  var method = document.getElementById('launch-methodology');
+  var mode = document.getElementById('launch-methodology-mode');
+  var workflow = document.getElementById('launch-methodology-workflow');
+  var selection = {
+    id: method ? method.value : launchMethodologySelection.id,
+    mode: mode ? mode.value : launchMethodologySelection.mode,
+    workflow: workflow ? workflow.value : launchMethodologySelection.workflow
+  };
+  launchMethodologySelection = selection;
+  return selection.id === 'bmad'
+    ? { id: 'bmad', mode: selection.mode || 'quick', workflow: selection.workflow || 'bmad-quick-dev' }
+    : null;
+}
+
+function bmadDescriptor() {
+  return launchMethodologies.find(function(item) { return item.id === 'bmad'; }) || null;
+}
+
+function bmadWorkflowsForMode(mode) {
+  var descriptor = bmadDescriptor();
+  return descriptor && Array.isArray(descriptor.workflows)
+    ? descriptor.workflows.filter(function(item) { return item.mode === mode; })
+    : [];
+}
+
+function renderBmadWorkflowOptions(mode, selected) {
+  var workflows = bmadWorkflowsForMode(mode);
+  if (!workflows.length) return '<option value="">No workflows available</option>';
+  if (!workflows.some(function(item) { return item.id === selected; })) {
+    selected = mode === 'quick' ? 'bmad-quick-dev' : 'auto';
+  }
+  launchMethodologySelection.workflow = selected;
+  return workflows.map(function(item) {
+    return '<option value="' + escapeHtml(item.id) + '"' + (item.id === selected ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
+  }).join('');
+}
+
+function methodologyStatusBadges(status) {
+  if (!status) return '<span class="methodology-badge error">Status unavailable</span>';
+  var html = '<span class="methodology-badge">' + escapeHtml('Compatible with BMad Method v' + (status.supported_major || 6)) + '</span>';
+  html += '<span class="methodology-badge ' + (status.installed ? 'ok' : 'warn') + '">' + (status.installed ? 'Installed' : 'Not installed') + '</span>';
+  if (status.version) html += '<span class="methodology-badge">Version ' + escapeHtml(status.version) + '</span>';
+  if (status.installed) html += '<span class="methodology-badge ' + (status.compatible ? 'ok' : 'error') + '">' + (status.compatible ? 'Compatible' : 'Incompatible version') + '</span>';
+  if (status.stale) html += '<span class="methodology-badge warn">State stale</span>';
+  return html;
+}
+
+function renderBmadLifecycle(status, artifactsResponse) {
+  var html = '<div class="launch-section" id="bmad-lifecycle">';
+  html += '<h3 style="display:flex;justify-content:space-between;align-items:center;gap:8px">BMad Lifecycle <span class="methodology-badge">Read-only projection · BMad files authoritative</span></h3>';
+  if (!status || status.error) {
+    html += '<div class="launch-result error" style="display:block">' + escapeHtml(status && status.error ? status.error : 'BMad lifecycle status is unavailable.') + '</div></div>';
+    return html;
+  }
+  html += '<div class="methodology-summary">' + methodologyStatusBadges(status) + '</div>';
+  if (status.stale) {
+    html += '<div class="methodology-warning">Lifecycle data is stale. Refresh after the authoritative BMad files are updated.</div>';
+  }
+  html += '<div class="methodology-grid">';
+  (status.phases || []).forEach(function(phase) {
+    var stateClass = phase.status === 'completed' ? 'ok' : phase.status === 'blocked' ? 'error' : phase.status === 'in_progress' ? 'warn' : '';
+    html += '<div class="methodology-phase"><div class="methodology-phase-name">' + escapeHtml(phase.label) + (phase.optional ? ' <span style="font-weight:400;color:var(--text-muted)">(optional)</span>' : '') + '</div><div class="methodology-phase-state"><span class="methodology-badge ' + stateClass + '">' + escapeHtml(phase.status || 'unknown') + '</span></div></div>';
+  });
+  html += '</div>';
+  var next = status.next_action || {};
+  html += '<div style="margin-top:12px;padding:10px;border-left:3px solid var(--accent);background:var(--surface-2);font-size:12px"><strong>Next action:</strong> ' + escapeHtml(next.workflow || 'None') + (next.story_id ? ' · ' + escapeHtml(next.story_id) : '') + '<div style="color:var(--text-muted);margin-top:3px">' + escapeHtml(next.reason || 'No recommendation available.') + '</div></div>';
+
+  html += '<div class="launch-form-row" style="margin-top:12px">';
+  html += '<div><div style="font-size:12px;font-weight:700">Story statuses</div><div class="methodology-list">';
+  if ((status.stories || []).length) {
+    (status.stories || []).slice(0, 20).forEach(function(story) {
+      var assignment = story.assignment
+        ? ' · ' + (story.assignment.assignee || 'unassigned') + ' (' + (story.assignment.execution_status || 'pending') + ')'
+        : '';
+      html += '<div class="methodology-list-row"><span>' + escapeHtml(story.title || story.external_id) + '</span><span>' + escapeHtml((story.status || 'unknown') + assignment) + '</span></div>';
+    });
+  } else html += '<div style="font-size:11px;color:var(--text-muted)">No story state found.</div>';
+  html += '</div></div><div><div style="font-size:12px;font-weight:700">Gates</div><div class="methodology-list">';
+  if ((status.gates || []).length) {
+    (status.gates || []).forEach(function(gate) {
+      html += '<div class="methodology-list-row"><span>' + escapeHtml(gate.label) + '</span><span>' + escapeHtml(gate.status || 'unknown') + '</span></div>';
+    });
+  } else html += '<div style="font-size:11px;color:var(--text-muted)">No readiness gates recorded.</div>';
+  html += '</div></div></div>';
+
+  var artifacts = artifactsResponse && Array.isArray(artifactsResponse.artifacts) ? artifactsResponse.artifacts : (status.artifacts || []);
+  html += '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:12px;font-weight:700">Artifacts (' + artifacts.length + ')</summary><div class="methodology-list">';
+  if (artifactsResponse && artifactsResponse.error) {
+    html += '<div class="methodology-warning">Artifact index error: ' + escapeHtml(artifactsResponse.error) + '</div>';
+  }
+  artifacts.slice(0, 50).forEach(function(artifact) {
+    var artifactState = artifact.error ? 'error' : artifact.stale ? 'stale' : artifact.kind || 'artifact';
+    html += '<div class="methodology-list-row"><span>' + escapeHtml(artifact.path || artifact.relative_path || artifact.id) + '</span><span>' + escapeHtml(artifactState) + '</span></div>';
+  });
+  if (!artifacts.length) html += '<div style="font-size:11px;color:var(--text-muted)">No BMad output artifacts found.</div>';
+  html += '</div></details></div>';
+  return html;
+}
+
+// Story 1.2/1.3 (FR1/FR2): read-only Story<->Task cross-link view +
+// shadow-work surfacing. Fed by GET /api/methodologies/bmad/links.
+// Display-only — never touches task status/assignee/createability.
+function renderBmadLinks(links) {
+  var html = '<div class="launch-section" id="bmad-links">';
+  var shadowCount = links && links.shadow_work ? (links.shadow_work.count || 0) : 0;
+  html += '<h3 style="display:flex;justify-content:space-between;align-items:center;gap:8px">Story &lt;-&gt; Task links';
+  html += '<span class="methodology-badge ' + (shadowCount > 0 ? 'warn' : 'ok') + '">Shadow work: ' + shadowCount + '</span></h3>';
+
+  if (!links || links.error) {
+    html += '<div class="launch-result error" style="display:block">' + escapeHtml(links && links.error ? links.error : 'Cross-link data unavailable.') + '</div></div>';
+    return html;
+  }
+
+  var stories = links.stories || [];
+  html += '<div class="methodology-list">';
+  if (stories.length) {
+    stories.forEach(function(story) {
+      html += '<div class="methodology-list-row" style="flex-direction:column;align-items:flex-start;gap:2px">';
+      html += '<div style="display:flex;justify-content:space-between;width:100%"><span>' + escapeHtml(story.title || story.external_id) + '</span><span>' + escapeHtml(story.status || 'unknown') + '</span></div>';
+      if (story.linked_tasks && story.linked_tasks.length) {
+        story.linked_tasks.forEach(function(task) {
+          var src = story.link_source === 'heuristic' ? ' (heuristic link)' : '';
+          html += '<div style="font-size:11px;color:var(--text-muted);padding-left:10px">&#8618; ' + escapeHtml(task.title || task.id) + ' &middot; ' + escapeHtml(task.status) + (task.assignee ? ' &middot; ' + escapeHtml(task.assignee) : '') + escapeHtml(src) + '</div>';
+        });
+      } else {
+        html += '<div style="font-size:11px;color:var(--text-muted);padding-left:10px">No linked tasks.</div>';
+      }
+      html += '</div>';
+    });
+  } else {
+    html += '<div style="font-size:11px;color:var(--text-muted)">No BMad stories found.</div>';
+  }
+  html += '</div>';
+
+  html += '<details style="margin-top:12px" ' + (shadowCount > 0 ? 'open' : '') + '><summary style="cursor:pointer;font-size:12px;font-weight:700">Shadow work (' + shadowCount + ')</summary><div class="methodology-list">';
+  var shadowTasks = (links.shadow_work && links.shadow_work.tasks) || [];
+  if (shadowTasks.length) {
+    shadowTasks.forEach(function(task) {
+      html += '<div class="methodology-list-row"><span>' + escapeHtml(task.title || task.id) + '</span><span>' + escapeHtml((task.status || 'unknown') + (task.created_by ? ' · ' + task.created_by : '')) + '</span></div>';
+    });
+  } else {
+    html += '<div style="font-size:11px;color:var(--text-muted)">No shadow work detected — every roadmap-sized task links to a story.</div>';
+  }
+  html += '</div></details></div>';
+  return html;
+}
+
+var bmadTabRenderSeq = 0;
+function renderBmadTab() {
+  var el = document.getElementById('bmad-area');
+  var requestedProject = activeProject;
+  var requestId = ++bmadTabRenderSeq;
+  var pq = projectParamFor(requestedProject);
+  if (el) {
+    el.innerHTML = '<div class="launch-section"><p style="color:var(--text-dim)">Loading BMad lifecycle for the selected project...</p></div>';
+  }
+  Promise.all([
+    lttFetch('/api/methodologies/bmad/status' + pq).then(function(r) { return r.json(); }).catch(function(error) { return { error: error.message || 'Failed to load BMad status' }; }),
+    lttFetch('/api/methodologies/bmad/artifacts' + pq).then(function(r) { return r.json(); }).catch(function(error) { return { error: error.message || 'Failed to load BMad artifacts', artifacts: [] }; }),
+    lttFetch('/api/methodologies/bmad/links' + pq).then(function(r) { return r.json(); }).catch(function(error) { return { error: error.message || 'Failed to load Story/Task links' }; })
+  ]).then(function(results) {
+    if (requestId !== bmadTabRenderSeq || requestedProject !== activeProject) return;
+    bmadStatus = results[0];
+    bmadArtifacts = results[1].artifacts || [];
+    el.innerHTML = renderBmadLifecycle(bmadStatus, results[1]) + renderBmadLinks(results[2]);
+  }).catch(function() {
+    if (requestId !== bmadTabRenderSeq || requestedProject !== activeProject) return;
+    el.innerHTML = '<div class="launch-section"><h3>BMad Lifecycle</h3><p style="color:var(--text-dim)">Failed to load data.</p></div>';
+  });
+}
+
 function renderLaunchPanel() {
   var el = document.getElementById('launch-area');
-  var pq = projectParam();
+  var requestedProject = activeProject;
+  var requestId = ++launchRenderSeq;
+  var pq = projectParamFor(requestedProject);
+  launchRefreshPending = true;
+  launchRenderedProject = null;
+  if (el) {
+    el.innerHTML = '<div class="launch-section"><p style="color:var(--text-dim)">Loading launch data for the selected project...</p></div>';
+  }
   Promise.all([
     lttFetch('/api/templates').then(function(r) { return r.json(); }).catch(function() { return []; }),
     lttFetch('/api/agents' + pq).then(function(r) { return r.json(); }).catch(function() { return {}; }),
     lttFetch('/api/launch/roles').then(function(r) { return r.json(); }),
     lttFetch('/api/ollama/endpoints' + pq).then(function(r) { return r.json(); }).catch(function() { return { endpoints: [] }; }),
-    lttFetch('/api/ollama/instances' + pq).then(function(r) { return r.json(); }).catch(function() { return { instances: [] }; })
+    lttFetch('/api/ollama/instances' + pq).then(function(r) { return r.json(); }).catch(function() { return { instances: [] }; }),
+    lttFetch('/api/launch/methodologies').then(function(r) { return r.json(); }).catch(function() { return { methodologies: [], runtimes: [] }; }),
+    lttFetch('/api/methodologies/bmad/status' + pq).then(function(r) { return r.json(); }).catch(function(error) { return { error: error.message || 'Failed to load BMad status' }; }),
+    lttFetch('/api/methodologies/bmad/artifacts' + pq).then(function(r) { return r.json(); }).catch(function(error) { return { error: error.message || 'Failed to load BMad artifacts', artifacts: [] }; })
   ]).then(function(results) {
+    if (requestId !== launchRenderSeq || requestedProject !== activeProject) return;
     var allTemplates = results[0];
     var existingAgents = results[1];
     setLaunchRoleProfiles(results[2].roles || []);
     var ollamaEndpoints = results[3].endpoints || [];
     var ollamaInstances = results[4].instances || [];
+    launchMethodologies = results[5].methodologies || [];
+    window._launchMethodologyRuntimes = results[5].runtimes || [];
+    bmadStatus = results[6];
+    bmadArtifacts = results[7].artifacts || [];
+    if (launchMethodologyProject !== requestedProject && bmadStatus && bmadStatus.settings) {
+      launchMethodologySelection = {
+        id: bmadStatus.settings.enabled ? 'bmad' : 'none',
+        mode: bmadStatus.settings.mode || 'quick',
+        workflow: bmadStatus.settings.workflow || (bmadStatus.settings.mode === 'full' ? 'auto' : 'bmad-quick-dev')
+      };
+      launchMethodologyProject = requestedProject;
+    }
     var existingNames = Object.keys(existingAgents).map(function(n) { return n.toLowerCase(); });
 
     var simpleTemplates = [];
@@ -10418,6 +10790,40 @@ function renderLaunchPanel() {
     html += '<div class="launch-form-field"><label>Runtime</label><select id="launch-runtime" onchange="updateUnifiedLaunchForm()"><option value="claude">Claude Code</option><option value="gemini">Gemini CLI</option><option value="codex">Codex CLI</option><option value="cursor">Cursor Agent</option><option value="ollama-claude">Claude Code via Ollama</option><option value="ollama-responder">Ollama responder</option></select><div class="field-hint" id="launch-runtime-hint">Select where this agent should run.</div></div>';
     html += '<div class="launch-form-field"><label>Registration Skills</label><input type="text" id="launch-skills" placeholder="Select a role" readonly style="color:var(--text-muted)"></div>';
     html += '</div>';
+    html += '<div class="methodology-panel">';
+    html += '<div class="launch-form-row" style="margin-bottom:0">';
+    html += '<div class="launch-form-field"><label for="launch-methodology">Methodology</label><select id="launch-methodology" onchange="onLaunchMethodologyChange()"><option value="none"' + (launchMethodologySelection.id !== 'bmad' ? ' selected' : '') + '>None</option>';
+    launchMethodologies.forEach(function(methodology) {
+      html += '<option value="' + escapeHtml(methodology.id) + '"' + (launchMethodologySelection.id === methodology.id ? ' selected' : '') + '>' + escapeHtml(methodology.label) + '</option>';
+    });
+    html += '</select><div class="field-hint">Optional project methodology for this launch and team templates.</div></div>';
+    html += '<div id="launch-bmad-selectors"' + (launchMethodologySelection.id === 'bmad' ? '' : ' style="display:none"') + '><div class="launch-form-row" style="margin-bottom:0">';
+    html += '<div class="launch-form-field"><label for="launch-methodology-mode">Mode</label><select id="launch-methodology-mode" onchange="onBmadModeChange()"><option value="quick"' + (launchMethodologySelection.mode === 'quick' ? ' selected' : '') + '>Quick</option><option value="full"' + (launchMethodologySelection.mode === 'full' ? ' selected' : '') + '>Full</option></select></div>';
+    html += '<div class="launch-form-field"><label for="launch-methodology-workflow">Workflow</label><select id="launch-methodology-workflow" onchange="onBmadSettingsChange()">' + renderBmadWorkflowOptions(launchMethodologySelection.mode, launchMethodologySelection.workflow) + '</select></div>';
+    html += '</div></div></div>';
+    html += '<div id="launch-bmad-setup"' + (launchMethodologySelection.id === 'bmad' ? '' : ' style="display:none"') + '>';
+    html += '<div class="methodology-summary" style="margin-top:10px">' + methodologyStatusBadges(bmadStatus) + '</div>';
+    if (bmadStatus && bmadStatus.error) {
+      html += '<div class="methodology-warning">Status error: ' + escapeHtml(bmadStatus.error) + '</div>';
+    }
+    if (bmadStatus && bmadStatus.preflight && !bmadStatus.preflight.ok) {
+      var failedPrereqs = Object.keys(bmadStatus.preflight.checks || {}).filter(function(key) { return !bmadStatus.preflight.checks[key].ok; }).map(function(key) {
+        return key + ' (' + bmadStatus.preflight.checks[key].required + ')';
+      });
+      html += '<div class="methodology-warning">Installer prerequisites missing: ' + escapeHtml(failedPrereqs.join(', ')) + '</div>';
+    }
+    if (bmadStatus && bmadStatus.installed && !bmadStatus.compatible) {
+      html += '<div class="methodology-warning">Installed BMad version is not compatible with this integration. Update before launching.</div>';
+    }
+    html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px">Install for native runtimes: ';
+    ['claude', 'gemini', 'codex', 'cursor'].forEach(function(runtimeId) {
+      var checked = bmadStatus && bmadStatus.settings && (bmadStatus.settings.installed_tools || []).indexOf(runtimeId) !== -1;
+      html += '<label style="margin-right:9px"><input type="checkbox" class="bmad-install-runtime" value="' + runtimeId + '"' + (checked ? ' checked' : '') + '> ' + escapeHtml(runtimeId) + '</label>';
+    });
+    var bmadPreflightOk = bmadStatus && bmadStatus.preflight && bmadStatus.preflight.ok;
+    html += '</div><div style="font-size:11px;color:var(--text-muted);margin-top:5px">' + (bmadStatus && bmadStatus.installed ? 'Quick Update preserves the existing runtime integrations; no runtime selection is required.' : 'Choose at least one runtime for a fresh install.') + '</div>';
+    html += '<div class="launch-inline-actions"><button class="btn" type="button" onclick="installBmad(\'install\')"' + (!bmadPreflightOk || (bmadStatus && bmadStatus.installed) ? ' disabled' : '') + '>Install selected runtimes</button><button class="btn" type="button" onclick="installBmad(\'update\')"' + (!bmadPreflightOk || !bmadStatus || !bmadStatus.installed ? ' disabled' : '') + '>Quick Update</button></div>';
+    html += '</div></div>';
     html += '<div id="launch-ollama-fields" style="display:none">';
     html += '<div class="launch-form-row">';
     html += '<div class="launch-form-field"><label>Ollama Endpoint</label><select id="ollama-endpoint" onchange="loadOllamaModels(true)">';
@@ -10433,7 +10839,7 @@ function renderLaunchPanel() {
     html += '</div></div>';
     html += '<details id="launch-prompt-details" style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--text-muted)">Generated role prompt</summary><div id="launch-prompt-output" style="margin-top:8px"></div></details>';
     html += '<div style="margin-top:12px"><button class="btn btn-primary" id="launch-primary-btn" onclick="launchConfiguredAgent()">Generate prompt and launch</button></div>';
-    html += '<div class="launch-result" id="launch-result"></div>';
+    html += '<div class="launch-result" id="launch-result" aria-live="polite"></div>';
     html += '<div id="launch-status-tracker" class="launch-status-tracker" style="display:none;margin-top:12px"></div>';
     html += '<details style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)"><summary style="cursor:pointer;font-size:13px;font-weight:600">Manage Ollama endpoints</summary><div style="margin-top:12px">';
     html += '<div class="launch-form-row">';
@@ -10441,7 +10847,7 @@ function renderLaunchPanel() {
     html += '<div class="launch-form-field"><label>Display Name</label><input type="text" id="ollama-endpoint-name" placeholder="Office Ollama" maxlength="80"></div>';
     html += '</div>';
     html += '<div class="launch-form-field"><label>URL</label><input type="url" id="ollama-endpoint-url" placeholder="http://192.168.1.120:11434"></div>';
-    html += '<div style="display:flex;gap:8px;margin-top:10px"><button class="btn" onclick="saveOllamaEndpoint()">Save Endpoint</button>';
+    html += '<div class="launch-inline-actions"><button class="btn" onclick="saveOllamaEndpoint()">Save Endpoint</button>';
     if (ollamaEndpoints.length) {
       html += '<button class="btn" onclick="deleteSelectedOllamaEndpoint()">Delete Selected Endpoint</button>';
     }
@@ -10456,7 +10862,10 @@ function renderLaunchPanel() {
       var isActive = ['starting', 'running', 'working'].indexOf(instance.status) !== -1;
       html += '<div class="ollama-instance-row">';
       html += '<div class="ollama-instance-meta"><div class="ollama-instance-name">' + escapeHtml(instance.name) + ' <span style="font-weight:400;color:var(--text-muted)">(' + escapeHtml(instance.status) + ')</span></div>';
-      html += '<div class="ollama-instance-detail">' + escapeHtml(instance.runtime === 'claude' ? 'Claude Code via Ollama' : 'Ollama responder') + ' · ' + escapeHtml(instance.model) + ' · ' + escapeHtml(instance.endpoint_name || instance.endpoint_id) + ' · ' + escapeHtml(instance.tmux_window_name || '') + '</div></div>';
+      var instanceMethod = instance.methodology && instance.methodology.id === 'bmad'
+        ? ' · BMad ' + (instance.methodology.version || 'v6') + ' / ' + (instance.methodology.mode || 'quick')
+        : '';
+      html += '<div class="ollama-instance-detail">' + escapeHtml(instance.runtime === 'claude' ? 'Claude Code via Ollama' : 'Ollama responder') + ' · ' + escapeHtml(instance.model) + ' · ' + escapeHtml(instance.endpoint_name || instance.endpoint_id) + ' · ' + escapeHtml(instance.tmux_window_name || '') + escapeHtml(instanceMethod) + '</div></div>';
       html += '<div class="ollama-instance-actions">';
       if (isActive) {
         html += '<button class="btn" onclick="openOllamaWindow(\'' + instance.id + '\')">Open terminal</button>';
@@ -10478,7 +10887,7 @@ function renderLaunchPanel() {
         var tpl = allTpls[t];
         var agents = tpl.agents || [];
         var isConv = tpl.source === 'conversation-templates';
-        html += '<div class="template-card" onclick="expandTemplate(' + t + ')">';
+        html += '<div class="template-card" role="button" tabindex="0" aria-label="Preview ' + escapeHtml(tpl.name || tpl.id || 'template') + '" onclick="expandTemplate(' + t + ')" onkeydown="if(event.target===this&&(event.key===\'Enter\'||event.key===\' \')){event.preventDefault();expandTemplate(' + t + ')}">';
         html += '<div class="template-card-name">' + escapeHtml(tpl.name || tpl.id || 'Template') + '</div>';
         html += '<div class="template-card-desc">' + escapeHtml(tpl.description || '') + '</div>';
         html += '<div class="template-card-agents">';
@@ -10494,7 +10903,7 @@ function renderLaunchPanel() {
             html += '<span class="template-agent-chip">' + escapeHtml(roleNames[r]) + '</span>';
           }
         }
-        html += '</div></div>';
+        html += '</div><button class="btn" type="button" onclick="event.stopPropagation();launchTeamTemplate(' + t + ')" style="font-size:11px;padding:4px 8px">Launch team</button></div>';
       }
       html += '</div>';
       html += '<div id="template-expanded" style="display:none;margin-top:16px"></div>';
@@ -10509,25 +10918,125 @@ function renderLaunchPanel() {
     window._allLaunchTemplates = allTpls;
 
     el.innerHTML = html;
+    launchRenderedProject = requestedProject;
+    launchRefreshPending = false;
     updateUnifiedLaunchForm();
   }).catch(function() {
+    if (requestId !== launchRenderSeq || requestedProject !== activeProject) return;
+    launchRefreshPending = false;
     el.innerHTML = '<div class="launch-section"><h3>Add Agent</h3><p style="color:var(--text-dim)">Failed to load data.</p></div>';
   });
 }
 
+function saveBmadSettings(enabled) {
+  var context = currentLaunchActionContext();
+  if (!context) return Promise.reject(new Error('Launch data is refreshing'));
+  var selection = selectedMethodology() || launchMethodologySelection;
+  var requestedProject = context.project;
+  var requestId = ++bmadSettingsSeq;
+  return lttFetch('/api/methodologies/bmad/settings' + context.param, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      enabled: enabled === true,
+      mode: selection.mode || 'quick',
+      workflow: selection.workflow || (selection.mode === 'full' ? 'auto' : 'bmad-quick-dev')
+    })
+  }).then(function(response) { return response.json(); }).then(function(result) {
+    if (result.error) throw new Error(result.error);
+    if (requestId !== bmadSettingsSeq || requestedProject !== activeProject) return result;
+    if (bmadStatus) {
+      bmadStatus.enabled = result.settings.enabled;
+      bmadStatus.settings = result.settings;
+    }
+    return result;
+  });
+}
+
+function onLaunchMethodologyChange() {
+  var method = document.getElementById('launch-methodology');
+  launchMethodologySelection.id = method && method.value === 'bmad' ? 'bmad' : 'none';
+  var enabled = launchMethodologySelection.id === 'bmad';
+  var selectors = document.getElementById('launch-bmad-selectors');
+  var setup = document.getElementById('launch-bmad-setup');
+  if (selectors) selectors.style.display = enabled ? '' : 'none';
+  if (setup) setup.style.display = enabled ? '' : 'none';
+  var runtime = document.getElementById('launch-runtime');
+  if (enabled && runtime && runtime.value === 'ollama-responder') runtime.value = 'claude';
+  updateUnifiedLaunchForm();
+  saveBmadSettings(enabled).catch(function(error) {
+    showToast('!', error.message || 'Failed to save methodology settings');
+  });
+}
+
+function onBmadModeChange() {
+  var mode = document.getElementById('launch-methodology-mode');
+  var workflow = document.getElementById('launch-methodology-workflow');
+  launchMethodologySelection.mode = mode ? mode.value : 'quick';
+  var preferred = launchMethodologySelection.mode === 'quick' ? 'bmad-quick-dev' : 'auto';
+  if (workflow) workflow.innerHTML = renderBmadWorkflowOptions(launchMethodologySelection.mode, preferred);
+  onBmadSettingsChange();
+}
+
+function onBmadSettingsChange() {
+  selectedMethodology();
+  updateUnifiedLaunchForm();
+  saveBmadSettings(true).catch(function(error) {
+    showToast('!', error.message || 'Failed to save BMad settings');
+  });
+}
+
+function installBmad(action) {
+  var context = currentLaunchActionContext();
+  if (!context) return;
+  var runtimes = Array.prototype.slice.call(document.querySelectorAll('.bmad-install-runtime:checked')).map(function(input) { return input.value; });
+  if (action !== 'update' && !runtimes.length) {
+    showToast('!', 'Select at least one native runtime');
+    return;
+  }
+  var requestedProject = context.project;
+  var requestId = ++bmadInstallSeq;
+  var buttons = document.querySelectorAll('#launch-bmad-setup button');
+  Array.prototype.forEach.call(buttons, function(button) { button.disabled = true; });
+  showToast('', (action === 'update' ? 'Updating' : 'Installing') + ' BMad Method...');
+  lttFetch('/api/methodologies/bmad/install' + context.param, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: action === 'update' ? 'update' : 'install',
+      runtimes: action === 'update' ? undefined : runtimes
+    })
+  }).then(function(response) { return response.json(); }).then(function(result) {
+    if (result.error) throw new Error(result.error);
+    if (requestId !== bmadInstallSeq || requestedProject !== activeProject) return;
+    showToast('&#x2713;', action === 'update' ? 'BMad Method updated' : 'BMad Method installed');
+    renderLaunchPanel();
+  }).catch(function(error) {
+    if (requestId !== bmadInstallSeq || requestedProject !== activeProject) return;
+    Array.prototype.forEach.call(buttons, function(button) { button.disabled = false; });
+    showToast('!', error.message || 'BMad installation failed');
+  });
+}
+
 function saveOllamaEndpoint() {
+  var context = currentLaunchActionContext();
+  if (!context) return;
+  var requestedProject = context.project;
+  var actionId = ++launchActionSeq;
   var id = (document.getElementById('ollama-endpoint-id').value || '').trim();
   var name = (document.getElementById('ollama-endpoint-name').value || '').trim();
   var url = (document.getElementById('ollama-endpoint-url').value || '').trim();
-  lttFetch('/api/ollama/endpoints' + projectParam(), {
+  lttFetch('/api/ollama/endpoints' + context.param, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: id, name: name, url: url })
   }).then(function(response) { return response.json(); }).then(function(result) {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     if (result.error) throw new Error(result.error);
     showToast('OK', 'Ollama endpoint saved');
     renderLaunchPanel();
   }).catch(function(error) {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     showToast('!', error.message || 'Failed to save endpoint');
   });
 }
@@ -10548,6 +11057,30 @@ function formatModelSize(bytes) {
   return gib >= 1 ? gib.toFixed(gib >= 10 ? 0 : 1) + ' GB' : Math.round(bytes / (1024 * 1024)) + ' MB';
 }
 
+function requestLaunchPreview(role, name, runtime, methodology, promptOutput) {
+  launchPreviewSeq += 1;
+  var requestId = launchPreviewSeq;
+  var requestedProject = activeProject;
+  if (launchPreviewTimer) clearTimeout(launchPreviewTimer);
+  launchPreviewTimer = setTimeout(function() {
+    lttFetch('/api/launch/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: role, agent_name: name, runtime: runtime, methodology: methodology })
+    }).then(function(response) { return response.json(); }).then(function(result) {
+      if (requestId !== launchPreviewSeq || requestedProject !== activeProject || !promptOutput || !document.documentElement.contains(promptOutput)) return;
+      if (result.error) throw new Error(result.error);
+      window._generatedLaunchPrompt = result.prompt || '';
+      if (promptOutput) {
+        promptOutput.innerHTML = '<div class="launch-prompt-output" role="button" tabindex="0" aria-label="Copy server-generated launch prompt" onclick="copyGeneratedPrompt()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();copyGeneratedPrompt()}"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Server-generated final launch prompt · click or press Enter to copy</div>' + escapeHtml(result.prompt || '') + '</div>';
+      }
+    }).catch(function(error) {
+      if (requestId !== launchPreviewSeq || requestedProject !== activeProject || !promptOutput || !document.documentElement.contains(promptOutput)) return;
+      promptOutput.innerHTML = '<div class="methodology-warning">Prompt preview unavailable: ' + escapeHtml(error.message || 'request failed') + '</div>';
+    });
+  }, 120);
+}
+
 function updateUnifiedLaunchForm() {
   var runtimeSelect = document.getElementById('launch-runtime');
   if (!runtimeSelect) return;
@@ -10561,33 +11094,54 @@ function updateUnifiedLaunchForm() {
   var promptOutput = document.getElementById('launch-prompt-output');
   var primaryButton = document.getElementById('launch-primary-btn');
   var ollamaRuntime = isOllamaLaunchRuntime(runtime);
+  var methodology = selectedMethodology();
+  var responderOption = Array.prototype.find.call(runtimeSelect.options, function(option) { return option.value === 'ollama-responder'; });
+  if (responderOption) {
+    responderOption.disabled = !!methodology;
+    responderOption.textContent = methodology ? 'Ollama responder (not compatible with BMad)' : 'Ollama responder';
+  }
 
   if (ollamaFields) ollamaFields.style.display = ollamaRuntime ? 'block' : 'none';
   if (skillsInput) skillsInput.value = roleProfile ? roleProfile.skills.join(', ') : '';
   if (roleHint) roleHint.textContent = roleProfile ? roleProfile.description : 'A role is required and determines skills and prompt.';
 
-  var validName = /^[a-zA-Z0-9_-]{1,20}$/.test(name);
+  var validName = validAgentName(name);
   var prompt = roleProfile && validName
     ? String(roleProfile.prompt_template || '').replace(/\{\{name\}\}/g, name)
     : '';
   window._generatedLaunchPrompt = prompt;
   if (promptOutput) {
     promptOutput.innerHTML = prompt
-      ? '<div class="launch-prompt-output" onclick="copyGeneratedPrompt()"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Click to copy</div>' + escapeHtml(prompt) + '</div>'
+      ? '<div style="font-size:12px;color:var(--text-muted)">Generating authoritative prompt...</div>'
       : '<div style="font-size:12px;color:var(--text-muted)">Enter a valid name and select a role to generate the prompt.</div>';
+  }
+  if (prompt) requestLaunchPreview(roleProfile.id, name, runtime, methodology, promptOutput);
+  else {
+    launchPreviewSeq += 1;
+    if (launchPreviewTimer) clearTimeout(launchPreviewTimer);
   }
 
   if (primaryButton) {
     primaryButton.textContent = ollamaRuntime
       ? 'Launch agent and open terminal'
       : 'Generate prompt and launch';
+    var bmadBlocked = methodology && (
+      runtime === 'ollama-responder' ||
+      !bmadStatus ||
+      !bmadStatus.installed ||
+      bmadStatus.compatible === false
+    );
+    primaryButton.disabled = !!bmadBlocked;
+    primaryButton.title = bmadBlocked
+      ? (runtime === 'ollama-responder' ? 'BMad requires a tool-capable runtime.' : 'Install a compatible BMad Method version before launching.')
+      : '';
   }
   var runtimeHint = document.getElementById('launch-runtime-hint');
   if (runtimeHint) {
     runtimeHint.textContent = runtime === 'ollama-claude'
       ? 'Runs Claude Code against the selected Ollama model in managed tmux.'
       : runtime === 'ollama-responder'
-        ? 'Runs a lightweight responder for Neohive messages and direct terminal chat.'
+        ? (methodology ? 'BMad requires filesystem, shell, skills, and MCP; the lightweight responder is unavailable.' : 'Runs a lightweight responder for Neohive messages and direct terminal chat.')
         : runtime === 'cursor'
           ? 'Writes MCP config and launches Cursor Agent (agent) in tmux with the generated prompt.'
           : 'Writes MCP config and launches the CLI in tmux with the generated prompt.';
@@ -10656,14 +11210,17 @@ function loadOllamaModels(force) {
 }
 
 function launchConfiguredAgent() {
+  var context = currentLaunchActionContext();
+  if (!context) return;
   var name = (document.getElementById('launch-name').value || '').trim();
   var role = document.getElementById('launch-role').value;
   var runtime = document.getElementById('launch-runtime').value;
   var resultEl = document.getElementById('launch-result');
-  if (!/^[a-zA-Z0-9_-]{1,20}$/.test(name)) { showToast('!', 'Enter a valid agent name'); return; }
+  var methodology = selectedMethodology();
+  if (!validAgentName(name)) { showToast('!', 'Enter a valid agent name'); return; }
   if (!role || !ROLE_PROMPTS[role]) { showToast('!', 'Select an agent role'); return; }
-  window._generatedLaunchPrompt = ROLE_PROMPTS[role](name);
-
+  if (methodology && runtime === 'ollama-responder') { showToast('!', 'BMad requires a tool-capable runtime; Ollama responder is not supported'); return; }
+  if (methodology && (!bmadStatus || !bmadStatus.installed || bmadStatus.compatible === false)) { showToast('!', 'Install a compatible BMad Method version first'); return; }
   if (!isOllamaLaunchRuntime(runtime)) {
     selectedCli = runtime;
     doLaunch();
@@ -10679,7 +11236,9 @@ function launchConfiguredAgent() {
     resultEl.className = 'launch-result info';
     resultEl.textContent = 'Starting managed agent...';
   }
-  lttFetch('/api/ollama/instances' + projectParam(), {
+  var requestedProject = context.project;
+  var actionId = ++launchActionSeq;
+  lttFetch('/api/ollama/instances' + context.param, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -10687,9 +11246,11 @@ function launchConfiguredAgent() {
       model: model,
       endpoint_id: endpointId,
       runtime: runtime === 'ollama-claude' ? 'claude' : 'ollama',
-      role: role
+      role: role,
+      methodology: methodology
     })
   }).then(function(response) { return response.json(); }).then(function(result) {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     if (result.error) throw new Error(result.error);
     showToast('OK', 'Managed agent started');
     if (resultEl) {
@@ -10698,6 +11259,7 @@ function launchConfiguredAgent() {
     }
     return focusOllamaWindow(result.instance.id);
   }).catch(function(error) {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     if (resultEl) {
       resultEl.className = 'launch-result error';
       resultEl.textContent = error.message || 'Failed to start managed agent';
@@ -10707,31 +11269,43 @@ function launchConfiguredAgent() {
 }
 
 function deleteSelectedOllamaEndpoint() {
+  var context = currentLaunchActionContext();
+  if (!context) return;
   var select = document.getElementById('ollama-endpoint');
   var endpointId = select && select.value;
   if (!endpointId || !confirm('Delete the selected Ollama endpoint profile?')) return;
-  lttFetch('/api/ollama/endpoints/' + encodeURIComponent(endpointId) + projectParam(), {
+  var requestedProject = context.project;
+  var actionId = ++launchActionSeq;
+  lttFetch('/api/ollama/endpoints/' + encodeURIComponent(endpointId) + context.param, {
     method: 'DELETE'
   }).then(function(response) { return response.json(); }).then(function(result) {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     if (result.error) throw new Error(result.error);
     showToast('OK', 'Ollama endpoint deleted');
     renderLaunchPanel();
   }).catch(function(error) {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     showToast('!', error.message || 'Failed to delete endpoint');
   });
 }
 
 function stopOllamaAgent(instanceId, agentName) {
+  var context = currentLaunchActionContext();
+  if (!context) return;
   if (!confirm('Stop Ollama agent "' + agentName + '" and close its tmux window?')) return;
-  lttFetch('/api/ollama/instances/' + encodeURIComponent(instanceId) + projectParam(), {
+  var requestedProject = context.project;
+  var actionId = ++launchActionSeq;
+  lttFetch('/api/ollama/instances/' + encodeURIComponent(instanceId) + context.param, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ confirm: true })
   }).then(function(response) { return response.json(); }).then(function(result) {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     if (result.error) throw new Error(result.error);
     showToast('OK', 'Ollama agent stopped');
     renderLaunchPanel();
   }).catch(function(error) {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     showToast('!', error.message || 'Failed to stop Ollama agent');
   });
 }
@@ -10758,7 +11332,7 @@ function validateLaunchName() {
   var hint = document.getElementById('launch-name-hint');
   var name = (input.value || '').trim();
   if (!name) { hint.className = 'field-hint'; hint.textContent = '1-20 alphanumeric, underscore, or hyphen'; input.classList.remove('invalid'); return; }
-  if (!/^[a-zA-Z0-9_-]{1,20}$/.test(name)) { hint.className = 'field-hint error'; hint.textContent = 'Invalid: only letters, numbers, _ and -'; input.classList.add('invalid'); return; }
+  if (!validAgentName(name)) { hint.className = 'field-hint error'; hint.textContent = 'Invalid: only letters, numbers, _ and -'; input.classList.add('invalid'); return; }
   if (window._launchExistingNames && window._launchExistingNames.indexOf(name.toLowerCase()) !== -1) { hint.className = 'field-hint error'; hint.textContent = 'Name already taken by an existing agent'; input.classList.add('invalid'); return; }
   hint.className = 'field-hint success'; hint.textContent = 'Name available'; input.classList.remove('invalid');
 }
@@ -10771,14 +11345,14 @@ function generateAgentPrompt() {
   var name = (document.getElementById('launch-name').value || '').trim();
   var role = document.getElementById('launch-role').value;
   if (!name) { showToast('!', 'Enter an agent name'); return; }
-  if (!/^[a-zA-Z0-9_-]{1,20}$/.test(name)) { showToast('!', 'Invalid agent name'); return; }
+  if (!validAgentName(name)) { showToast('!', 'Invalid agent name'); return; }
   if (!role || !ROLE_PROMPTS[role]) { showToast('!', 'Select an agent role'); return; }
 
   var prompt = ROLE_PROMPTS[role](name);
 
   var outputEl = document.getElementById('launch-prompt-output');
   outputEl.style.display = 'block';
-  outputEl.innerHTML = '<div class="launch-prompt-output" onclick="copyGeneratedPrompt()"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Click to copy</div>' + escapeHtml(prompt) + '</div>';
+  outputEl.innerHTML = '<div class="launch-prompt-output" role="button" tabindex="0" aria-label="Copy generated launch prompt" onclick="copyGeneratedPrompt()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();copyGeneratedPrompt()}"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Generated prompt · click or press Enter to copy</div>' + escapeHtml(prompt) + '</div>';
   window._generatedLaunchPrompt = prompt;
 }
 
@@ -10820,7 +11394,8 @@ function expandTemplate(index) {
       if (ag.responsibilities && ag.responsibilities.length) {
         html += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">' + ag.responsibilities.map(function(r) { return escapeHtml(r); }).join(' / ') + '</div>';
       }
-      html += '<div class="launch-prompt-output" style="font-size:11px;max-height:100px" onclick="navigator.clipboard.writeText(this.textContent).then(function(){showToast(\'&#x2713;\',\'Copied!\')})">' + escapeHtml(agPrompt) + '</div>';
+      html += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Template base instructions — the server composes the final launch prompt with the selected methodology.</div>';
+      html += '<div class="launch-prompt-output" role="button" tabindex="0" aria-label="Copy template base instructions" style="font-size:11px;max-height:100px" onclick="copyTemplateInstructions(this)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();copyTemplateInstructions(this)}">' + escapeHtml(agPrompt) + '</div>';
       html += '</div>';
     }
   } else if (tpl.roles) {
@@ -10829,7 +11404,8 @@ function expandTemplate(index) {
       var rolePrompt = tpl.roles[roleNames[r]].prompt || 'Register as "' + roleNames[r] + '" and call listen().';
       html += '<div style="margin-bottom:8px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px">';
       html += '<div style="font-weight:600;font-size:13px;margin-bottom:4px">' + escapeHtml(roleNames[r]) + '</div>';
-      html += '<div class="launch-prompt-output" style="font-size:11px;max-height:100px" onclick="navigator.clipboard.writeText(this.textContent).then(function(){showToast(\'&#x2713;\',\'Copied!\')})">' + escapeHtml(rolePrompt) + '</div>';
+      html += '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">Template base instructions — the server composes the final launch prompt with the selected methodology.</div>';
+      html += '<div class="launch-prompt-output" role="button" tabindex="0" aria-label="Copy template base instructions" style="font-size:11px;max-height:100px" onclick="copyTemplateInstructions(this)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();copyTemplateInstructions(this)}">' + escapeHtml(rolePrompt) + '</div>';
       html += '</div>';
     }
   }
@@ -10838,6 +11414,116 @@ function expandTemplate(index) {
   expanded.innerHTML = html;
   expanded.style.display = 'block';
   expanded.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function copyTemplateInstructions(element) {
+  if (!element) return;
+  navigator.clipboard.writeText(element.textContent).then(function() {
+    showToast('&#x2713;', 'Template base instructions copied');
+  });
+}
+
+function launchTeamTemplate(index) {
+  var context = currentLaunchActionContext();
+  if (!context) return;
+  var templates = window._allLaunchTemplates || [];
+  var template = templates[index];
+  var agents = normalizedTemplateAgents(template && template.agents);
+  var runtimeEl = document.getElementById('launch-runtime');
+  var runtime = runtimeEl ? runtimeEl.value : 'claude';
+  var methodology = selectedMethodology();
+  var resultEl = document.getElementById('launch-result');
+  if (!agents.length) { showToast('!', 'This template has no agents'); return; }
+  var nameError = templateAgentNameError(agents);
+  if (nameError) { showToast('!', nameError); return; }
+  if (methodology && runtime === 'ollama-responder') { showToast('!', 'BMad is not available for Ollama responder'); return; }
+  if (methodology && (!bmadStatus || !bmadStatus.installed || bmadStatus.compatible === false)) { showToast('!', 'Install a compatible BMad Method version first'); return; }
+
+  var endpoint = document.getElementById('ollama-endpoint');
+  var model = document.getElementById('ollama-model');
+  if (isOllamaLaunchRuntime(runtime) && (!endpoint || !endpoint.value || !model || model.disabled || !model.value)) {
+    showToast('!', 'Select an Ollama endpoint and installed model first');
+    return;
+  }
+
+  var requestedProject = context.project;
+  var actionId = ++launchActionSeq;
+  var actionProjectParam = context.param;
+  _launchWatchers = agents.map(function(agent) {
+    return { name: agent.name, cli: runtime, prompt: agent.prompt, state: 'pending' };
+  });
+  renderLaunchStatusTracker();
+  if (resultEl) {
+    resultEl.className = 'launch-result info';
+    resultEl.textContent = 'Launching ' + agents.length + ' template agents...';
+  }
+
+  var indexToLaunch = 0;
+  function next() {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
+    if (indexToLaunch >= agents.length) {
+      if (resultEl) {
+        resultEl.className = 'launch-result success';
+        var manualCount = _launchWatchers.filter(function(item) { return item.manualPromptRequired; }).length;
+        resultEl.textContent = manualCount
+          ? 'Team launch requests completed. Use Copy Prompt below, then paste into ' + manualCount + ' terminal(s) marked for manual delivery.'
+          : 'Team launch requests completed.';
+      }
+      startLaunchWatchAll();
+      return;
+    }
+    var agent = agents[indexToLaunch];
+    var watcher = _launchWatchers[indexToLaunch];
+    watcher.state = 'launching';
+    renderLaunchStatusTracker();
+    var request;
+    if (isOllamaLaunchRuntime(runtime)) {
+      request = lttFetch('/api/ollama/instances' + actionProjectParam, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: agent.name,
+          model: model.value,
+          endpoint_id: endpoint.value,
+          runtime: runtime === 'ollama-claude' ? 'claude' : 'ollama',
+          role: agent.role || '',
+          base_prompt: agent.prompt || '',
+          methodology: methodology
+        })
+      });
+    } else {
+      request = lttFetch('/api/launch' + actionProjectParam, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cli: runtime,
+          agent_name: agent.name,
+          role: agent.role || '',
+          prompt: agent.prompt,
+          base_prompt: agent.prompt || '',
+          methodology: methodology
+        })
+      });
+    }
+    request.then(function(response) { return response.json(); }).then(function(result) {
+      if (result.error) throw new Error(result.error);
+      if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
+      watcher.state = 'launched';
+      watcher.prompt = result.prompt || watcher.prompt;
+      watcher.manualPromptRequired = result.manual_prompt_required === true || result.prompt_supplied === false || result.launch_mode === 'manual-paste';
+      watcher.promptSupplied = result.prompt_supplied;
+    }).catch(function(error) {
+      if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
+      watcher.state = 'failed';
+      watcher.error = error.message;
+    }).then(function() {
+      if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
+      renderLaunchStatusTracker();
+      indexToLaunch += 1;
+      setTimeout(next, 700);
+    });
+  }
+  next();
 }
 
 // ==================== CUSTOM TEMPLATE BUILDER ====================
@@ -10875,7 +11561,7 @@ function renderBuilderForm(el, prefill) {
     var ag = _tplBuilderAgents[i];
     html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">';
     html += '<div class="launch-form-row">';
-    html += '<div class="launch-form-field"><label>Name</label><input type="text" data-tpl-agent="' + i + '" data-field="name" value="' + escapeHtml(ag.name || '') + '" oninput="updateTplAgent(' + i + ',\'name\',this.value)"></div>';
+    html += '<div class="launch-form-field"><label>Name</label><input type="text" maxlength="20" data-tpl-agent="' + i + '" data-field="name" value="' + escapeHtml(ag.name || '') + '" oninput="updateTplAgent(' + i + ',\'name\',this.value);validateTemplateBuilderNames()"><div class="field-hint" data-tpl-name-hint="' + i + '">1-20 alphanumeric, underscore, or hyphen</div></div>';
     html += '<div class="launch-form-field"><label>Role</label><select data-tpl-agent="' + i + '" data-field="role" onchange="updateTplAgent(' + i + ',\'role\',this.value);autoFillTplSkills(' + i + ',this.value)"><option value="">Select...</option><option value="lead"' + (ag.role === 'lead' ? ' selected' : '') + '>Lead</option><option value="backend"' + (ag.role === 'backend' ? ' selected' : '') + '>Backend</option><option value="frontend"' + (ag.role === 'frontend' ? ' selected' : '') + '>Frontend</option><option value="quality"' + (ag.role === 'quality' ? ' selected' : '') + '>Quality</option><option value="monitor"' + (ag.role === 'monitor' ? ' selected' : '') + '>Monitor</option></select></div>';
     html += '</div>';
     html += '<div class="launch-form-field" style="margin-bottom:6px"><label>Skills</label><input type="text" data-tpl-agent="' + i + '" data-field="skills" value="' + escapeHtml(ag.skills || '') + '" oninput="updateTplAgent(' + i + ',\'skills\',this.value)" placeholder="comma-separated skills"></div>';
@@ -10897,6 +11583,7 @@ function renderBuilderForm(el, prefill) {
   html += '</div>';
   html += '</div>';
   el.innerHTML = html;
+  validateTemplateBuilderNames();
 }
 
 function hideTemplateBuilder() {
@@ -10906,6 +11593,25 @@ function hideTemplateBuilder() {
 
 function updateTplAgent(idx, field, value) {
   if (_tplBuilderAgents[idx]) _tplBuilderAgents[idx][field] = value;
+}
+
+function validateTemplateBuilderNames() {
+  var inputs = document.querySelectorAll('#template-builder [data-tpl-agent][data-field="name"]');
+  var counts = {};
+  Array.prototype.forEach.call(inputs, function(input) {
+    var key = (input.value || '').trim().toLowerCase();
+    if (key) counts[key] = (counts[key] || 0) + 1;
+  });
+  Array.prototype.forEach.call(inputs, function(input) {
+    var name = (input.value || '').trim();
+    var invalid = !!name && !validAgentName(name);
+    var duplicate = !!name && counts[name.toLowerCase()] > 1;
+    input.classList.toggle('invalid', invalid || duplicate);
+    var hint = document.querySelector('[data-tpl-name-hint="' + input.dataset.tplAgent + '"]');
+    if (!hint) return;
+    hint.className = 'field-hint' + (invalid || duplicate ? ' error' : name ? ' success' : '');
+    hint.textContent = invalid ? 'Only 1-20 letters, numbers, _ and -' : duplicate ? 'Name must be unique in this template' : name ? 'Valid launch name' : '1-20 alphanumeric, underscore, or hyphen';
+  });
 }
 
 function autoFillTplSkills(idx, role) {
@@ -10929,6 +11635,10 @@ function removeTplAgent(idx) {
 }
 
 function saveCustomTemplate(existingId) {
+  var context = currentLaunchActionContext();
+  if (!context) return;
+  var requestedProject = context.project;
+  var actionId = ++launchActionSeq;
   var name = (document.getElementById('tpl-name').value || '').trim();
   var desc = (document.getElementById('tpl-desc').value || '').trim();
   var category = document.getElementById('tpl-category').value;
@@ -10936,8 +11646,8 @@ function saveCustomTemplate(existingId) {
 
   if (!name) { showToast('!', 'Template name is required'); return; }
   if (_tplBuilderAgents.length < 1) { showToast('!', 'Add at least one agent'); return; }
-  var hasEmptyName = _tplBuilderAgents.some(function(a) { return !a.name || !a.name.trim(); });
-  if (hasEmptyName) { showToast('!', 'All agents must have a name'); return; }
+  var nameError = templateAgentNameError(_tplBuilderAgents);
+  if (nameError) { validateTemplateBuilderNames(); showToast('!', nameError); return; }
 
   var agents = _tplBuilderAgents.map(function(a) {
     return {
@@ -10960,11 +11670,12 @@ function saveCustomTemplate(existingId) {
   var method = existingId ? 'PUT' : 'POST';
   if (existingId) body.id = existingId;
 
-  lttFetch('/api/custom-templates' + projectParam(), {
+  lttFetch('/api/custom-templates' + context.param, {
     method: method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   }).then(function(r) { return r.json(); }).then(function(data) {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     if (data.error) {
       showToast('!', data.error);
     } else {
@@ -10973,6 +11684,7 @@ function saveCustomTemplate(existingId) {
       renderLaunchPanel();
     }
   }).catch(function() {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     showToast('!', 'Failed to save template');
   });
 }
@@ -11077,56 +11789,82 @@ function fillAgentFromConvTemplate(templateId, agentName) {
 
 // ==================== LAUNCH SINGLE AGENT ====================
 function doLaunch() {
+  var context = currentLaunchActionContext();
+  if (!context) return;
   var agentName = document.getElementById('launch-name').value.trim();
   var resultEl = document.getElementById('launch-result');
   var cliSelect = document.getElementById('launch-cli');
   var cli = cliSelect ? cliSelect.value : selectedCli;
   var roleSelect = document.getElementById('launch-role');
   var role = roleSelect ? roleSelect.value : '';
+  var methodology = selectedMethodology();
+  var requestedProject = context.project;
+  var actionId = ++launchActionSeq;
 
-  if (!agentName) {
+  if (!validAgentName(agentName)) {
     resultEl.className = 'launch-result error';
-    resultEl.innerHTML = 'Please enter an agent name.';
+    resultEl.innerHTML = 'Enter a valid 1-20 character agent name using letters, numbers, underscores, or hyphens.';
     return;
   }
 
   // Use generated prompt if available, otherwise build a default
   var launchPrompt = window._generatedLaunchPrompt || 'You are agent "' + agentName + '". Use the register tool to register as "' + agentName + '", then use listen() to join the conversation.';
-  writeClipboard(launchPrompt).catch(function() {});
   selectedCli = cli;
 
   resultEl.className = 'launch-result info';
   resultEl.innerHTML = 'Launching terminal for <strong>' + escapeHtml(agentName) + '</strong>...';
 
-  lttFetch('/api/launch' + projectParam(), {
+  lttFetch('/api/launch' + context.param, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cli: cli, agent_name: agentName, role: role, prompt: launchPrompt })
+    body: JSON.stringify({ cli: cli, agent_name: agentName, role: role, prompt: launchPrompt, methodology: methodology })
   }).then(function(r) { return r.json(); }).then(function(data) {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     if (data.error) {
       resultEl.className = 'launch-result error';
       resultEl.innerHTML = escapeHtml(data.error);
       return;
     }
+    if (data.prompt) {
+      launchPrompt = data.prompt;
+      window._generatedLaunchPrompt = data.prompt;
+      writeClipboard(data.prompt).catch(function() {});
+    }
 
     if (data.launched) {
+      var manualPromptRequired = data.manual_prompt_required === true || data.prompt_supplied === false || data.launch_mode === 'manual-paste';
       resultEl.className = 'launch-result success';
-      resultEl.innerHTML =
-        '<strong>Agent launched in terminal!</strong> Prompt was passed to ' + escapeHtml(selectedCli === 'cursor' ? 'Cursor Agent' : selectedCli) + ' automatically.<br>' +
-        '<span style="font-size:11px;color:var(--text-dim)">Opening terminal view' + (data.tmux_window_name ? ' (' + escapeHtml(data.tmux_window_name) + ')' : '') + '...</span>';
-      startLaunchWatcher(agentName);
-      switchView('terminal');
-      setTimeout(function() { sendTmuxControl('get_state'); }, 250);
+      if (manualPromptRequired) {
+        var promptAttr = escapeHtml(launchPrompt).replace(/"/g, '&quot;');
+        resultEl.innerHTML =
+          '<strong>Terminal opened; the prompt was not sent automatically.</strong> ' + escapeHtml(data.message || 'Paste the server-composed prompt after the CLI loads.') + '<br>' +
+          '<div class="launch-prompt-box" role="button" tabindex="0" aria-label="Copy server-composed launch prompt" onclick="copyText(this)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();copyText(this)}" data-text="' + promptAttr + '">' +
+          escapeHtml(launchPrompt.substring(0, 300)) + (launchPrompt.length > 300 ? '...' : '') + '</div>';
+      } else {
+        resultEl.innerHTML =
+          '<strong>Agent terminal launched.</strong> ' + escapeHtml(data.message || 'The server-composed prompt was supplied to the CLI.') + '<br>' +
+          '<span style="font-size:11px;color:var(--text-dim)">Opening terminal view' + (data.tmux_window_name ? ' (' + escapeHtml(data.tmux_window_name) + ')' : '') + '...</span>';
+      }
+      startLaunchWatcher(agentName, {
+        prompt: launchPrompt,
+        manualPromptRequired: manualPromptRequired,
+        promptSupplied: data.prompt_supplied
+      });
+      if (!manualPromptRequired) {
+        switchView('terminal');
+        setTimeout(function() { sendTmuxControl('get_state'); }, 250);
+      }
     } else {
       resultEl.className = 'launch-result success';
       var html = '<strong>MCP config written.</strong> Run this command in a terminal:<br>';
-      html += '<div class="launch-prompt-box" onclick="copyText(this)" data-text="' + escapeHtml(data.command || '').replace(/"/g, '&quot;') + '">' + escapeHtml(data.command || '') + '</div>';
+      html += '<div class="launch-prompt-box" role="button" tabindex="0" onclick="copyText(this)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();copyText(this)}" data-text="' + escapeHtml(data.command || '').replace(/"/g, '&quot;') + '">' + escapeHtml(data.command || '') + '</div>';
       html += '<br>Then paste this prompt:<br>';
-      html += '<div class="launch-prompt-box" onclick="copyText(this)" data-text="' + escapeHtml(launchPrompt).replace(/"/g, '&quot;') + '">' + escapeHtml(launchPrompt.substring(0, 300)) + (launchPrompt.length > 300 ? '...' : '') + '</div>';
+      html += '<div class="launch-prompt-box" role="button" tabindex="0" onclick="copyText(this)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();copyText(this)}" data-text="' + escapeHtml(launchPrompt).replace(/"/g, '&quot;') + '">' + escapeHtml(launchPrompt.substring(0, 300)) + (launchPrompt.length > 300 ? '...' : '') + '</div>';
       resultEl.innerHTML = html;
       startLaunchWatcher(agentName);
     }
   }).catch(function(err) {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     resultEl.className = 'launch-result error';
     resultEl.innerHTML = 'Request failed: ' + escapeHtml(err.message);
   });
@@ -11134,10 +11872,13 @@ function doLaunch() {
 
 // ==================== LAUNCH ALL AGENTS FROM TEMPLATE ====================
 function doLaunchAll() {
+  var context = currentLaunchActionContext();
+  if (!context) return;
   var sel = document.getElementById('launch-template');
   var projectDir = document.getElementById('launch-project').value.trim();
   var resultEl = document.getElementById('launch-result');
   var val = sel.value;
+  var methodology = selectedMethodology();
 
   var agents = [];
   if (val.startsWith('simple:')) {
@@ -11149,12 +11890,22 @@ function doLaunchAll() {
     var ct = (window._convTemplates || []).find(function(t) { return (t.id || t.name) === tid; });
     if (ct && ct.agents) agents = ct.agents;
   }
+  agents = normalizedTemplateAgents(agents);
 
   if (!agents.length) {
     resultEl.className = 'launch-result error';
     resultEl.innerHTML = 'No agents in selected template.';
     return;
   }
+  var nameError = templateAgentNameError(agents);
+  if (nameError) {
+    resultEl.className = 'launch-result error';
+    resultEl.textContent = nameError;
+    return;
+  }
+  var requestedProject = context.project;
+  var actionId = ++launchActionSeq;
+  var actionProjectParam = context.param;
 
   // Reset watchers
   _launchWatchers = [];
@@ -11163,6 +11914,7 @@ function doLaunchAll() {
       name: agents[i].name,
       cli: selectedCli,
       prompt: agents[i].prompt,
+      role: agents[i].role || '',
       state: 'pending' // pending -> launching -> launched -> registered | failed
     });
   }
@@ -11171,6 +11923,7 @@ function doLaunchAll() {
   // Launch sequentially with delay between each
   var idx = 0;
   function launchNext() {
+    if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     if (idx >= agents.length) return;
     var w = _launchWatchers[idx];
     w.state = 'launching';
@@ -11178,18 +11931,20 @@ function doLaunchAll() {
 
     var agentPrompt = w.prompt || 'You are agent "' + w.name + '". Use the register tool to register as "' + w.name + '", then use listen() to join the conversation.';
 
-    lttFetch('/api/launch' + projectParam(), {
+    lttFetch('/api/launch' + actionProjectParam, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cli: selectedCli, project_dir: projectDir || undefined, agent_name: w.name, prompt: agentPrompt })
+      body: JSON.stringify({ cli: selectedCli, project_dir: projectDir || undefined, agent_name: w.name, role: w.role, prompt: agentPrompt, base_prompt: agentPrompt, methodology: methodology })
     }).then(function(r) { return r.json(); }).then(function(data) {
+      if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
       if (data.error) {
         w.state = 'failed';
         w.error = data.error;
       } else {
         w.state = 'launched';
-        // Copy prompt to clipboard for current agent
-        writeClipboard(agentPrompt).catch(function() {});
+        w.prompt = data.prompt || agentPrompt;
+        w.manualPromptRequired = data.manual_prompt_required === true || data.prompt_supplied === false || data.launch_mode === 'manual-paste';
+        w.promptSupplied = data.prompt_supplied;
       }
       renderLaunchStatusTracker();
       idx++;
@@ -11197,6 +11952,7 @@ function doLaunchAll() {
         setTimeout(launchNext, 2000); // 2s between launches to avoid overwhelming
       }
     }).catch(function(err) {
+      if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
       w.state = 'failed';
       w.error = err.message;
       renderLaunchStatusTracker();
@@ -11208,17 +11964,24 @@ function doLaunchAll() {
   }
 
   resultEl.className = 'launch-result info';
-  resultEl.innerHTML = 'Launching ' + agents.length + ' agents... Prompts will be copied to clipboard one at a time.';
+  resultEl.innerHTML = 'Launching ' + agents.length + ' agents. The status tracker exposes each server-composed prompt when available.';
   launchNext();
   startLaunchWatchAll();
 }
 
 // ==================== LAUNCH STATUS TRACKING ====================
-function startLaunchWatcher(agentName) {
+function startLaunchWatcher(agentName, launchResult) {
   // Add single agent to watchers if not already there
   var exists = _launchWatchers.find(function(w) { return w.name === agentName; });
   if (!exists) {
-    _launchWatchers.push({ name: agentName, cli: selectedCli, state: 'launched' });
+    _launchWatchers.push({
+      name: agentName,
+      cli: selectedCli,
+      prompt: launchResult && launchResult.prompt,
+      manualPromptRequired: !!(launchResult && launchResult.manualPromptRequired),
+      promptSupplied: launchResult && launchResult.promptSupplied,
+      state: 'launched'
+    });
   }
   renderLaunchStatusTracker();
   startLaunchWatchAll();
@@ -11273,7 +12036,9 @@ function renderLaunchStatusTracker() {
   for (var i = 0; i < _launchWatchers.length; i++) {
     var w = _launchWatchers[i];
     var launchingLabel = w.cli === 'cursor' ? 'Launching Cursor Agent...' : 'Opening terminal...';
-    var launchedLabel = w.cli === 'cursor' ? 'Cursor Agent launched' : 'Terminal open — prompt sent';
+    var launchedLabel = w.manualPromptRequired
+      ? 'Terminal open — paste prompt manually'
+      : (w.cli === 'cursor' ? 'Cursor Agent launched' : 'Terminal open — prompt sent');
     var stateLabel = { pending: 'Waiting...', launching: launchingLabel, launched: launchedLabel, registered: 'Online', failed: 'Failed' }[w.state] || w.state;
     if (w.state === 'failed' && w.error) stateLabel = 'Failed: ' + w.error;
     h += '<div class="launch-status-item">' +
@@ -11914,6 +12679,7 @@ function initSSE() {
       var needAgents = changes.indexOf('agents') !== -1 || changes.indexOf('update') !== -1;
       var needTasks = changes.indexOf('tasks') !== -1;
       var needWorkflows = changes.indexOf('workflows') !== -1;
+      var needMethodology = changes.indexOf('methodology') !== -1;
       if (needMessages || needAgents) {
         // Full poll for messages/agents (they're coupled in rendering)
         poll();
@@ -11928,6 +12694,11 @@ function initSSE() {
       if (needWorkflows) {
         if (activeView === 'workflows') fetchWorkflows();
         else if (activeView === 'overview') renderOverview();
+      }
+      if (needMethodology && activeView === 'launch') {
+        var _launchArea = document.getElementById('launch-area');
+        var _focusInLaunch = _launchArea && _launchArea.contains(document.activeElement);
+        if (!_focusInLaunch) renderLaunchPanel();
       }
     };
     eventSource.onopen = function() {
