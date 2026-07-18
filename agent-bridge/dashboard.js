@@ -481,14 +481,30 @@ function apiAgents(query) {
     const hbFiles = fs.readdirSync(dataDir).filter(f => f.startsWith('heartbeat-') && f.endsWith('.json'));
     for (const f of hbFiles) {
       const name = f.slice(10, -5);
-      if (agents[name]) {
-        try {
-          const hb = JSON.parse(fs.readFileSync(path.join(dataDir, f), 'utf8'));
-          if (hb.last_activity) agents[name].last_activity = hb.last_activity;
-          if (hb.pid) agents[name].pid = hb.pid;
-          if (hb.ppid) agents[name].ppid = hb.ppid;
-        } catch {}
-      }
+      try {
+        const hb = JSON.parse(fs.readFileSync(path.join(dataDir, f), 'utf8'));
+        if (!agents[name]) {
+          // Orphaned heartbeat: agents.json was reset/corrupted after this agent
+          // registered. Synthesize a row so a live agent doesn't vanish from the
+          // dashboard until it happens to call register() again.
+          if (hb.pid && isPidAlive(hb.pid, hb.last_activity)) {
+            agents[name] = {
+              pid: hb.pid,
+              ppid: hb.ppid || null,
+              timestamp: hb.last_activity || new Date().toISOString(),
+              last_activity: hb.last_activity || new Date().toISOString(),
+              last_listened_at: hb.last_activity || null,
+              provider: 'unknown',
+              branch: 'main',
+              recovered_from_heartbeat: true,
+            };
+          }
+          continue;
+        }
+        if (hb.last_activity) agents[name].last_activity = hb.last_activity;
+        if (hb.pid) agents[name].pid = hb.pid;
+        if (hb.ppid) agents[name].ppid = hb.ppid;
+      } catch {}
     }
   } catch {}
 
@@ -2261,6 +2277,77 @@ function ollamaRequestContext(url) {
     : bmadProvider.projectRootFromDataDir(DEFAULT_DATA_DIR, process.cwd());
   const dataDir = projectPath ? resolveDataDir(projectDir) : DEFAULT_DATA_DIR;
   return { dataDir, projectDir, packageDir: __dirname };
+}
+
+// Read-only Files browser: recursively lists files under the visible
+// artifact locations agents write to. Bounded to avoid runaway scans of
+// large/unexpected trees (e.g. node_modules symlinked in by mistake).
+const FILES_BROWSER_MAX_FILES = 500;
+const FILES_BROWSER_SKIP_DIRS = new Set(['node_modules', '.git']);
+
+function listVisibleProjectFiles(projectDir, dataDir) {
+  const roots = [
+    path.join(projectDir, '_bmad-output'),
+    path.join(dataDir, 'artifacts'),
+  ];
+  const results = [];
+
+  function walk(dir, depth) {
+    if (results.length >= FILES_BROWSER_MAX_FILES || depth > 12) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (results.length >= FILES_BROWSER_MAX_FILES) return;
+      if (FILES_BROWSER_SKIP_DIRS.has(entry.name)) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full, depth + 1);
+      } else if (entry.isFile()) {
+        let stat;
+        try {
+          stat = fs.statSync(full);
+        } catch {
+          continue;
+        }
+        results.push({
+          path: path.relative(projectDir, full).replace(/\\/g, '/'),
+          size: stat.size,
+          mtime: stat.mtime.toISOString(),
+        });
+      }
+    }
+  }
+
+  for (const root of roots) {
+    if (fs.existsSync(root)) walk(root, 0);
+  }
+  return results;
+}
+
+// Strict sandbox: resolve the requested path against the project root and
+// verify it does not escape it (no ../, no absolute-path swap, no symlink
+// escape). Returns the resolved absolute path, or null if rejected.
+function resolveSandboxedFilePath(projectDir, requestedPath) {
+  const root = path.resolve(projectDir);
+  const resolved = path.resolve(root, requestedPath);
+  // Lexical check: no ../, no absolute-path swap, no prefix-sibling escape.
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) return null;
+  // Symlink check: path.resolve does NOT follow symlinks, so a link planted
+  // under an allowed tree could point outside root and leak arbitrary files.
+  // Re-verify the REAL path (following symlinks) is still inside the real root.
+  try {
+    const realRoot = fs.realpathSync(root);
+    const realResolved = fs.realpathSync(resolved);
+    if (realResolved !== realRoot && !realResolved.startsWith(realRoot + path.sep)) return null;
+  } catch {
+    // Non-existent path (realpath throws) or resolution error → reject.
+    return null;
+  }
+  return resolved;
 }
 
 // Story 1.2/1.3 (FR1/FR2, AD-1/AD-2): read-only join of tasks.json against
@@ -4373,6 +4460,35 @@ const server = http.createServer(async (req, res) => {
           runtimes: body.runtimes,
         });
         writeApiResult(res, result);
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    // Read-only Files browser: surfaces artifacts agents create under
+    // _bmad-output/ (project root) and .neohive/artifacts/ (data dir).
+    // Sandboxed to the project root — see resolveSandboxedFilePath below.
+    else if (url.pathname === '/api/files' && req.method === 'GET') {
+      try {
+        const context = ollamaRequestContext(url);
+        const files = listVisibleProjectFiles(context.projectDir, context.dataDir);
+        writeApiResult(res, { count: files.length, files });
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    else if (url.pathname === '/api/file' && req.method === 'GET') {
+      try {
+        const context = ollamaRequestContext(url);
+        const requestedPath = url.searchParams.get('path');
+        if (!requestedPath) throw new Error('Missing "path" query parameter');
+        const resolved = resolveSandboxedFilePath(context.projectDir, requestedPath);
+        if (!resolved) throw new Error('Invalid path: outside project root');
+        if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) throw new Error('File not found');
+        const stat = fs.statSync(resolved);
+        const MAX_FILE_BYTES = 1024 * 1024;
+        if (stat.size > MAX_FILE_BYTES) throw new Error('File too large to preview (max 1MB)');
+        const content = fs.readFileSync(resolved, 'utf8');
+        writeApiResult(res, { path: path.relative(context.projectDir, resolved).replace(/\\/g, '/'), content, size: stat.size });
       } catch (error) {
         writeApiResult(res, { error: error.message }, 400);
       }

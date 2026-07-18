@@ -97,6 +97,7 @@ const RULES_FILE = path.join(DATA_DIR, 'rules.json');
 const AGENT_CARDS_FILE = path.join(DATA_DIR, 'agent-cards.json');
 const PUSH_REQUESTS_FILE = path.join(DATA_DIR, 'push-requests.json');
 const AUDIT_LOG_FILE = path.join(DATA_DIR, 'audit_log.jsonl');
+const ARTIFACTS_DIR = path.join(DATA_DIR, 'artifacts'); // convention: agents save work artifacts under artifacts/{agentName}/ so they surface on the dashboard
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SERVER_CONFIG — centralized constants (timeouts, thresholds, limits)
@@ -296,6 +297,9 @@ function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
   }
+  if (!fs.existsSync(ARTIFACTS_DIR)) {
+    try { fs.mkdirSync(ARTIFACTS_DIR, { recursive: true, mode: 0o700 }); } catch (e) { log.debug('artifacts dir mkdir failed:', e.message); }
+  }
 }
 
 // Data version tracking — enables safe migrations between releases
@@ -397,14 +401,32 @@ function getAgents() {
       const files = fs.readdirSync(DATA_DIR).filter(f => f.startsWith('heartbeat-') && f.endsWith('.json'));
       for (const f of files) {
         const name = f.slice(10, -5); // extract name from 'heartbeat-{name}.json'
-        if (agents[name]) {
-          try {
-            const hb = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
-            if (hb.last_activity) agents[name].last_activity = hb.last_activity;
-            if (hb.last_listen_call) agents[name].last_listen_call = hb.last_listen_call;
-            if (hb.pid) agents[name].pid = hb.pid;
-          } catch (e) { log.debug("heartbeat merge failed:", e.message); }
-        }
+        try {
+          const hb = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
+          if (!agents[name]) {
+            // Orphaned heartbeat: agents.json was reset/corrupted after this agent
+            // registered. Synthesize a row so a live agent doesn't vanish from the
+            // dashboard until it happens to call register() again.
+            if (hb.pid && isPidAlive(hb.pid, hb.last_activity)) {
+              agents[name] = {
+                pid: hb.pid,
+                ppid: null,
+                timestamp: hb.last_activity || new Date().toISOString(),
+                last_activity: hb.last_activity || new Date().toISOString(),
+                last_listened_at: hb.last_activity || null,
+                provider: 'unknown',
+                branch: 'main',
+                token: null,
+                started_at: hb.last_activity || new Date().toISOString(),
+                recovered_from_heartbeat: true,
+              };
+            }
+            continue;
+          }
+          if (hb.last_activity) agents[name].last_activity = hb.last_activity;
+          if (hb.last_listen_call) agents[name].last_listen_call = hb.last_listen_call;
+          if (hb.pid) agents[name].pid = hb.pid;
+        } catch (e) { log.debug("heartbeat merge failed:", e.message); }
       }
     } catch (e) { log.debug("heartbeat scan failed:", e.message); }
     return agents;
@@ -650,6 +672,7 @@ function buildBatchMessageResponse(msgs, consumedIds) {
     pending_count: pendingCount,
     agents_online: agentsOnline,
     ...(taskReminder && { task_reminder: taskReminder }),
+    charter: buildCharter(registeredName),
   };
 }
 
@@ -732,6 +755,7 @@ function buildMessageResponse(msg, consumedIds) {
     pending_count: pendingCount,
     agents_online: agentsOnline,
     ...(taskReminder && { task_reminder: taskReminder }),
+    charter: buildCharter(registeredName),
   };
 }
 
@@ -1326,6 +1350,7 @@ function buildGuide(level = 'standard') {
     }
     rules.push('If stuck: retry up to 3 times, then ask team via send_message, then move to next task.');
     rules.push('Lock files before editing (lock_file/unlock_file). Log decisions with log_decision().');
+    rules.push('Save work artifacts under .neohive/artifacts/{yourName}/ so they appear on the dashboard.');
     rules.push('Keep messages short (2-3 paragraphs). Report what you did and what files changed.');
 
     // User-customizable project-specific rules
@@ -1407,6 +1432,7 @@ function buildGuide(level = 'standard') {
 
   rules.push('Keep messages short (2-3 paragraphs). Report what you did and what files changed.');
   rules.push('Lock files before editing (lock_file/unlock_file). Log decisions with log_decision().');
+  rules.push('Save work artifacts under .neohive/artifacts/{yourName}/ so they appear on the dashboard.');
 
   if (mode === 'group' || mode === 'managed') {
     rules.push('Use reply_to for threading (faster cooldown). Ignore should_respond: false unless relevant.');
@@ -1467,6 +1493,59 @@ function buildGuide(level = 'standard') {
 
   // Cache the result for subsequent calls with same params
   _guideCache = { key: cacheKey, result };
+  return result;
+}
+
+// --- Persistent charter (role + responsibilities), re-injected on every listen() ---
+// Fixes agents forgetting their role/responsibilities as context fills — task_reminder
+// alone isn't enough, so we carry a compact charter alongside it on every response.
+let _charterCache = { key: null, result: null };
+function buildCharter(name) {
+  const agentName = name || registeredName;
+  let role = 'agent';
+  try {
+    const profiles = getProfiles();
+    const agents = getAgents();
+    role = (profiles[agentName] && profiles[agentName].role) ||
+           (agents[agentName] && agents[agentName].role) ||
+           'agent';
+  } catch (e) { log.debug('buildCharter role lookup failed:', e.message); }
+
+  let rulesMtime = 0;
+  try { rulesMtime = fs.existsSync(RULES_FILE) ? fs.statSync(RULES_FILE).mtimeMs : 0; } catch {}
+  // Include provider in the key — active_rules is filtered by provider below,
+  // so a provider change must invalidate the cached charter too.
+  let providerForKey = '';
+  try { const ag = getAgents(); providerForKey = ((ag[agentName] && ag[agentName].provider) || '').toLowerCase(); } catch {}
+  const cacheKey = `${agentName}:${role}:${providerForKey}:${rulesMtime}`;
+  if (_charterCache.key === cacheKey && _charterCache.result) return _charterCache.result;
+
+  const responsibilities = [
+    `You are ${role}.`,
+    'After every step, report progress via send_message — never work silently.',
+    'Keep tasks updated (update_task) and log key decisions (log_decision).',
+    `Save work artifacts under .neohive/artifacts/${agentName}/ so they appear on the dashboard.`,
+    'Always call listen() as your last tool call.',
+  ];
+
+  let activeRules = [];
+  try {
+    const myProvider = (() => {
+      const ag = getAgents();
+      return ((ag[agentName] && ag[agentName].provider) || '').toLowerCase();
+    })();
+    const roleLower = (role || '').toLowerCase();
+    activeRules = getRules().filter(r => {
+      if (!r.active) return false;
+      if (r.scope_role && r.scope_role !== roleLower) return false;
+      if (r.scope_provider && r.scope_provider !== myProvider) return false;
+      if (r.scope_agent && r.scope_agent !== agentName) return false;
+      return true;
+    }).map(r => `[${r.category.toUpperCase()}] ${r.text}`);
+  } catch (e) { log.debug('buildCharter active_rules failed:', e.message); }
+
+  const result = { role, responsibilities, active_rules: activeRules };
+  _charterCache = { key: cacheKey, result };
   return result;
 }
 

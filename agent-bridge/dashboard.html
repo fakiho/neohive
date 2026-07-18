@@ -4666,6 +4666,9 @@
       <div class="nav-item" data-view="terminal" onclick="switchView('terminal')">
         <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4l4 4-4 4M9 12h4"/></svg></span><span class="nav-text">Terminal</span>
       </div>
+      <div class="nav-item" data-view="files" onclick="switchView('files')">
+        <span class="nav-icon"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4a1 1 0 0 1 1-1h3l1.5 2H13a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></svg></span><span class="nav-text">Files</span>
+      </div>
     </div>
     <div class="nav-sidebar-divider"></div>
     <!-- Agents -->
@@ -4740,6 +4743,7 @@
       <div class="view-tab" id="tab-plan" onclick="switchView('plan')">Plan</div>
       <div class="view-tab" id="tab-launch" onclick="switchView('launch')">Launch</div>
       <div class="view-tab" id="tab-bmad" onclick="switchView('bmad')">BMad</div>
+      <div class="view-tab" id="tab-files" onclick="switchView('files')">Files</div>
       <div class="view-tab" id="tab-rules" onclick="switchView('rules')">Policies</div>
       <div class="view-tab" id="tab-audit-log" onclick="switchView('audit-log')">Audit Log</div>
       <div class="view-tab" id="tab-stats" onclick="switchView('stats')">Stats</div>
@@ -4771,6 +4775,7 @@
     <div class="plan-area" id="monitor-panel" style="display:none"></div>
     <div class="launch-area" id="launch-area"></div>
     <div class="launch-area" id="bmad-area"></div>
+    <div class="launch-area" id="files-area"></div>
     <div class="rules-area" id="rules-area"></div>
     <div class="audit-log-area" id="audit-log-area" style="display:none; padding:16px 20px; overflow-y:auto; flex:1"></div>
     <div class="stats-area" id="stats-area"></div>
@@ -7003,7 +7008,7 @@ function switchView(view) {
     navItems[i].classList.toggle('active', navItems[i].getAttribute('data-view') === view);
   }
   // Update old tab active states (kept for compatibility)
-  var tabIds = ['messages','tasks','workspaces','workflows','plan','launch','bmad','rules','audit-log','stats','docs'];
+  var tabIds = ['messages','tasks','workspaces','workflows','plan','launch','bmad','files','rules','audit-log','stats','docs'];
   for (var t = 0; t < tabIds.length; t++) {
     var el = document.getElementById('tab-' + tabIds[t]);
     if (el) el.classList.toggle('active', view === tabIds[t]);
@@ -7018,6 +7023,7 @@ function switchView(view) {
   document.getElementById('monitor-panel').style.display = view === 'plan' ? 'block' : 'none';
   document.getElementById('launch-area').classList.toggle('visible', view === 'launch');
   document.getElementById('bmad-area').classList.toggle('visible', view === 'bmad');
+  document.getElementById('files-area').classList.toggle('visible', view === 'files');
   document.getElementById('rules-area').classList.toggle('visible', view === 'rules');
   if (document.getElementById('audit-log-area')) {
     document.getElementById('audit-log-area').classList.toggle('visible', view === 'audit-log');
@@ -7044,6 +7050,7 @@ function switchView(view) {
   if (view === 'docs') renderDocs();
   if (view === 'launch') renderLaunchPanel();
   if (view === 'bmad') renderBmadTab();
+  if (view === 'files') renderFiles();
   if (view === 'rules') fetchRules();
   if (view === 'audit-log') fetchAuditLog();
   if (view === 'stats') fetchStats();
@@ -10722,6 +10729,85 @@ function renderBmadTab() {
   }).catch(function() {
     if (requestId !== bmadTabRenderSeq || requestedProject !== activeProject) return;
     el.innerHTML = '<div class="launch-section"><h3>BMad Lifecycle</h3><p style="color:var(--text-dim)">Failed to load data.</p></div>';
+  });
+}
+
+var filesTabRenderSeq = 0;
+var filesTabList = [];
+var filesTabSelected = null;
+
+function renderFiles() {
+  var el = document.getElementById('files-area');
+  var requestedProject = activeProject;
+  var requestId = ++filesTabRenderSeq;
+  var pq = projectParamFor(requestedProject);
+  if (el) {
+    el.innerHTML = '<div class="launch-section"><p style="color:var(--text-dim)">Loading files for the selected project...</p></div>';
+  }
+  lttFetch('/api/files' + pq).then(function(r) { return r.json(); }).then(function(result) {
+    if (requestId !== filesTabRenderSeq || requestedProject !== activeProject) return;
+    filesTabList = (result && result.files) || [];
+    filesTabSelected = null;
+    el.innerHTML = renderFilesList(result);
+  }).catch(function(error) {
+    if (requestId !== filesTabRenderSeq || requestedProject !== activeProject) return;
+    el.innerHTML = '<div class="launch-section"><h3>Files</h3><p style="color:var(--text-dim)">Failed to load files: ' + escapeHtml((error && error.message) || 'unknown error') + '</p></div>';
+  });
+}
+
+function renderFilesList(result) {
+  if (result && result.error) {
+    return '<div class="launch-section"><h3>Files</h3><p style="color:var(--text-dim)">' + escapeHtml(result.error) + '</p></div>';
+  }
+  var files = (result && result.files) || [];
+  if (!files.length) {
+    return '<div class="launch-section"><h3>Files</h3><p style="color:var(--text-dim)">No agent-created files found yet (looks under _bmad-output/ and .neohive/artifacts/).</p></div>';
+  }
+  // Group by directory (relative path minus filename)
+  var groups = {};
+  files.forEach(function(f) {
+    var idx = f.path.lastIndexOf('/');
+    var dir = idx === -1 ? '.' : f.path.slice(0, idx);
+    (groups[dir] = groups[dir] || []).push(f);
+  });
+  var dirs = Object.keys(groups).sort();
+  var listHtml = dirs.map(function(dir) {
+    var items = groups[dir].map(function(f) {
+      var name = f.path.slice(f.path.lastIndexOf('/') + 1);
+      return '<div class="file-row" style="padding:4px 8px;cursor:pointer;border-radius:4px" onclick="openFile(' + JSON.stringify(f.path) + ')" title="' + escapeHtml(f.path) + '">' +
+        '<span style="color:var(--text)">' + escapeHtml(name) + '</span> ' +
+        '<span style="color:var(--text-muted);font-size:11px">' + f.size + ' bytes</span></div>';
+    }).join('');
+    return '<div class="file-group" style="margin-bottom:10px"><div style="color:var(--text-muted);font-size:11px;letter-spacing:0.04em;margin-bottom:2px">' + escapeHtml(dir) + '</div>' + items + '</div>';
+  }).join('');
+  return '<div class="launch-section"><h3>Files</h3>' +
+    '<div style="display:flex;gap:16px;align-items:flex-start">' +
+    '<div id="files-list-pane" style="flex:0 0 280px;max-height:70vh;overflow-y:auto">' + listHtml + '</div>' +
+    '<div id="files-preview-pane" style="flex:1;min-width:0;max-height:70vh;overflow-y:auto"><p style="color:var(--text-dim)">Select a file to preview.</p></div>' +
+    '</div></div>';
+}
+
+function openFile(filePath) {
+  filesTabSelected = filePath;
+  var pane = document.getElementById('files-preview-pane');
+  if (!pane) return;
+  pane.innerHTML = '<p style="color:var(--text-dim)">Loading...</p>';
+  var pq = projectParamFor(activeProject);
+  var qs = pq ? (pq + '&path=' + encodeURIComponent(filePath)) : ('?path=' + encodeURIComponent(filePath));
+  lttFetch('/api/file' + qs).then(function(r) { return r.json(); }).then(function(result) {
+    if (filesTabSelected !== filePath) return;
+    if (result.error) {
+      pane.innerHTML = '<p style="color:var(--text-dim)">' + escapeHtml(result.error) + '</p>';
+      return;
+    }
+    if (/\.md$/i.test(result.path)) {
+      pane.innerHTML = '<div class="md-content">' + renderMarkdown(result.content) + '</div>';
+    } else {
+      pane.innerHTML = '<pre style="white-space:pre-wrap;word-break:break-word;font-size:12px">' + escapeHtml(result.content) + '</pre>';
+    }
+  }).catch(function(error) {
+    if (filesTabSelected !== filePath) return;
+    pane.innerHTML = '<p style="color:var(--text-dim)">Failed to load file: ' + escapeHtml((error && error.message) || 'unknown error') + '</p>';
   });
 }
 
