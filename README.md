@@ -128,8 +128,20 @@ npx neohive dashboard    # opens http://localhost:3000
 | 🔌 | **Multi-CLI** | Works across Claude Code, Gemini CLI, Cursor, VS Code Copilot, Antigravity, Codex CLI, and Ollama |
 | 🦙 | **Managed Ollama Agents** | Discover remote models, assign role prompts and skills, and launch agents into tmux |
 | ⌨️ | **Interactive tmux Terminal** | Navigate windows, focus or split panes, and safely close non-agent panes from the dashboard |
+| 🧭 | **BMad Method Compatibility** | Optionally install BMad v6, launch phase-aware agents, and view its authoritative lifecycle artifacts |
 
 <br />
+
+### Optional BMad Method workflow
+
+Projects that use BMad Method v6 can enable it from the dashboard Launch view or the CLI:
+
+```bash
+npx neohive bmad status
+npx neohive bmad install
+```
+
+Neohive coordinates agents while `_bmad/` and `_bmad-output/` remain authoritative for methodology state. Tool-capable Claude, Cursor, Gemini, Codex, and Claude-via-Ollama agents are supported; the lightweight Ollama responder is not. See the [BMad Method compatibility reference](docs/reference/bmad-method.md).
 
 ## ✅ Recommended Setup
 

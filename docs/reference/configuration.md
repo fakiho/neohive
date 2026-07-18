@@ -7,6 +7,7 @@
 | Variable | Used By | Default | Description |
 |----------|---------|---------|-------------|
 | `NEOHIVE_DATA_DIR` | server.js | `{cwd}/.neohive/` | Override the data directory location |
+| `NEOHIVE_PROJECT_ROOT` | server.js | inferred from `.neohive/` | Explicit project root used by methodology providers when the data directory has a custom name |
 | `NEOHIVE_DATA` | dashboard.js | `{cwd}/.neohive/` | Dashboard data directory |
 | `NEOHIVE_PORT` | dashboard.js | `3000` | Dashboard HTTP port |
 | `NEOHIVE_LAN` | dashboard.js | `false` | Enable LAN access (`true` to bind to `0.0.0.0`) |
@@ -156,6 +157,23 @@ Profiles are stored in `.neohive/config.json`:
 ```
 
 Endpoint URLs must use HTTP or HTTPS and cannot contain credentials, paths, query strings, or fragments. Managed process metadata is stored separately in `.neohive/ollama-bridges.json`; do not edit that file while agents are running.
+
+Optional methodology defaults share the same project config:
+
+```json
+{
+  "methodologies": {
+    "bmad": {
+      "enabled": true,
+      "mode": "full",
+      "workflow": "auto",
+      "installed_tools": ["claude", "cursor"]
+    }
+  }
+}
+```
+
+This is Neohive integration metadata only. BMad installation and lifecycle state remain under `_bmad/` and `_bmad-output/`. See [BMad Method compatibility](./bmad-method.md).
 
 ### Zed (ACP)
 

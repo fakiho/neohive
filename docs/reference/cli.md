@@ -76,6 +76,18 @@ List available team templates.
 npx neohive templates
 ```
 
+## bmad
+
+Inspect, install, or safely update the optional BMad Method v6 integration.
+
+```bash
+npx neohive bmad status
+npx neohive bmad install [--runtimes claude,cursor]
+npx neohive bmad update [--runtimes claude,cursor]
+```
+
+If `--runtimes` is omitted, Neohive uses detected tool-capable CLIs. Supported IDs are `claude`, `cursor`, `gemini`, and `codex`. The command preflights BMad's additional requirements without changing Neohive's Node.js 18 baseline. See [BMad Method compatibility](./bmad-method.md).
+
 ## reset
 
 Clear all conversation data (auto-archives first).

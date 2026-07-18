@@ -59,6 +59,7 @@ The server watches the `.neohive/` directory with `fs.watch()` and pushes change
 | `tasks.json` | `tasks` |
 | `workflows.json` | `workflows` |
 | Other `.json`/`.jsonl` | `update` |
+| Nested `_bmad-output/` fingerprint | `methodology` |
 
 Heartbeat files (`heartbeat-*.json`) and lock files (`.lock`) are excluded to reduce noise.
 
@@ -70,7 +71,7 @@ The Launch view uses one role-first **Create Agent** form for native CLIs and Ol
 
 When an Ollama runtime is selected, choose a saved endpoint and an installed model. The model dropdown is loaded live from Ollama's `/api/tags` endpoint, so model names do not need to be typed and removed models cannot be launched accidentally. Choose **Claude Code via Ollama** for a full coding agent or **Ollama responder** for message-only inference.
 
-The primary launch action starts a managed Ollama agent, selects its tagged tmux window, and opens the Terminal view. Endpoint profile management remains available from the collapsible section below the form.
+For native runtimes, the primary action writes MCP configuration and launches the CLI in tmux. For an Ollama runtime, it starts a managed agent, selects its tagged tmux window, and opens the Terminal view. Endpoint profile management remains available from the collapsible section below the form.
 
 Each managed agent:
 
@@ -91,11 +92,27 @@ The Launch view only lists live or starting windows. Stopped, failed, and dead i
 | `DELETE` | `/api/ollama/endpoints/{id}` | Delete an unused endpoint profile |
 | `GET` | `/api/ollama/models?endpoint_id={id}` | List installed models from a saved endpoint |
 | `GET` | `/api/ollama/instances` | List managed Ollama instances and lifecycle status |
-| `POST` | `/api/ollama/instances` | Start an agent. Body: `name`, `model`, `endpoint_id`, `runtime`, `role` |
+| `POST` | `/api/ollama/instances` | Start an agent. Body: `name`, `model`, `endpoint_id`, `runtime`, `role`; optional `methodology` and template `base_prompt` |
 | `POST` | `/api/ollama/instances/{id}/focus` | Select the instance's tmux window |
 | `DELETE` | `/api/ollama/instances/{id}` | Stop an instance. Requires `{ "confirm": true }` |
 
 All mutations require the standard dashboard CSRF and LAN authentication headers.
+
+## BMad Method compatibility
+
+The Launch view can install, update, and select the optional **Compatible with BMad Method v6** provider. Quick mode targets small, well-understood work; Full mode exposes the analysis, planning, solutioning, and implementation workflows. The server validates the selected runtime and composes the final role plus methodology prompt.
+
+The lifecycle panel is a read-only projection of `_bmad/` and `_bmad-output/`. BMad remains authoritative for phases, stories, gates, and artifacts; Neohive remains authoritative for agents, assignments, locks, and messages. The lightweight Ollama responder is not tool-capable and cannot be launched with BMad.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/launch/methodologies` | List methodology providers, workflows, and runtime capabilities |
+| `GET` | `/api/methodologies/bmad/status` | Installation, prerequisites, lifecycle, stories, gates, and artifacts |
+| `GET` | `/api/methodologies/bmad/artifacts` | Read-only artifact references; optional `kind` filter |
+| `POST` | `/api/methodologies/bmad/settings` | Save `enabled`, `mode`, and `workflow` project defaults |
+| `POST` | `/api/methodologies/bmad/install` | Explicit upstream install or quick update |
+
+See [BMad Method compatibility](./bmad-method.md) for CLI commands, ownership rules, recovery, and trademark guidance.
 
 ## Interactive Terminal and tmux Controls
 

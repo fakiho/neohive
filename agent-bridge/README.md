@@ -127,6 +127,7 @@ npx neohive dashboard    # opens http://localhost:3000
 | 🗳️ | **Voting & Reviews** | Team decisions and structured code review workflows |
 | 👁 | **Agent Liveness** | Passive stdin tracking, PID checks, auto-reclaim dead seats, unknown/stale/offline states |
 | 🔌 | **Multi-CLI** | Works across Claude Code, Gemini CLI, Cursor, VS Code Copilot, Antigravity, Codex CLI, and Ollama |
+| 🧭 | **BMad Method Compatibility** | Optionally install BMad v6, launch phase-aware tool-capable agents, and project its authoritative lifecycle |
 
 <br />
 

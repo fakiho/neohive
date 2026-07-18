@@ -4,6 +4,8 @@
 
 ### Added
 
+- **BMad Method v6 compatibility** — Optional, version-bounded upstream install/update from CLI or dashboard; runtime-capability-aware launcher prompts for native CLIs and Claude-via-Ollama; read-only phase/story/gate/artifact projection; `methodology_status`, `methodology_next_action`, and `methodology_artifacts` MCP tools; linked `external_ref` task assignments; nested-output SSE refresh; explicit lightweight Ollama rejection; tests and documentation.
+
 - **`init --acp` Zed UX** — Detects **neohive package dev root** (`package.json` name `neohive` + `acp-agent.mjs`) → **`${workspaceFolder}/acp-agent.mjs`**; **monorepo / git checkout root** with **`agent-bridge/`** → **`${workspaceFolder}/agent-bridge/acp-agent.mjs`** and **`${workspaceFolder}/.neohive`**. Otherwise **`node_modules/neohive/...`**. Merges **`agent_servers.neohive`** into **`.zed/settings.json`** idempotently.
 
 - **ACP dual-node router** — `acp-orchestrator.mjs` (`WorkerSession`, `ClientSideConnection` to headless ACP workers): forwards `sessionUpdate` / `requestPermission` (with MVP fallback) and optional `readTextFile` / `writeTextFile` to Zed; hub poll via `setTimeout` chain + in-flight guard; PID-safe **`hub.unregister`** / **`hubUnregisterAgent`**. **`acp-agent.mjs`**: `dispatch worker=<id> cwd=<path>` (+ JSON `action: dispatch`), session **`allowedRoots`**, teardown on cancel / connection abort; **`npx neohive init --acp-worker`** + **`templates/acp-workers.json`**. **Docs:** `docs/acp-registry/` draft for upstream registry PR; README / `docs/documentation.md` / `docs/reference/cli.md` updates. **`package.json` `files`:** `acp-orchestrator.mjs`.

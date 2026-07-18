@@ -194,6 +194,7 @@ Create a task and optionally assign it to an agent.
 | `title` | string | Yes | Task title |
 | `description` | string | No | Detailed description |
 | `assignee` | string | No | Agent to assign the task to |
+| `external_ref` | string | No | Authoritative BMad link such as `bmad:story:story-one`; does not duplicate external status |
 
 **Returns:** Task object with generated ID.
 
@@ -944,6 +945,29 @@ Distribute a user request to the team. The lead agent breaks it into tasks and c
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `content` | string | Yes | The user request to distribute |
+
+---
+
+## Project Methodology
+
+These read-only tools expose the authoritative BMad Method projection when BMad is installed.
+
+### methodology_status
+
+Returns compatibility, configured mode, lifecycle phases, sprint stories, linked assignments, gates, artifacts, and the recommended next workflow.
+
+### methodology_next_action
+
+Returns a compact next workflow recommendation without requiring the agent to consume the full artifact index.
+
+### methodology_artifacts
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `kind` | string | No | Filter by `prd`, `architecture`, `story`, `gate`, `sprint-status`, or another projected kind |
+| `limit` | number | No | Maximum references to return (default 50, max 200) |
+
+All paths are project-relative references. These tools do not copy or mutate `_bmad-output/`.
 
 ---
 

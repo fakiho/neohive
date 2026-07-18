@@ -312,3 +312,9 @@ concurrent wake requests, and absent legacy metadata
 **And** they prove the provider-agnostic invariants “a busy pane never receives
 message content,” “repeated nudges produce at most one queued wake,” and
 “content is always retrievable via `listen()`” without restarting the dashboard.
+
+<!-- Related Task: task_mrq79g5n45a7ac5c2723 -->
+
+<!-- Related Task: task_mrq7bvy28cfb81d58323 -->
+
+<!-- Related Task: task_mrq7coh70dc4fa1e3fdb -->

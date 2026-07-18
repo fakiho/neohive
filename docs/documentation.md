@@ -360,6 +360,7 @@ Long-form reference material lives under **[`docs/reference/`](reference/)** so 
 | Autonomy, managed mode, branching, channels | [reference/advanced.md](reference/advanced.md) |
 | `next_action` response chain & coordinator flows | [reference/next-action-chain.md](reference/next-action-chain.md) |
 | Environment variables & MCP config snippets | [reference/configuration.md](reference/configuration.md) |
+| BMad Method v6 compatibility | [reference/bmad-method.md](reference/bmad-method.md) |
 
 ---
 
