@@ -86,82 +86,91 @@ function releaseCompactLease() {
 }
 
 function autoCompact() {
+  const { withFileLock } = require('./file-io');
   const msgFile = getMessagesFile(state.currentBranch);
   if (!fs.existsSync(msgFile)) return;
   if (!tryAcquireCompactLease()) return;
-  try {
-    const content = fs.readFileSync(msgFile, 'utf8').trim();
-    if (!content) return;
-    const lines = content.split(/\r?\n/);
-    if (lines.length < 500) return;
 
-    const messages = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  // Hold the messages-file lock across read→archive→rename so no append
+  // can interleave and be lost. All appenders use withFileLock(msgFile).
+  withFileLock(msgFile, () => {
+    try {
+      const content = fs.readFileSync(msgFile, 'utf8').trim();
+      if (!content) return;
+      const lines = content.split(/\r?\n/);
+      if (lines.length < 500) return;
 
-    const agents = getAgents();
-    const allAgentNames = Object.keys(agents);
-    const retentionMs = (parseInt(process.env.NEOHIVE_RETENTION_HOURS) || 24) * 3600000;
-    const allConsumed = new Set();
-    const perAgentConsumed = {};
-    if (fs.existsSync(DATA_DIR)) {
-      for (const f of fs.readdirSync(DATA_DIR)) {
-        if (f.startsWith('consumed-') && f.endsWith('.json')) {
-          const agentName = f.replace('consumed-', '').replace('.json', '');
-          try {
-            const ids = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
-            perAgentConsumed[agentName] = new Set(ids);
-            ids.forEach(id => allConsumed.add(id));
-          } catch {}
+      const messages = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+
+      const agents = getAgents();
+      const allAgentNames = Object.keys(agents);
+      const retentionMs = (parseInt(process.env.NEOHIVE_RETENTION_HOURS) || 24) * 3600000;
+      const allConsumed = new Set();
+      const perAgentConsumed = {};
+      if (fs.existsSync(DATA_DIR)) {
+        for (const f of fs.readdirSync(DATA_DIR)) {
+          if (f.startsWith('consumed-') && f.endsWith('.json')) {
+            const agentName = f.replace('consumed-', '').replace('.json', '');
+            try {
+              const ids = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
+              perAgentConsumed[agentName] = new Set(ids);
+              ids.forEach(id => allConsumed.add(id));
+            } catch {}
+          }
         }
       }
-    }
 
-    const active = messages.filter(m => {
-      if (m.to === '__group__') {
-        const msgTime = new Date(m.timestamp).getTime();
-        if (msgTime < Date.now() - retentionMs) return false;
-        return !allAgentNames.every(n => n === m.from || (perAgentConsumed[n] && perAgentConsumed[n].has(m.id)));
+      const active = messages.filter(m => {
+        if (m.to === '__group__') {
+          const msgTime = new Date(m.timestamp).getTime();
+          if (msgTime < Date.now() - retentionMs) return false;
+          return !allAgentNames.every(n => n === m.from || (perAgentConsumed[n] && perAgentConsumed[n].has(m.id)));
+        }
+        if (!allConsumed.has(m.id)) return true;
+        return false;
+      });
+
+      const archived = messages.filter(m => !active.includes(m));
+      if (archived.length > 0) {
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const archiveFile = path.join(DATA_DIR, `archive-${dateStr}.jsonl`);
+        const archiveContent = archived.map(m => JSON.stringify(m)).join('\n') + '\n';
+        // If archive write fails, abort compaction — do not delete unarchived messages
+        const archiveResult = withFileLock(archiveFile, () => {
+          try { fs.appendFileSync(archiveFile, archiveContent); return true; }
+          catch (e) { log.error('autoCompact archive write failed:', e.message); return false; }
+        });
+        if (!archiveResult) return; // archive lock failed or write failed — abort
       }
-      if (!allConsumed.has(m.id)) return true;
-      return false;
-    });
 
-    const archived = messages.filter(m => !active.includes(m));
-    if (archived.length > 0) {
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const archiveFile = path.join(DATA_DIR, `archive-${dateStr}.jsonl`);
-      const archiveContent = archived.map(m => JSON.stringify(m)).join('\n') + '\n';
+      const newContent = active.map(m => JSON.stringify(m)).join('\n') + (active.length ? '\n' : '');
+      const tmpFile = `${msgFile}.tmp.${process.pid}.${Date.now()}`;
+      fs.writeFileSync(tmpFile, newContent);
       try {
-        const { withFileLock } = require('./file-io');
-        withFileLock(archiveFile, () => { fs.appendFileSync(archiveFile, archiveContent); });
-      } catch (e) { log.error('autoCompact archive write failed:', e.message); }
-    }
-
-    const newContent = active.map(m => JSON.stringify(m)).join('\n') + (active.length ? '\n' : '');
-    const tmpFile = `${msgFile}.tmp.${process.pid}.${Date.now()}`;
-    fs.writeFileSync(tmpFile, newContent);
-    try {
-      fs.renameSync(tmpFile, msgFile);
-    } catch {
-      try { fs.unlinkSync(tmpFile); } catch {}
-      return;
-    }
-    state.lastReadOffset = Buffer.byteLength(newContent, 'utf8');
-
-    const activeIds = new Set(active.map(m => m.id));
-    for (const f of fs.readdirSync(DATA_DIR)) {
-      if (f.startsWith('consumed-') && f.endsWith('.json')) {
-        try {
-          const fp = path.join(DATA_DIR, f);
-          const ids = JSON.parse(fs.readFileSync(fp, 'utf8'));
-          const trimmed = ids.filter(id => activeIds.has(id));
-          const tmp = `${fp}.tmp.${process.pid}.${Date.now()}`;
-          fs.writeFileSync(tmp, JSON.stringify(trimmed));
-          fs.renameSync(tmp, fp);
-        } catch (e) { log.debug('consumed trim failed:', e.message); }
+        fs.renameSync(tmpFile, msgFile);
+      } catch {
+        try { fs.unlinkSync(tmpFile); } catch {}
+        return;
       }
-    }
-  } catch (e) { log.warn('autoCompact failed:', e.message); }
-  finally { releaseCompactLease(); }
+      state.lastReadOffset = Buffer.byteLength(newContent, 'utf8');
+
+      const activeIds = new Set(active.map(m => m.id));
+      for (const f of fs.readdirSync(DATA_DIR)) {
+        if (f.startsWith('consumed-') && f.endsWith('.json')) {
+          try {
+            const fp = path.join(DATA_DIR, f);
+            const ids = JSON.parse(fs.readFileSync(fp, 'utf8'));
+            const trimmed = ids.filter(id => activeIds.has(id));
+            const tmp = `${fp}.tmp.${process.pid}.${Date.now()}`;
+            fs.writeFileSync(tmp, JSON.stringify(trimmed));
+            fs.renameSync(tmp, fp);
+          } catch (e) { log.debug('consumed trim failed:', e.message); }
+        }
+      }
+    } catch (e) { log.warn('autoCompact failed:', e.message); }
+  });
+
+  releaseCompactLease();
 }
 
 module.exports = {

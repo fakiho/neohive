@@ -12,6 +12,7 @@ const _audit = require('./lib/audit');
 const { WebSocketServer } = require('ws');
 const terminalWs = require('./lib/terminal-ws');
 const tmuxAgentState = require('./lib/tmux-agent-state');
+const { directDeliver } = require('./lib/direct-delivery');
 const ollamaBridgeManager = require('./lib/ollama-bridge-manager');
 const agentLaunchProfiles = require('./lib/agent-launch-profiles');
 const tmuxCliLauncher = require('./lib/tmux-cli-launcher');
@@ -1356,103 +1357,30 @@ async function apiInjectMessage(body, query) {
     timestamp: now,
   };
 
-  // Interactive CLI agents mapped to tmux are reachable directly through their
-  // terminal — deliver there instead of the MCP message queue. Managed Ollama
-  // responders are queue-only Node workers: their pane is an activity log and
-  // stdin is not a CLI prompt, so they must always fall through to messages.jsonl.
-  // NOT both: injected text never goes
-  // through listen()'s consumed-tracking, so queuing it too would just mean
-  // it gets redelivered (and re-processed) the next time the agent calls
-  // listen() for any other reason. Unmapped agents are completely unaffected
-  // — same messagesFile+historyFile write as before this change.
-  let targetTmux = null;
-  let targetPid = null;
-  let targetListeningSince = null;
-  let targetAgentAlive = null; // null = agent/agents.json missing entirely, not just dead
-  const targetQueueOnly = ollamaBridgeManager.isManagedResponder(dataDir, body.to);
-  try {
-    const agentsFile = path.join(dataDir, 'agents.json');
-    if (fs.existsSync(agentsFile)) {
-      const info = JSON.parse(fs.readFileSync(agentsFile, 'utf8'))[body.to];
-      if (info) {
-        targetListeningSince = info.listening_since || null;
-        targetAgentAlive = info.pid ? isPidAlive(info.pid, info.last_activity) : false;
-        if (info.tmux && info.tmux.mapped) {
-          targetTmux = info.tmux;
-          targetPid = info.pid;
-        }
-      }
-    }
-  } catch {}
-
-  // The agents.json snapshot can be up to poll_interval_seconds stale (default
-  // 20s). Re-verify the mapping right before trusting it for a real side
-  // effect — if the agent's PID died and got reused by an unrelated process
-  // in that window, a stale mapping would otherwise send keystrokes + Enter
-  // into whatever pane that process happens to share ancestry with.
-  // Fresh, uncached check that the agent isn't mid-generation or sitting at a
-  // permission prompt right now — the agents.json advisory state only polls
-  // every ~20s, too stale to safely gate a real-time send. Typing into a pane
-  // in either of those states could corrupt an in-progress turn or answer a
-  // permission menu with whatever character the message happens to start with.
-  //
-  // Skip tmux injection when the agent is currently blocking inside listen():
-  // Claude Code's MCP tool-call wait state doesn't show "esc to interrupt" so
-  // isPaneSafeToInject() returns true, but stdin is not being read — the
-  // injected text would sit in the terminal buffer until listen() eventually
-  // times out. Instead, fall through to MCP delivery (messages.jsonl), which
-  // wakes the blocking listen() call immediately via fs.watch.
-  //
-  // Gated on listening_since, NOT the agents.json "status" field: status is
-  // set to 'listening' by a middleware right before every listen() call
-  // starts but is never reset afterward, so it stays 'listening' forever
-  // once an agent has called listen() at least once — even while genuinely
-  // idle at its own prompt. listening_since is set by setListening(true) at
-  // the start of the blocking wait and cleared back to null the instant it
-  // resolves, so it's the only field that actually reflects "blocked in
-  // listen() right now" rather than "last tool that was ever invoked".
-  if (
-    targetTmux &&
-    !targetQueueOnly &&
-    !targetListeningSince &&
-    (await tmuxAgentState.verifyPaneMapping(targetPid, targetTmux.pane_id).catch(() => false)) &&
-    (await tmuxAgentState.isPaneSafeToInject(targetTmux.pane_id).catch(() => false))
-  ) {
-    // The reply is the agent's own send_message() call, not a screen-scraped
-    // guess: capture-pane heuristics (quiet-detection timing, box-boundary
-    // parsing) proved unreliable in practice — a real reply was silently lost
-    // when the pane text didn't match the expected shape. The agent already
-    // has the neohive MCP tools loaded in this session, so it can close the
-    // loop the same reliable way any other agent-to-agent reply does.
-    const paneText = `${body.content} [neohive: reply via send_message(to="${fromName}") when done]`;
-    try {
-      await tmuxAgentState.sendKeysToPane(targetTmux.pane_id, paneText);
-    } catch (e) {
-      return { error: 'tmux delivery failed: ' + e.message };
-    }
-    // Ensure the pane-exited hook is registered for this session so any future
-    // pane death is caught immediately, even if the dashboard restarted after
-    // the initial startup scan.
-    if (targetTmux.session_name) {
-      try { tmuxAgentState.registerSessionHook(targetTmux.session_name, PORT); } catch {}
-    }
-    fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
-
-    return { success: true, messageId: msg.id, delivery: 'tmux' };
+  // Story 1.2 / AD-1: direct injects use the shared queue-first boundary.
+  // Content always lands in messages.jsonl + history before any advisory wake.
+  // Wake is content-free (WAKE_SIGNAL only); wake failure never drops a queued
+  // message. body.content / body.from / reply instructions never reach tmux.
+  const deliveryResult = await directDeliver({
+    msgFile: messagesFile,
+    histFile: historyFile,
+    msg,
+    dataDir,
+    to: body.to,
+  });
+  if (!deliveryResult.success) {
+    return { error: deliveryResult.error || 'queue-write-failed' };
   }
 
-  // Neither channel is reachable: not tmux-injectable (unmapped/unsafe/busy) and
-  // the agent's own MCP process isn't alive to ever call listen() and consume
-  // messages.jsonl. Queuing here would report success while the message sits
-  // undelivered forever — surface the failure instead.
-  if (!targetAgentAlive) {
-    return { error: `Agent "${body.to}" is not reachable via tmux or MCP — message not delivered`, delivery: 'none' };
+  const response = {
+    success: true,
+    messageId: deliveryResult.messageId || msg.id,
+  };
+  if (deliveryResult.wake) {
+    response.wake = deliveryResult.wake;
+    if (deliveryResult.wakeReason) response.wakeReason = deliveryResult.wakeReason;
   }
-
-  fs.appendFileSync(messagesFile, JSON.stringify(msg) + '\n');
-  fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
-
-  return { success: true, messageId: msg.id, delivery: 'mcp' };
+  return response;
 }
 
 // Multi-project management
@@ -2074,7 +2002,7 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
 }
 
 async function apiLaunchAgent(body) {
-  const { cli, project_dir, agent_name, prompt, role, methodology, base_prompt } = body;
+  const { cli, project_dir, agent_name, prompt, role, methodology, base_prompt, profile } = body;
   if (!cli || !['claude', 'gemini', 'codex', 'cursor'].includes(cli)) {
     return { error: 'Invalid cli type. Must be: claude, gemini, codex, or cursor' };
   }
@@ -2148,6 +2076,7 @@ async function apiLaunchAgent(body) {
       agentName: safeName || 'agent',
       prompt: launchPrompt,
       methodology: methodologySelection,
+      profile,
     });
     return {
       success: true,
@@ -2179,21 +2108,22 @@ function ollamaRequestContext(url) {
   return { dataDir, projectDir, packageDir: __dirname };
 }
 
-// Read-only Files browser: recursively lists files under the visible
-// artifact locations agents write to. Bounded to avoid runaway scans of
-// large/unexpected trees (e.g. node_modules symlinked in by mistake).
-const FILES_BROWSER_MAX_FILES = 500;
-const FILES_BROWSER_SKIP_DIRS = new Set(['node_modules', '.git']);
+// Read-only Files browser: recursively lists files under the whole project
+// root. Bounded to avoid runaway scans of large/unexpected trees (build
+// output, package manager caches, VCS internals).
+const FILES_BROWSER_MAX_FILES = 5000;
+const FILES_BROWSER_SKIP_DIRS = new Set([
+  'node_modules', '.git', '.cursor', '.claude', '.vscode', '.idea',
+  'dist', 'build', '.next', '.nuxt', '.cache', '.turbo', '.parcel-cache',
+  'coverage', '.nyc_output',
+]);
 
 function listVisibleProjectFiles(projectDir, dataDir) {
-  const roots = [
-    path.join(projectDir, '_bmad-output'),
-    path.join(dataDir, 'artifacts'),
-  ];
   const results = [];
+  let truncated = false;
 
   function walk(dir, depth) {
-    if (results.length >= FILES_BROWSER_MAX_FILES || depth > 12) return;
+    if (truncated || depth > 20) return;
     let entries;
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -2201,7 +2131,8 @@ function listVisibleProjectFiles(projectDir, dataDir) {
       return;
     }
     for (const entry of entries) {
-      if (results.length >= FILES_BROWSER_MAX_FILES) return;
+      if (results.length >= FILES_BROWSER_MAX_FILES) { truncated = true; return; }
+      if (entry.name.startsWith('.') && entry.name !== '.neohive') continue;
       if (FILES_BROWSER_SKIP_DIRS.has(entry.name)) continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
@@ -2222,9 +2153,8 @@ function listVisibleProjectFiles(projectDir, dataDir) {
     }
   }
 
-  for (const root of roots) {
-    if (fs.existsSync(root)) walk(root, 0);
-  }
+  walk(projectDir, 0);
+  results.truncated = truncated;
   return results;
 }
 
@@ -2248,6 +2178,28 @@ function resolveSandboxedFilePath(projectDir, requestedPath) {
     return null;
   }
   return resolved;
+}
+
+const RAW_MIME_TYPES = {
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.bmp': 'image/bmp',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.txt': 'text/plain; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.csv': 'text/csv; charset=utf-8',
+};
+function mimeTypeFor(filePath) {
+  return RAW_MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
 }
 
 // Story 1.2/1.3 (FR1/FR2, AD-1/AD-2): read-only join of tasks.json against
@@ -4371,7 +4323,7 @@ const server = http.createServer(async (req, res) => {
       try {
         const context = ollamaRequestContext(url);
         const files = listVisibleProjectFiles(context.projectDir, context.dataDir);
-        writeApiResult(res, { count: files.length, files });
+        writeApiResult(res, { count: files.length, files, truncated: !!files.truncated });
       } catch (error) {
         writeApiResult(res, { error: error.message }, 400);
       }
@@ -4389,6 +4341,31 @@ const server = http.createServer(async (req, res) => {
         if (stat.size > MAX_FILE_BYTES) throw new Error('File too large to preview (max 1MB)');
         const content = fs.readFileSync(resolved, 'utf8');
         writeApiResult(res, { path: path.relative(context.projectDir, resolved).replace(/\\/g, '/'), content, size: stat.size });
+      } catch (error) {
+        writeApiResult(res, { error: error.message }, 400);
+      }
+    }
+    // Raw byte-serving for binary previews (PDF via native browser viewer,
+    // images) — separate from /api/file, which JSON-wraps text as utf8 and
+    // would corrupt binary content. Sandboxed identically.
+    else if (url.pathname === '/api/file-raw' && req.method === 'GET') {
+      try {
+        const context = ollamaRequestContext(url);
+        const requestedPath = url.searchParams.get('path');
+        if (!requestedPath) throw new Error('Missing "path" query parameter');
+        const resolved = resolveSandboxedFilePath(context.projectDir, requestedPath);
+        if (!resolved) throw new Error('Invalid path: outside project root');
+        if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) throw new Error('File not found');
+        const stat = fs.statSync(resolved);
+        const MAX_RAW_BYTES = 50 * 1024 * 1024;
+        if (stat.size > MAX_RAW_BYTES) throw new Error('File too large to preview (max 50MB)');
+        res.writeHead(200, {
+          'Content-Type': mimeTypeFor(resolved),
+          'Content-Length': stat.size,
+          'Content-Disposition': 'inline; filename="' + path.basename(resolved).replace(/"/g, '') + '"',
+          'Cache-Control': 'no-store',
+        });
+        fs.createReadStream(resolved).pipe(res);
       } catch (error) {
         writeApiResult(res, { error: error.message }, 400);
       }

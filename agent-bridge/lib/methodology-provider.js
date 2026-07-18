@@ -100,6 +100,7 @@ const ROLE_PERSONA_SKILLS = Object.freeze({
   dev: 'bmad-agent-dev',
   pm: 'bmad-agent-pm',
   ux: 'bmad-agent-ux-designer',
+  'tech-writer': 'bmad-agent-tech-writer',
 });
 
 function getPersonaSkillForRole(role) {

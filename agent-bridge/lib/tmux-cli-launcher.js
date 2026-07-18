@@ -93,7 +93,7 @@ function getCliSpec(cli) {
  * Build env + argv for a native CLI launch with the role prompt as the initial prompt.
  * Mirrors ollama-bridge-manager's env-prefixed tmux command style.
  */
-function buildNativeCliEnvArgs({ cli, dataDir, prompt }) {
+function buildNativeCliEnvArgs({ cli, dataDir, projectDir, prompt, profile }) {
   const spec = getCliSpec(cli);
   const cliPath = findExecutable(spec.bin);
   if (!cliPath) {
@@ -102,10 +102,18 @@ function buildNativeCliEnvArgs({ cli, dataDir, prompt }) {
   const launchPrompt = String(prompt || '').trim();
   if (!launchPrompt) throw new Error('Launch prompt is required');
 
+  // Optional Codex config profile (~/.codex/<name>.config.toml). Machine-local:
+  // the profile file must exist on the launching machine. Only Codex supports
+  // --profile; ignored for other CLIs. Sanitized to a safe TOML profile name.
+  const rawProfile = String(profile || '').trim();
+  const safeProfile = /^[A-Za-z0-9_-]{1,40}$/.test(rawProfile) ? rawProfile : '';
+  const codexProfileArgs = cli === 'codex' && safeProfile ? ['--profile', safeProfile] : [];
+
   // Gemini: -i keeps interactive mode after running the initial prompt.
   if (cli === 'gemini') {
     return [
       `NEOHIVE_DATA_DIR=${dataDir}`,
+      `NEOHIVE_PROJECT_ROOT=${projectDir || path.dirname(dataDir)}`,
       cliPath,
       '--prompt-interactive', launchPrompt,
     ];
@@ -113,16 +121,18 @@ function buildNativeCliEnvArgs({ cli, dataDir, prompt }) {
 
   return [
     `NEOHIVE_DATA_DIR=${dataDir}`,
+    `NEOHIVE_PROJECT_ROOT=${projectDir || path.dirname(dataDir)}`,
     cliPath,
+    ...codexProfileArgs,
     launchPrompt,
   ];
 }
 
-async function launchNativeCli({ dataDir, projectDir, cli, agentName, prompt }) {
+async function launchNativeCli({ dataDir, projectDir, cli, agentName, prompt, profile }) {
   const spec = getCliSpec(cli);
   const safeName = String(agentName || 'agent').replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 20) || 'agent';
   const windowName = `${spec.windowPrefix}-${safeName}`.slice(0, 50);
-  const envArgs = buildNativeCliEnvArgs({ cli, dataDir, prompt });
+  const envArgs = buildNativeCliEnvArgs({ cli, dataDir, projectDir, prompt, profile });
   const window = await launchInTmux({
     dataDir,
     projectDir,

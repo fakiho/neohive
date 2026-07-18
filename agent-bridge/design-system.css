@@ -706,3 +706,96 @@
   opacity: 0.45;
   filter: grayscale(1);
 }
+
+/* ==========================================================================
+   RESPONSIVE DESIGN UTILITIES
+   ========================================================================== */
+
+/* Responsive breakpoints */
+@media (max-width: 768px) {
+  .nh-mobile-hidden {
+    display: none !important;
+  }
+  
+  .nh-mobile-stack {
+    flex-direction: column !important;
+  }
+  
+  .nh-mobile-full-width {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  .nh-mobile-padding {
+    padding: var(--nh-space-3) !important;
+  }
+  
+  .nh-mobile-text-center {
+    text-align: center !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .nh-small-mobile-hidden {
+    display: none !important;
+  }
+  
+  .nh-small-mobile-block {
+    display: block !important;
+    width: 100% !important;
+  }
+}
+
+/* Responsive spacing utilities */
+.nh-responsive-gap {
+  gap: var(--nh-space-4);
+}
+
+@media (max-width: 768px) {
+  .nh-responsive-gap {
+    gap: var(--nh-space-3);
+  }
+}
+
+@media (max-width: 480px) {
+  .nh-responsive-gap {
+    gap: var(--nh-space-2);
+  }
+}
+
+/* Responsive typography */
+@media (max-width: 768px) {
+  .nh-responsive-text {
+    font-size: 0.9em !important;
+  }
+  
+  .nh-responsive-heading {
+    font-size: 1.5em !important;
+    line-height: 1.3 !important;
+  }
+}
+
+/* Touch-friendly tap targets for mobile */
+@media (hover: none) and (pointer: coarse) {
+  .nh-touch-target {
+    min-height: 44px !important;
+    min-width: 44px !important;
+    padding: var(--nh-space-3) !important;
+  }
+  
+  .nh-touch-text {
+    font-size: 16px !important; /* Prevents iOS zoom on input focus */
+  }
+}
+
+/* Print styles */
+@media print {
+  .nh-print-hidden {
+    display: none !important;
+  }
+  
+  .nh-print-visible {
+    display: block !important;
+  }
+}
+

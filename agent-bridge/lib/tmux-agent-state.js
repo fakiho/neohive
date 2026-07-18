@@ -16,6 +16,12 @@
 const fs = require('fs');
 const path = require('path');
 const { execFile, execFileSync } = require('child_process');
+const { claimWake, releaseWakeClaim, clearWakeClaim } = require('./wake-claims');
+
+// Fixed, module-owned wake signal (AD-2). No caller-supplied text may reach
+// tmux send-keys on the delivery path; this constant is the only pane input
+// the wake module may inject.
+const WAKE_SIGNAL = '\n[neohive] Messages pending — call listen()\n';
 
 const PROMPT_PATTERNS = [
   {
@@ -378,25 +384,12 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Injects literal text into a tmux pane as a fresh prompt: literal text via
-// `send-keys -l` (avoids tmux special-key-name interpretation), then a
-// SEPARATE Enter keystroke — empirically required, text alone sits unsent
-// in the pane's input box. Newlines are collapsed to spaces first, since a
-// literal embedded newline can submit prematurely in a multi-line-aware
-// TUI input box. Stateless (no ctx) — throws on failure, caller decides
-// what to do about it.
-//
-// Clears the input line first (Ctrl-A to line start, Ctrl-K to kill to end)
-// so a previously-injected message that never got submitted (see below)
-// can't silently merge with this one instead of being replaced/lost.
-//
-// Some TUIs (observed with Cursor's Ink-based input widget) don't reliably
-// register a separate Enter keystroke sent immediately after the literal
-// text — the text sits typed-but-unsubmitted in the input box. A short
-// pause lets the TUI finish rendering the pasted text before Enter arrives,
-// and Enter is sent twice as a cheap hedge against a single dropped
-// keystroke (a no-op on an already-empty input in every TUI observed here).
-async function sendKeysToPane(paneId, text) {
+// Internal primitive: type a fixed literal into a pane and submit Enter.
+// Not exported — delivery callers must use requestAdvisoryWake / sendFixedWake
+// so arbitrary message content cannot cross the tmux boundary (AD-2, NFR-1).
+// Non-delivery terminal controls (e.g. interrupt) must use separately named
+// helpers that send control chords only, never this path with free text.
+async function typeLiteralIntoPane(paneId, text) {
   const flat = String(text).replace(/\r?\n/g, ' ');
   execFileSync('tmux', ['send-keys', '-t', paneId, 'C-a'], { timeout: 5000 });
   execFileSync('tmux', ['send-keys', '-t', paneId, 'C-k'], { timeout: 5000 });
@@ -440,43 +433,86 @@ function unregisterAllSessionHooks() {
   for (const s of [..._hookedSessions]) unregisterSessionHook(s);
 }
 
-// Attempts to deliver `paneText` straight into `toAgentName`'s tmux pane, so a
-// message never silently sits unconsumed in the mcp queue if the recipient
-// never calls listen() again (idle at its own prompt, no listen() in flight).
-// Shared by dashboard message injection and agent-to-agent send_message() —
-// same gating rules both ways: tmux-mapped, NOT currently blocked inside a
-// live listen() call (listening_since, not the stale agents.json "status"
-// field — see dashboard.js apiInjectMessage for why), pane verified live and
-// safe to type into right now. Returns true if delivered via tmux, false if
-// the caller should fall back to its normal queue-based delivery.
-async function attemptTmuxDelivery(dataDir, toAgentName, paneText) {
+// Internal: send the fixed wake signal to a pane. Content is the module
+// constant; callers may not inject arbitrary text through this path (AD-2).
+async function sendFixedWake(paneId) {
+  await typeLiteralIntoPane(paneId, WAKE_SIGNAL);
+}
+
+// Request an advisory, content-free wake for a recipient agent (AD-1–AD-6).
+// Queue success is authoritative and must already be confirmed before calling.
+// Returns { wake: 'sent'|'coalesced'|'suppressed'|'failed', reason: string }.
+//
+// Wakeability requires positive live evidence (AD-3):
+//   recipient live PID + mapped pane + no listening_since + pane safe to inject
+// Coalescing is atomic via a per-recipient claim file (AD-4).
+// listen() clears the claim (AD-5); send failure releases only the matching claim.
+async function requestAdvisoryWake(dataDir, recipient) {
   let info;
   try {
     const agentsFile = path.join(dataDir, 'agents.json');
-    if (!fs.existsSync(agentsFile)) return false;
-    info = JSON.parse(fs.readFileSync(agentsFile, 'utf8'))[toAgentName];
+    if (!fs.existsSync(agentsFile)) return { wake: 'suppressed', reason: 'no-agents-file' };
+    info = JSON.parse(fs.readFileSync(agentsFile, 'utf8'))[recipient];
   } catch {
-    return false;
+    return { wake: 'suppressed', reason: 'agents-read-error' };
   }
-  if (!info || !info.tmux || !info.tmux.mapped || info.listening_since) return false;
+
+  if (!info) return { wake: 'suppressed', reason: 'recipient-unknown' };
+  if (info.listening_since) return { wake: 'suppressed', reason: 'listening' };
+  if (!info.tmux || !info.tmux.mapped) return { wake: 'suppressed', reason: 'not-mapped' };
 
   const paneId = info.tmux.pane_id;
-  if (!(await verifyPaneMapping(info.pid, paneId).catch(() => false))) return false;
-  if (!(await isPaneSafeToInject(paneId).catch(() => false))) return false;
+  const pid = info.pid;
+  const sessionToken = `${pid}:${info.registered_at || ''}`;
+
+  // Claim before live pane checks so an already-pending wake coalesces across
+  // producers without requiring re-verification (AD-4). Fresh claims that later
+  // fail safety/send release only the matching token.
+  const claim = claimWake(dataDir, recipient, sessionToken);
+  if (!claim.claimed) {
+    return { wake: claim.reason === 'coalesced' ? 'coalesced' : 'suppressed', reason: claim.reason };
+  }
+
+  if (!(await verifyPaneMapping(pid, paneId).catch(() => false))) {
+    releaseWakeClaim(dataDir, recipient, sessionToken);
+    return { wake: 'suppressed', reason: 'pane-verify-failed' };
+  }
+  if (!(await isPaneSafeToInject(paneId).catch(() => false))) {
+    releaseWakeClaim(dataDir, recipient, sessionToken);
+    return { wake: 'suppressed', reason: 'pane-unsafe' };
+  }
 
   try {
-    await sendKeysToPane(paneId, paneText);
+    await sendFixedWake(paneId);
   } catch {
-    return false;
+    releaseWakeClaim(dataDir, recipient, sessionToken);
+    return { wake: 'failed', reason: 'send-keys-error' };
   }
-  return true;
+
+  return { wake: 'sent', reason: 'ok' };
 }
 
-module.exports.sendKeysToPane = sendKeysToPane;
+// Backward-compatible adapter. Existing callers pass (dataDir, recipient, paneText) —
+// paneText is silently ignored; only the fixed WAKE_SIGNAL may reach send-keys (AD-2, FR-10).
+// Returns true when a wake was sent (for callers that gated queue writes on this),
+// false in all other cases. NOTE: callers must no longer gate queue writes on this
+// return value — queue-first is the correct pattern (AD-1).
+async function attemptTmuxDelivery(dataDir, toAgentName, _legacyPayload) {
+  const result = await requestAdvisoryWake(dataDir, toAgentName);
+  return result.wake === 'sent';
+}
+
+module.exports.WAKE_SIGNAL = WAKE_SIGNAL;
+// sendKeysToPane is intentionally NOT exported after Story 1.2 — arbitrary-text
+// pane injection is closed on the delivery path. Use requestAdvisoryWake /
+// attemptTmuxDelivery (fixed WAKE_SIGNAL only). Non-delivery controls stay
+// outside this module (e.g. ollama-bridge-manager interrupt via C-c).
 module.exports.verifyPaneMapping = verifyPaneMapping;
 module.exports.resolvePaneForPid = resolvePaneForPid;
 module.exports.isPaneSafeToInject = isPaneSafeToInject;
+module.exports.requestAdvisoryWake = requestAdvisoryWake;
 module.exports.attemptTmuxDelivery = attemptTmuxDelivery;
+module.exports.clearWakeClaim = clearWakeClaim;
 module.exports.registerSessionHook = registerSessionHook;
 module.exports.unregisterSessionHook = unregisterSessionHook;
 module.exports.unregisterAllSessionHooks = unregisterAllSessionHooks;

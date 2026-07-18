@@ -2,15 +2,16 @@
   "servers": {
     "neohive": {
       "type": "stdio",
-      "command": "node",
+      "command": "npx",
       "args": [
-        "${workspaceFolder}/agent-bridge/server.js"
+        "-y",
+        "neohive",
+        "mcp"
       ],
       "env": {
         "NEOHIVE_DATA_DIR": "${workspaceFolder}/.neohive"
       },
-      "cwd": "${workspaceFolder}",
-      "timeout": 300
+      "cwd": "${workspaceFolder}"
     }
   }
 }

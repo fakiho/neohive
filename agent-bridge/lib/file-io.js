@@ -128,7 +128,10 @@ function lockAgentsFile() {
   try {
     const ownerPid = parseInt(fs.readFileSync(AGENTS_LOCK, 'utf8').trim(), 10);
     if (ownerPid && ownerPid !== process.pid) {
-      try { process.kill(ownerPid, 0); return false; } catch {}
+      try { process.kill(ownerPid, 0); return false; } catch (e) {
+        // ESRCH = no such process (dead). EPERM = alive but can't signal — treat as alive.
+        if (e.code !== 'ESRCH') return false;
+      }
     }
   } catch {}
   try { fs.unlinkSync(AGENTS_LOCK); } catch {}

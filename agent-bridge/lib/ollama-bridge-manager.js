@@ -5,10 +5,12 @@ const path = require('path');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const {
-  buildRolePrompt,
   getRoleProfile,
   validateAgentName: validateLaunchAgentName,
 } = require('./agent-launch-profiles');
+const methodologyProvider = require('./methodology-provider');
+const bmadProvider = require('./bmad-provider');
+const { mutateProjectConfig, readProjectConfig } = require('./project-config');
 const {
   execTmux,
   findExecutable,
@@ -52,11 +54,7 @@ function validateEndpointProfile(profile) {
 }
 
 function getConfig(dataDir) {
-  return readJson(path.join(dataDir, 'config.json'), {});
-}
-
-function saveConfig(dataDir, config) {
-  writeJsonAtomic(path.join(dataDir, 'config.json'), config);
+  return readProjectConfig(dataDir);
 }
 
 function listEndpoints(dataDir) {
@@ -127,14 +125,15 @@ async function requireAvailableModel(dataDir, endpointId, model) {
 
 function upsertEndpoint(dataDir, profile) {
   const clean = validateEndpointProfile(profile);
-  const config = getConfig(dataDir);
-  if (!config.ollama || typeof config.ollama !== 'object') config.ollama = {};
-  const endpoints = Array.isArray(config.ollama.endpoints) ? config.ollama.endpoints : [];
-  const index = endpoints.findIndex((item) => item && item.id === clean.id);
-  if (index >= 0) endpoints[index] = clean;
-  else endpoints.push(clean);
-  config.ollama.endpoints = endpoints;
-  saveConfig(dataDir, config);
+  mutateProjectConfig(dataDir, (config) => {
+    if (!config.ollama || typeof config.ollama !== 'object') config.ollama = {};
+    const endpoints = Array.isArray(config.ollama.endpoints) ? config.ollama.endpoints.slice() : [];
+    const index = endpoints.findIndex((item) => item && item.id === clean.id);
+    if (index >= 0) endpoints[index] = clean;
+    else endpoints.push(clean);
+    config.ollama.endpoints = endpoints;
+    return config;
+  });
   return clean;
 }
 
@@ -143,12 +142,15 @@ function removeEndpoint(dataDir, endpointId) {
   const running = listInstances(dataDir).some((instance) =>
     instance.endpoint_id === endpointId && ['starting', 'running', 'working'].includes(instance.status));
   if (running) throw new Error('Stop agents using this endpoint before deleting it');
-  const config = getConfig(dataDir);
-  if (!config.ollama || !Array.isArray(config.ollama.endpoints)) return false;
-  const before = config.ollama.endpoints.length;
-  config.ollama.endpoints = config.ollama.endpoints.filter((item) => item && item.id !== endpointId);
-  saveConfig(dataDir, config);
-  return config.ollama.endpoints.length !== before;
+  let removed = false;
+  mutateProjectConfig(dataDir, (config) => {
+    if (!config.ollama || !Array.isArray(config.ollama.endpoints)) return config;
+    const before = config.ollama.endpoints.length;
+    config.ollama.endpoints = config.ollama.endpoints.filter((item) => item && item.id !== endpointId);
+    removed = config.ollama.endpoints.length !== before;
+    return config;
+  });
+  return removed;
 }
 
 function registryFile(dataDir) {
@@ -281,7 +283,7 @@ async function waitForRuntime(dataDir, instanceId) {
   throw new Error('Ollama agent did not register within 10 seconds');
 }
 
-function buildClaudeLaunchArgs({ dataDir, endpointUrl, claudePath, name, model, role, skills, prompt }) {
+function buildClaudeLaunchArgs({ dataDir, projectDir, endpointUrl, claudePath, name, model, role, skills, prompt }) {
   const skillText = skills.length ? skills.join(', ') : 'general';
   const systemPrompt = [
     `You are Neohive agent ${name} with role ${role || 'agent'} and skills ${skillText}.`,
@@ -291,6 +293,7 @@ function buildClaudeLaunchArgs({ dataDir, endpointUrl, claudePath, name, model, 
   ].join('\n\n');
   return [
     `NEOHIVE_DATA_DIR=${dataDir}`,
+    `NEOHIVE_PROJECT_ROOT=${projectDir || bmadProvider.projectRootFromDataDir(dataDir, process.cwd())}`,
     'ANTHROPIC_AUTH_TOKEN=ollama',
     'ANTHROPIC_API_KEY=',
     `ANTHROPIC_BASE_URL=${endpointUrl}`,
@@ -302,15 +305,29 @@ function buildClaudeLaunchArgs({ dataDir, endpointUrl, claudePath, name, model, 
   ];
 }
 
-async function startInstance({ dataDir, projectDir, packageDir, name, model, endpointId, runtime, role }) {
+async function startInstance({ dataDir, projectDir, packageDir, name, model, endpointId, runtime, role, methodology, basePrompt }) {
   const safeName = validateAgentName(name);
   const safeModel = validateModel(model);
   const safeRuntime = runtime || 'ollama';
   const roleProfile = getRoleProfile(role);
   const safeRole = roleProfile.id;
   const safeSkills = roleProfile.skills.slice();
-  const generatedPrompt = buildRolePrompt(safeRole, safeName);
   if (!RUNTIMES.has(safeRuntime)) throw new Error('Runtime must be "ollama" or "claude"');
+  const launchRuntime = safeRuntime === 'claude' ? 'ollama-claude' : 'ollama-responder';
+  const composed = methodologyProvider.composeLaunchPrompt({
+    role: safeRole,
+    name: safeName,
+    runtime: launchRuntime,
+    methodology,
+    basePrompt,
+  });
+  if (composed.methodology && composed.methodology.id === 'bmad') {
+    const bmadStatus = bmadProvider.inspectProject(projectDir, dataDir, { preflight: false });
+    if (!bmadStatus.installed) throw new Error('Install BMad Method before launching a BMad agent');
+    if (!bmadStatus.compatible) throw new Error(`Installed BMad version is not compatible with v${bmadProvider.SUPPORTED_MAJOR}`);
+    composed.methodology.version = bmadStatus.version;
+  }
+  const generatedPrompt = composed.prompt;
   const available = await requireAvailableModel(dataDir, endpointId, safeModel);
   const endpoint = available.endpoint;
   if (agentNameIsLive(dataDir, safeName)) throw new Error(`Agent "${safeName}" is already running`);
@@ -328,6 +345,7 @@ async function startInstance({ dataDir, projectDir, packageDir, name, model, end
     if (!claudePath) throw new Error('Claude Code is not installed or not available on PATH');
     envArgs = buildClaudeLaunchArgs({
       dataDir,
+      projectDir,
       endpointUrl: endpoint.url,
       claudePath,
       name: safeName,
@@ -376,6 +394,7 @@ async function startInstance({ dataDir, projectDir, packageDir, name, model, end
     tmux_window_name: window.windowName,
     status: 'starting',
     started_at: new Date().toISOString(),
+    methodology: composed.methodology,
   };
   registry.instances.push(instance);
   saveRegistry(dataDir, registry);

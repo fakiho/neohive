@@ -11,8 +11,10 @@
     "start": "node server.js",
     "dashboard": "node dashboard.js",
     "test": "echo \"No tests configured\"",
-    "test:e2e-scroll": "node scripts/test-message-scroll-anchor.mjs",
     "test:ollama-tmux": "node scripts/test-ollama-tmux.js",
+    "test:bmad": "node scripts/test-bmad-integration.js",
+    "test:bmad-dashboard": "node scripts/test-bmad-dashboard.js",
+    "test:bmad-mcp": "node scripts/test-bmad-mcp.js",
     "check-paths": "node scripts/check-portable-paths.mjs",
     "acp-spike": "node scripts/acp-spike.mjs",
     "acp-agent": "node acp-agent.mjs"
@@ -23,6 +25,10 @@
   "files": [
     "scripts/check-portable-paths.mjs",
     "scripts/ollama-agent.js",
+    "scripts/test-ollama-tmux.js",
+    "scripts/test-bmad-integration.js",
+    "scripts/test-bmad-dashboard.js",
+    "scripts/test-bmad-mcp.js",
     "server.js",
     "dashboard.js",
     "dashboard.html",
@@ -69,7 +75,8 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.18.2",
     "@modelcontextprotocol/sdk": "1.27.1",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "yaml": "^2.9.0"
   },
   "optionalDependencies": {
     "node-pty": "^1.1.0"

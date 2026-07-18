@@ -72,6 +72,7 @@ const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
 const ACKS_FILE = path.join(DATA_DIR, 'acks.json');
 const TASKS_FILE = path.join(DATA_DIR, 'tasks.json');
 const tmuxAgentStateLib = require('./lib/tmux-agent-state');
+const { directDeliver } = require('./lib/direct-delivery');
 const tmuxAgentState = tmuxAgentStateLib({
   DATA_DIR,
   helpers: { getAgents, saveAgents, broadcastSystemMessage },
@@ -212,7 +213,10 @@ function saveManagedConfig(managed) {
 }
 
 // Send a system message to a specific agent (written to messages + history)
-// Uses the recipient agent's branch so multi-branch agents get the message
+// Uses the recipient agent's branch so multi-branch agents get the message.
+// Routes through shared directDeliver (AD-1/FR-23): queue+history first, then
+// optional content-free advisory wake. Sync callers may ignore the returned
+// Promise — appends complete before the first await inside directDeliver.
 function sendSystemMessage(toAgent, content) {
   messageSeq++;
   const agents = getAgents();
@@ -229,8 +233,21 @@ function sendSystemMessage(toAgent, content) {
   ensureDataDir();
   const _ssmMf = getMessagesFile(recipientBranch);
   const _ssmHf = getHistoryFile(recipientBranch);
-  withFileLock(_ssmMf, () => { fs.appendFileSync(_ssmMf, JSON.stringify(msg) + '\n'); });
-  withFileLock(_ssmHf, () => { fs.appendFileSync(_ssmHf, JSON.stringify(msg) + '\n'); });
+  return directDeliver({
+    msgFile: _ssmMf,
+    histFile: _ssmHf,
+    msg,
+    dataDir: DATA_DIR,
+    to: toAgent,
+  }).then((result) => {
+    if (!result.success) {
+      log.warn('[sendSystemMessage] queue delivery failed:', result.error);
+    }
+    return result;
+  }).catch((e) => {
+    log.warn('[sendSystemMessage] delivery error:', e.message || e);
+    return { success: false, error: String(e.message || e) };
+  });
 }
 
 // Liveness [STATUS] lines are dashboard/history-only — skip messages.jsonl so agents never see them in listen/check/consume.
@@ -1601,6 +1618,9 @@ function toolRegister(name, provider = null, skills = null) {
     registeredName = name;
     registeredToken = token;
 
+    // Clear any obsolete wake claim from a prior session for this name (AD-5).
+    try { tmuxAgentStateLib.clearWakeClaim(DATA_DIR, name); } catch {}
+
     // Best-effort: record this agent in the cross-project registry so the
     // dashboard can find it even if its own cwd-based data-dir resolution
     // would have guessed a different directory. Never blocks registration.
@@ -2131,22 +2151,22 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
   const msgFile = channel ? getChannelMessagesFile(channel) : getMessagesFile(currentBranch);
   const histFile = channel ? getChannelHistoryFile(channel) : getHistoryFile(currentBranch);
 
-  // Direct 1:1 sends: try tmux delivery first so a message never silently
-  // sits unconsumed in the queue if the recipient never calls listen() again
-  // (e.g. idle at its own prompt with no listen() in flight, or its own
-  // enforce-listen Stop hook failed to bring it back). Group/channel/
-  // broadcast messages always go through the queue — tmux injection is only
-  // meaningful for a single named recipient.
-  let deliveredViaTmux = false;
+  // Queue-first delivery: always append to the recipient-visible message store
+  // and history before any optional advisory wake (AD-1). Wake failure never
+  // reverses a successful queue append (FR-21). For direct 1:1 sends the
+  // shared directDeliver boundary handles both appends and the advisory wake.
+  // Group/channel/broadcast messages go through the queue only — no pane wake.
+  let wakeResult = null;
   if (!channel && !isGroup && to !== '__user__' && to !== '__all__' && to !== '__group__') {
-    const paneText = `[neohive message from ${registeredName}]: ${content} — reply via send_message(to="${registeredName}") when done.`;
-    deliveredViaTmux = await tmuxAgentStateLib.attemptTmuxDelivery(DATA_DIR, to, paneText).catch(() => false);
-  }
-
-  if (!deliveredViaTmux) {
+    const deliveryResult = await directDeliver({ msgFile, histFile, msg, dataDir: DATA_DIR, to });
+    if (!deliveryResult.success) {
+      return { error: deliveryResult.error || 'queue-write-failed' };
+    }
+    wakeResult = deliveryResult.wake ? { wake: deliveryResult.wake, reason: deliveryResult.wakeReason } : null;
+  } else {
     withFileLock(msgFile, () => { fs.appendFileSync(msgFile, JSON.stringify(msg) + '\n'); });
+    withFileLock(histFile, () => { fs.appendFileSync(histFile, JSON.stringify(msg) + '\n'); });
   }
-  withFileLock(histFile, () => { fs.appendFileSync(histFile, JSON.stringify(msg) + '\n'); });
   touchActivity();
   lastSentAt = Date.now();
 
@@ -2233,9 +2253,12 @@ async function toolSendMessage(content, to = null, reply_to = null, channel = nu
       result._budget_hint = 'Response budget depleted (2 unaddressed sends in 60s). Wait to be addressed or wait for budget reset.';
     }
   }
-  if (deliveredViaTmux) {
-    result.delivery = 'tmux';
-  } else if (!recipientAlive) {
+  // Always delivered via queue (AD-1). Report advisory wake outcome separately (AD-6).
+  if (wakeResult) {
+    result.wake = wakeResult.wake;
+    if (wakeResult.reason && wakeResult.reason !== 'ok') result.wake_reason = wakeResult.reason;
+  }
+  if (!recipientAlive) {
     result.warning = `Agent "${to}" appears offline (PID not running). Message queued but may not be received until they reconnect.`;
   } else if (to !== '__user__' && agents[to] && !agents[to].listening_since) {
     result.note = `Agent "${to}" is currently working (not in listen mode). Message queued — they'll see it when they finish their current task and call listen().`;
@@ -2499,6 +2522,11 @@ async function toolListen(from = null, outcome = null, task_id = null, summary =
   if (isGroupMode() || isManagedMode()) {
     return toolListenGroup(null, null, null);
   }
+
+  // Clear any pending wake claim before draining queued content (AD-5).
+  // Entering listen() proves the fixed wake instruction was acted on;
+  // a later genuine message may request a new wake.
+  try { tmuxAgentStateLib.clearWakeClaim(DATA_DIR, registeredName); } catch {}
 
   setListening(true);
 
@@ -5461,88 +5489,56 @@ function autoAssignRoles() {
 
   if (aliveNames.length < 2) return null;
 
-  // Sticky roles: if critical roles (lead, quality, monitor, advisor) are held by alive agents, skip reassignment
+  // Sticky roles: an agent that already holds a role (assigned manually or
+  // automatically) keeps it forever — auto-assignment only fills in agents
+  // that don't have a role yet. This prevents roles from being recomputed
+  // (and flipping) for existing agents just because the team roster changed.
   const currentProfiles = getProfiles();
-  const criticalRoles = ['lead', 'quality', 'monitor', 'advisor'];
-  const existingCritical = {};
-  for (const name of aliveNames) {
-    if (currentProfiles[name] && criticalRoles.includes(currentProfiles[name].role)) {
-      existingCritical[currentProfiles[name].role] = name;
-    }
-  }
-  // If lead AND quality are both alive and assigned, skip full reassignment
-  if (existingCritical.lead && existingCritical.quality) {
-    const assignments = {};
-    for (const name of aliveNames) {
-      if (currentProfiles[name] && currentProfiles[name].role) {
-        assignments[name] = { role: currentProfiles[name].role, description: currentProfiles[name].role_description || '' };
-      }
-    }
-    // Only assign roles to agents that don't have one yet
-    const unassigned = aliveNames.filter(n => !currentProfiles[n] || !currentProfiles[n].role);
-    for (const name of unassigned) {
-      if (!currentProfiles[name]) currentProfiles[name] = { display_name: name, avatar: '', bio: '', role: '', created_at: new Date().toISOString() };
-      currentProfiles[name].role = 'implementer';
-      currentProfiles[name].role_description = 'You implement features and tasks assigned by the Lead. Report completed work to Quality Lead.';
-      assignments[name] = { role: 'implementer', description: currentProfiles[name].role_description };
-      saveProfiles(currentProfiles);
-      sendSystemMessage(name, `[ROLE ASSIGNED] You are the **implementer**. ${currentProfiles[name].role_description}`);
-    }
-    if (unassigned.length > 0) return assignments;
-    return null; // No changes needed
-  }
-
-  // Pick role config — use exact match or largest available
-  const teamSize = aliveNames.length;
-  const configSize = Math.min(teamSize, Math.max(...Object.keys(ROLE_CONFIGS).map(Number)));
-  const roles = ROLE_CONFIGS[configSize] || ROLE_CONFIGS[4];
-
-  // Assign roles round-robin: first agent = Lead, last agent = Quality (always)
-  const profiles = getProfiles();
   const assignments = {};
+  for (const name of aliveNames) {
+    if (currentProfiles[name] && currentProfiles[name].role) {
+      assignments[name] = { role: currentProfiles[name].role, description: currentProfiles[name].role_description || '' };
+    }
+  }
 
-  for (let i = 0; i < aliveNames.length; i++) {
-    const agentName = aliveNames[i];
+  const unassigned = aliveNames.filter(n => !currentProfiles[n] || !currentProfiles[n].role);
+  if (unassigned.length === 0) return null; // No changes needed
+
+  const teamSize = aliveNames.length;
+  const hasRole = (role) => Object.values(assignments).some(a => a.role === role);
+
+  for (const name of unassigned) {
     let roleConfig;
-
-    if (i === aliveNames.length - 1) {
-      // Last agent is always Quality Lead
-      roleConfig = roles.find(r => r.role === 'quality') || roles[roles.length - 1];
-    } else if (i === 0) {
-      // First agent is always Lead
-      roleConfig = roles.find(r => r.role === 'lead') || roles[0];
-    } else if (i === 1 && teamSize >= 10) {
-      // Second agent becomes Monitor at 10+ agents — the system's brain
+    if (!hasRole('lead')) {
+      roleConfig = { role: 'lead', description: 'You plan the approach and coordinate the team. Break work into tasks and assign them.' };
+    } else if (!hasRole('quality')) {
+      roleConfig = { role: 'quality', description: 'You review ALL work, find bugs, suggest improvements, and keep the team iterating. Never approve without checking. You are the last gate before anything is done.' };
+    } else if (teamSize >= 10 && !hasRole('monitor')) {
       roleConfig = { role: 'monitor', description: 'You are the MONITOR AGENT — the system\'s brain. You do NOT do regular work. Your job: watch all agents continuously, detect stuck/idle/failing agents, detect circular escalations and queue buildup, intervene by reassigning work and rebalancing roles, report system health metrics. Run monitorHealthCheck() instead of get_work().' };
-    } else if (i === 1 && teamSize >= 5) {
-      // Second agent becomes Advisor at 5-9 agents — strategic thinker
+    } else if (teamSize >= 5 && !hasRole('advisor')) {
       roleConfig = { role: 'advisor', description: 'You are the ADVISOR. You do NOT write code. You read all messages and completed work, spot patterns, suggest better approaches, challenge assumptions, and connect dots across the team. Your ideas go to the team as suggestions. Think deeply before speaking.' };
-    } else if (i === 2 && teamSize >= 10) {
-      // Third agent becomes Advisor at 10+ agents (Monitor is at position 1)
-      roleConfig = { role: 'advisor', description: 'You are the ADVISOR. You do NOT write code. You read all messages and completed work, spot patterns, suggest better approaches, challenge assumptions, and connect dots across the team. Your ideas go to the team as suggestions. Think deeply before speaking.' };
-    } else if (teamSize > 4) {
-      // Extra agents beyond 4 — assign as Implementer with index
-      roleConfig = { role: `implementer-${i}`, description: 'You implement features and tasks assigned by the Lead. Report completed work to Quality Lead.' };
     } else {
-      // Middle agents get middle roles
-      const middleRoles = roles.filter(r => r.role !== 'lead' && r.role !== 'quality');
-      roleConfig = middleRoles[(i - 1) % middleRoles.length] || { role: 'Implementer', description: 'Implement assigned tasks.' };
+      roleConfig = { role: 'implementer', description: 'You implement features and tasks assigned by the Lead. Report completed work to Quality Lead.' };
     }
+    // Record immediately so hasRole() sees it for the next agent in this batch.
+    assignments[name] = roleConfig;
+  }
 
-    // Update profile with role
-    if (!profiles[agentName]) {
-      profiles[agentName] = { display_name: agentName, avatar: '', bio: '', role: '', created_at: new Date().toISOString() };
+  const profiles = getProfiles();
+  for (const name of unassigned) {
+    if (!profiles[name]) {
+      profiles[name] = { display_name: name, avatar: '', bio: '', role: '', created_at: new Date().toISOString() };
     }
-    profiles[agentName].role = roleConfig.role;
-    profiles[agentName].role_description = roleConfig.description;
-    assignments[agentName] = roleConfig;
+    profiles[name].role = assignments[name].role;
+    profiles[name].role_description = assignments[name].description;
   }
 
   saveProfiles(profiles);
 
-  // Notify all agents of their roles
-  for (const [agentName, roleConfig] of Object.entries(assignments)) {
-    sendSystemMessage(agentName,
+  // Notify only the newly-assigned agents of their roles
+  for (const name of unassigned) {
+    const roleConfig = assignments[name];
+    sendSystemMessage(name,
       `[ROLE ASSIGNED] You are the **${roleConfig.role}**. ${roleConfig.description}`
     );
   }

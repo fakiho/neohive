@@ -9,6 +9,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const ollama = require('../lib/ollama-bridge-manager');
 const launchProfiles = require('../lib/agent-launch-profiles');
+const methodologyProvider = require('../lib/methodology-provider');
 const terminal = require('../lib/terminal-ws');
 const tmuxCli = require('../lib/tmux-cli-launcher');
 
@@ -40,8 +41,22 @@ async function main() {
   const backendPrompt = launchProfiles.buildRolePrompt('backend', 'LocalCoder');
   assert.match(backendPrompt, /Register as "LocalCoder"/);
   rejects(() => launchProfiles.buildRolePrompt('', 'LocalCoder'), /supported agent role/);
+  const bmadPrompt = methodologyProvider.composeLaunchPrompt({
+    role: 'backend',
+    name: 'LocalCoder',
+    runtime: 'ollama-claude',
+    methodology: { id: 'bmad', mode: 'quick', workflow: 'bmad-quick-dev' },
+  });
+  assert.match(bmadPrompt.prompt, /bmad-quick-dev/);
+  rejects(() => methodologyProvider.composeLaunchPrompt({
+    role: 'backend',
+    name: 'LocalCoder',
+    runtime: 'ollama-responder',
+    methodology: { id: 'bmad', mode: 'quick', workflow: 'bmad-quick-dev' },
+  }), /tool-capable runtime/);
   const claudeArgs = ollama.buildClaudeLaunchArgs({
     dataDir: '/tmp/neohive',
+    projectDir: '/tmp/project',
     endpointUrl: 'http://127.0.0.1:11434',
     claudePath: '/usr/bin/claude',
     name: 'LocalCoder',
@@ -51,6 +66,7 @@ async function main() {
     prompt: backendPrompt,
   });
   assert.strictEqual(claudeArgs[claudeArgs.length - 1], backendPrompt);
+  assert.ok(claudeArgs.includes('NEOHIVE_PROJECT_ROOT=/tmp/project'));
   const systemPrompt = claudeArgs[claudeArgs.indexOf('--append-system-prompt') + 1];
   assert.match(systemPrompt, /Neohive MCP register tool directly/);
   assert(!systemPrompt.includes(backendPrompt), 'role prompt should not be duplicated in the system prompt');
@@ -58,26 +74,30 @@ async function main() {
   const claudeNative = tmuxCli.buildNativeCliEnvArgs({
     cli: 'claude',
     dataDir: '/tmp/neohive',
+    projectDir: '/tmp/project',
     prompt: backendPrompt,
   });
   assert.strictEqual(claudeNative[0], 'NEOHIVE_DATA_DIR=/tmp/neohive');
+  assert.strictEqual(claudeNative[1], 'NEOHIVE_PROJECT_ROOT=/tmp/project');
   assert.strictEqual(claudeNative[claudeNative.length - 1], backendPrompt);
-  assert.match(claudeNative[1], /claude$/);
+  assert.match(claudeNative[2], /claude$/);
 
   const geminiNative = tmuxCli.buildNativeCliEnvArgs({
     cli: 'gemini',
     dataDir: '/tmp/neohive',
+    projectDir: '/tmp/project',
     prompt: backendPrompt,
   });
-  assert.strictEqual(geminiNative[2], '--prompt-interactive');
-  assert.strictEqual(geminiNative[3], backendPrompt);
+  assert.strictEqual(geminiNative[3], '--prompt-interactive');
+  assert.strictEqual(geminiNative[4], backendPrompt);
 
   const cursorNative = tmuxCli.buildNativeCliEnvArgs({
     cli: 'cursor',
     dataDir: '/tmp/neohive',
+    projectDir: '/tmp/project',
     prompt: backendPrompt,
   });
-  assert.match(cursorNative[1], /agent$/);
+  assert.match(cursorNative[2], /agent$/);
   assert.strictEqual(cursorNative[cursorNative.length - 1], backendPrompt);
 
   rejects(() => tmuxCli.buildNativeCliEnvArgs({ cli: 'claude', dataDir: '/tmp', prompt: '' }), /Launch prompt is required/);

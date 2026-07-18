@@ -6,6 +6,7 @@ const os = require('os');
 const { execSync } = require('child_process');
 const { upsertNeohiveMcpInToml } = require('./lib/codex-neohive-toml');
 const { upsertNeohiveHooksInToml } = require('./lib/codex-neohive-hooks-toml');
+const bmadProvider = require('./lib/bmad-provider');
 const pkg = require('./package.json');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -51,6 +52,9 @@ function printUsage() {
     npx neohive cursor-hooks        Install listen-enforcement hooks into .cursor/hooks.json only
     npx neohive codex-hooks         Install listen-enforcement hooks into .codex/hooks.json only
     npx neohive skills              Install neohive skills & agents for all detected IDEs
+    npx neohive bmad status         Show BMad installation and lifecycle status
+    npx neohive bmad install        Install BMad v6 for detected tool-capable CLIs
+    npx neohive bmad update         Safely quick-update the existing BMad install
     npx neohive run --name N --cmd C  Wrap a CLI agent with event-driven message injection
     npx neohive uninstall           Remove from all CLI configs
     npx neohive help                Show this help
@@ -98,6 +102,55 @@ function detectOllama() {
   }
 }
 
+function argumentValue(name) {
+  const index = process.argv.indexOf(name);
+  return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : null;
+}
+
+function bmadRuntimes() {
+  const explicit = argumentValue('--runtimes') || argumentValue('--tools');
+  if (explicit) return explicit.split(',').map(value => value.trim()).filter(Boolean);
+  return detectCLIs().filter(runtime => bmadProvider.TOOL_IDS[runtime]);
+}
+
+async function bmadCommand() {
+  const action = process.argv[3] || 'status';
+  const cwd = process.cwd();
+  const hiveDir = dataDir(cwd);
+  if (action === 'status') {
+    const status = bmadProvider.inspectProject(cwd, hiveDir);
+    console.log(`\n  BMad Method v${bmadProvider.SUPPORTED_MAJOR} compatibility`);
+    console.log(`  Installed: ${status.installed ? 'yes' : 'no'}`);
+    console.log(`  Enabled:   ${status.enabled ? 'yes' : 'no'}`);
+    console.log(`  Version:   ${status.version || 'unknown'}`);
+    console.log(`  Compatible:${status.compatible ? ' yes' : ' no'}`);
+    console.log(`  Mode:      ${status.settings.mode}`);
+    console.log(`  Artifacts: ${status.artifact_count}`);
+    console.log(`  Next:      ${status.next_action.reason}`);
+    const failed = Object.entries(status.preflight.checks).filter(([, check]) => !check.ok);
+    if (failed.length) console.log(`  Missing:   ${failed.map(([name]) => name).join(', ')}`);
+    console.log('');
+    return;
+  }
+  if (!['install', 'update'].includes(action)) {
+    throw new Error('Usage: npx neohive bmad <status|install|update> [--runtimes claude,cursor]');
+  }
+  const runtimes = bmadRuntimes();
+  if (action === 'install' && !runtimes.length) {
+    throw new Error('No supported CLI detected. Pass --runtimes claude,cursor (or gemini/codex).');
+  }
+  const target = action === 'update' ? 'the existing manifest tools and settings' : runtimes.join(', ');
+  console.log(`\n  ${action === 'update' ? 'Updating' : 'Installing'} BMad Method for ${target}...`);
+  const result = await bmadProvider.runInstaller({
+    projectDir: cwd,
+    dataDir: hiveDir,
+    action,
+    runtimes,
+  });
+  console.log(`  [ok] BMad ${result.status.version || 'v6'} is ready.`);
+  console.log(`  Output: ${result.status.output_path}\n`);
+}
+
 // The data directory where all agents read/write — must be the same for server + dashboard
 function dataDir(cwd) {
   return path.join(cwd, '.neohive');
@@ -133,7 +186,7 @@ function setupClaude(serverPath, cwd) {
   mcpConfig.mcpServers['neohive'] = {
     command: mcpNodeCommand(),
     args: [serverPath],
-    env: { NEOHIVE_DATA_DIR: abDataDir },
+    env: { NEOHIVE_DATA_DIR: abDataDir, NEOHIVE_PROJECT_ROOT: path.resolve(cwd) },
     timeout: CLI_CONFIG.MCP_TOOL_TIMEOUT_S,
   };
 
@@ -277,7 +330,7 @@ function setupGemini(serverPath, cwd) {
   settings.mcpServers['neohive'] = {
     command: mcpNodeCommand(),
     args: [serverPath],
-    env: { NEOHIVE_DATA_DIR: abDataDir },
+    env: { NEOHIVE_DATA_DIR: abDataDir, NEOHIVE_PROJECT_ROOT: path.resolve(cwd) },
     timeout: CLI_CONFIG.MCP_TOOL_TIMEOUT_S,
     trust: true,
   };
@@ -509,6 +562,7 @@ function setupVSCode(cwd) {
     args: ['-y', 'neohive', 'mcp'],
     env: {
       NEOHIVE_DATA_DIR: '${workspaceFolder}/.neohive',
+      NEOHIVE_PROJECT_ROOT: '${workspaceFolder}',
     },
     cwd: '${workspaceFolder}',
   };
@@ -558,7 +612,7 @@ function setupAntigravity(cwd) {
     command: 'npx',
     args: ['-y', 'neohive', 'mcp'],
     cwd: cwd,
-    env: { NEOHIVE_DATA_DIR: abDataDir },
+    env: { NEOHIVE_DATA_DIR: abDataDir, NEOHIVE_PROJECT_ROOT: path.resolve(cwd) },
   };
 
   fs.writeFileSync(mcpPath, JSON.stringify(config, null, 2) + '\n');
@@ -625,13 +679,12 @@ function setupCodex(serverPath, cwd) {
 
   const abDataDir = path.join(path.resolve(cwd), '.neohive').replace(/\\/g, '/');
   const envSection =
-    `[mcp_servers.neohive.env]\nNEOHIVE_DATA_DIR = ${JSON.stringify(abDataDir)}\n`;
-  const hadNeohive = config.includes('[mcp_servers.neohive]');
+    `[mcp_servers.neohive.env]\nNEOHIVE_DATA_DIR = ${JSON.stringify(abDataDir)}\nNEOHIVE_PROJECT_ROOT = ${JSON.stringify(path.resolve(cwd))}\n`;
   config = upsertNeohiveMcpInToml(config, {
     command: mcpNodeCommand(),
     serverPath,
     timeout: CLI_CONFIG.MCP_TOOL_TIMEOUT_S,
-    envSection: hadNeohive ? undefined : envSection,
+    envSection,
   });
   fs.writeFileSync(configPath, config);
 
@@ -721,7 +774,7 @@ function setupCursor(serverPath, cwd) {
   mcpConfig.mcpServers['neohive'] = {
     command: mcpNodeCommand(),
     args: [serverPath],
-    env: { NEOHIVE_DATA_DIR: abDataDir },
+    env: { NEOHIVE_DATA_DIR: abDataDir, NEOHIVE_PROJECT_ROOT: path.resolve(cwd) },
     timeout: CLI_CONFIG.MCP_TOOL_TIMEOUT_S,
   };
 
@@ -785,6 +838,7 @@ function buildZedAcpNeohiveEntry(cwd) {
     args: [scriptArg],
     env: {
       NEOHIVE_DATA_DIR: '${workspaceFolder}/.neohive',
+      NEOHIVE_PROJECT_ROOT: '${workspaceFolder}',
       NEOHIVE_ACP_AGENT_NAME: 'acp-${workspaceName}',
     },
   };
@@ -1846,6 +1900,12 @@ switch (command) {
     break;
   case 'skills':
     installSkills(detectCLIs().length ? detectCLIs() : ['claude', 'cursor', 'antigravity'], process.cwd());
+    break;
+  case 'bmad':
+    bmadCommand().catch(error => {
+      console.error(`  [error] ${error.message}`);
+      process.exitCode = 1;
+    });
     break;
   case 'uninstall':
   case 'remove':
