@@ -25,7 +25,9 @@ function assert(cond, label) {
 
 function makeClient(env) {
   const proc = spawn('node', [serverPath], {
-    env: { ...process.env, NEOHIVE_DATA_DIR: testDir, ...env },
+    // Isolate the global registry to the test dir so register() never pollutes
+    // the real ~/.neohive/registry.json.
+    env: { ...process.env, NEOHIVE_DATA_DIR: testDir, NEOHIVE_REGISTRY_FILE: path.join(testDir, 'registry.json'), ...env },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   let buffer = '';

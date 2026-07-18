@@ -23,8 +23,12 @@ const os = require('os');
 // locking for a new file.
 const { withFileLock } = require('./file-io');
 
-const REGISTRY_DIR = path.join(os.homedir(), '.neohive');
-const REGISTRY_FILE = path.join(REGISTRY_DIR, 'registry.json');
+// NEOHIVE_REGISTRY_FILE lets tests (and any isolated run) redirect the global
+// registry away from the real ~/.neohive/registry.json so they never pollute it.
+const REGISTRY_FILE = process.env.NEOHIVE_REGISTRY_FILE
+  ? path.resolve(process.env.NEOHIVE_REGISTRY_FILE)
+  : path.join(os.homedir(), '.neohive', 'registry.json');
+const REGISTRY_DIR = path.dirname(REGISTRY_FILE);
 
 // Entries older than this with a dead PID are pruned on next write.
 const STALE_MS = 24 * 60 * 60 * 1000; // 24h
