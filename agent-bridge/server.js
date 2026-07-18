@@ -4913,6 +4913,9 @@ function checkStaleTasks() {
 // retry_count < 3 → strip assignee + reset to pending (next agent picks it up via get_work)
 // retry_count >= 3 → mark blocked_permanent + wake coordinator
 let _lastSelfHealRun = 0;
+// Q1: review stall-recovery — how long a pending review may sit with no live
+// eligible reviewer before we surface it. Never auto-approves; only notifies once.
+const REVIEW_STALL_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 function selfHealingWatchdog() {
   const now = Date.now();
   if (now - _lastSelfHealRun < 60000) return;
@@ -4959,33 +4962,77 @@ function selfHealingWatchdog() {
       changed = true;
     }
 
-    if (!changed) return;
-    saveTasks(tasks);
+    if (changed) {
+      saveTasks(tasks);
 
-    // Notify team about reclaimed tasks (one broadcast)
-    if (reclaimed.length > 0) {
-      const names = reclaimed.map(r => `"${r.task.title}" (was: ${r.prevAssignee})`).join(', ');
-      broadcastSystemMessage(`[WATCHDOG] ${reclaimed.length} stale task(s) reset to pending: ${names}. Call get_work() to claim.`);
-      log.info(`[self-heal] Reclaimed ${reclaimed.length} task(s): ${reclaimed.map(r => r.task.id).join(', ')}`);
-    }
-
-    // Wake coordinator for poison-pill tasks
-    if (poisoned.length > 0) {
-      const profiles = readJsonFileSafe(PROFILES_FILE, {});
-      const lead = Object.entries(agents).find(([n, a]) =>
-        isPidAlive(a.pid, a.last_activity) && profiles[n] && (profiles[n].role === 'lead' || profiles[n].role === 'coordinator')
-      );
-      const leadName = lead ? lead[0] : null;
-      const taskList = poisoned.map(t => `"${t.title}" (${t.id})`).join(', ');
-      const msg = `[WATCHDOG] POISON PILL: ${poisoned.length} task(s) abandoned ${POISON_PILL_COUNT}+ times and marked blocked_permanent: ${taskList}. Manual intervention required.`;
-      if (leadName) {
-        sendSystemMessage(leadName, msg);
-      } else {
-        broadcastSystemMessage(msg);
+      // Notify team about reclaimed tasks (one broadcast)
+      if (reclaimed.length > 0) {
+        const names = reclaimed.map(r => `"${r.task.title}" (was: ${r.prevAssignee})`).join(', ');
+        broadcastSystemMessage(`[WATCHDOG] ${reclaimed.length} stale task(s) reset to pending: ${names}. Call get_work() to claim.`);
+        log.info(`[self-heal] Reclaimed ${reclaimed.length} task(s): ${reclaimed.map(r => r.task.id).join(', ')}`);
       }
-      log.warn(`[self-heal] Poison pill tasks: ${poisoned.map(t => t.id).join(', ')}`);
+
+      // Wake coordinator for poison-pill tasks
+      if (poisoned.length > 0) {
+        const profiles = readJsonFile(PROFILES_FILE) || {};
+        const lead = Object.entries(agents).find(([n, a]) =>
+          isPidAlive(a.pid, a.last_activity) && profiles[n] && (profiles[n].role === 'lead' || profiles[n].role === 'coordinator')
+        );
+        const leadName = lead ? lead[0] : null;
+        const taskList = poisoned.map(t => `"${t.title}" (${t.id})`).join(', ');
+        const msg = `[WATCHDOG] POISON PILL: ${poisoned.length} task(s) abandoned ${POISON_PILL_COUNT}+ times and marked blocked_permanent: ${taskList}. Manual intervention required.`;
+        if (leadName) {
+          sendSystemMessage(leadName, msg);
+        } else {
+          broadcastSystemMessage(msg);
+        }
+        log.warn(`[self-heal] Poison pill tasks: ${poisoned.map(t => t.id).join(', ')}`);
+      }
     }
   } catch (e) { log.warn('[self-heal] watchdog error:', e.message); }
+
+  // Q1: stall-recovery for pending reviews with no live eligible reviewer.
+  // Never auto-approves — only surfaces the stall so a human/coordinator can act.
+  try {
+    const reviews = getReviews();
+    const agents = getAgents();
+    let reviewsChanged = false;
+
+    for (const review of reviews) {
+      if (review.status !== 'pending') continue;
+      if (review.stalled) continue; // idempotent: notify once per stall
+      if (!review.requested_at) continue;
+
+      const age = now - new Date(review.requested_at).getTime();
+      if (age < REVIEW_STALL_THRESHOLD_MS) continue;
+
+      const hasEligibleReviewer = Object.entries(agents).some(([name, a]) =>
+        name !== review.requested_by && isPidAlive(a.pid, a.last_activity)
+      );
+      if (hasEligibleReviewer) continue;
+
+      review.stalled = true;
+      review.stalled_at = new Date().toISOString();
+      reviewsChanged = true;
+
+      const msg = `[WATCHDOG] Review "${review.file}" (${review.id}) requested by ${review.requested_by} has been pending ${Math.round(age / 60000)}min with no live reviewer online. It will NOT be auto-approved — a reviewer must come online and call submit_review("${review.id}", ...).`;
+      const profiles = readJsonFile(PROFILES_FILE) || {};
+      const lead = Object.entries(agents).find(([n, a]) =>
+        n !== review.requested_by && isPidAlive(a.pid, a.last_activity) && profiles[n] && (profiles[n].role === 'lead' || profiles[n].role === 'coordinator')
+      );
+      if (agents[review.requested_by] && isPidAlive(agents[review.requested_by].pid, agents[review.requested_by].last_activity)) {
+        sendSystemMessage(review.requested_by, msg);
+      }
+      if (lead) {
+        sendSystemMessage(lead[0], msg);
+      } else if (!agents[review.requested_by] || !isPidAlive(agents[review.requested_by].pid, agents[review.requested_by].last_activity)) {
+        broadcastSystemMessage(msg);
+      }
+      log.warn(`[self-heal] Review stalled: ${review.id} "${review.file}"`);
+    }
+
+    if (reviewsChanged) writeJsonFile(REVIEWS_FILE, reviews);
+  } catch (e) { log.warn('[self-heal] review-stall watchdog error:', e.message); }
 }
 
 function watchdogCheck() {
@@ -8751,8 +8798,20 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  console.error('FATAL: ' + e.message);
-  console.error('Run "npx neohive doctor" for diagnostics.');
-  process.exit(1);
-});
+// NEOHIVE_TEST_NO_MAIN: escape hatch for unit tests that `require('../server.js')`
+// to reach internal functions (e.g. selfHealingWatchdog) without booting a real
+// stdio/HTTP transport. Never set in normal operation (cli.js / npm start).
+if (!process.env.NEOHIVE_TEST_NO_MAIN) {
+  main().catch((e) => {
+    console.error('FATAL: ' + e.message);
+    console.error('Run "npx neohive doctor" for diagnostics.');
+    process.exit(1);
+  });
+}
+
+if (process.env.NEOHIVE_TEST_NO_MAIN) {
+  module.exports = {
+    selfHealingWatchdog, getReviews, REVIEWS_FILE, isPidAlive, getAgents,
+    __resetSelfHealThrottle: () => { _lastSelfHealRun = 0; },
+  };
+}

@@ -17,6 +17,7 @@ const agentLaunchProfiles = require('./lib/agent-launch-profiles');
 const tmuxCliLauncher = require('./lib/tmux-cli-launcher');
 const methodologyProvider = require('./lib/methodology-provider');
 const bmadProvider = require('./lib/bmad-provider');
+const bmadWatcher = require('./lib/bmad-watcher');
 const { classifyTaskSize, isShadowWork } = require('./lib/task-classification');
 const { mutateProjectConfig } = require('./lib/project-config');
 const paths = require('./lib/paths');
@@ -4746,6 +4747,49 @@ startFileWatcher();
 // observe portably on Linux. Fingerprint installed projects and emit one
 // coalesced methodology event when their authoritative output changes.
 const methodologyFingerprints = new Map();
+
+// Human labels for bmad-watcher's artifactType (kind, from bmadProvider.listArtifacts).
+const BMAD_ARTIFACT_LABELS = {
+  prd: 'PRD',
+  architecture: 'architecture spine',
+  ux: 'UX design spec',
+  gate: 'implementation-readiness gate',
+  'sprint-status': 'sprint status',
+  story: 'story/epic',
+  brief: 'product brief',
+  research: 'research report',
+  artifact: 'artifact',
+};
+
+// Turn a bmad-watcher artifact event into a VISIBLE Neohive system message so
+// BMad lifecycle progress shows on the dashboard feed even if the agent never
+// self-reports it. Reuses the exact append-to-messages.jsonl/history.jsonl +
+// SSE mechanism apiInjectMessage uses for __group__ broadcasts — no bespoke
+// duplication of the message pipeline.
+function emitBmadArtifactMessage(event, dataDir) {
+  try {
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    const messagesFile = path.join(dataDir, 'messages.jsonl');
+    const historyFile = path.join(dataDir, 'history.jsonl');
+    const label = BMAD_ARTIFACT_LABELS[event.artifactType] || 'artifact';
+    const content = `[BMAD] Agent produced ${label}: ${event.path} (phase: ${event.phase})`;
+    const msg = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+      from: '__bmad__',
+      to: '__group__',
+      content,
+      timestamp: new Date().toISOString(),
+    };
+    fs.appendFileSync(messagesFile, JSON.stringify(msg) + '\n');
+    fs.appendFileSync(historyFile, JSON.stringify(msg) + '\n');
+    sseNotifyAll('messages');
+  } catch {}
+}
+
+// Roots currently under bmad-watcher supervision, keyed the same way
+// bmadWatcher itself keys them (path.resolve). Start/stop tracks the
+// monitored-project set so a project add/remove acts as the "switch".
+const bmadWatchedRoots = new Set();
 setInterval(() => {
   if (sseClients.size === 0) return;
   const projectContexts = new Map();
@@ -4765,7 +4809,20 @@ setInterval(() => {
       const previous = methodologyFingerprints.get(projectRoot);
       methodologyFingerprints.set(projectRoot, status.fingerprint);
       if (previous && previous !== status.fingerprint) changed = true;
+      const resolvedRoot = path.resolve(projectRoot);
+      if (!bmadWatchedRoots.has(resolvedRoot)) {
+        bmadWatchedRoots.add(resolvedRoot);
+        bmadWatcher.start(projectRoot, (event) => emitBmadArtifactMessage(event, dataDir));
+      }
     } catch {}
+  }
+  // Stop watchers for projects no longer monitored (project removed / switched away).
+  const desiredRoots = new Set(Array.from(projectContexts.keys(), (p) => path.resolve(p)));
+  for (const watchedRoot of Array.from(bmadWatchedRoots)) {
+    if (!desiredRoots.has(watchedRoot)) {
+      bmadWatchedRoots.delete(watchedRoot);
+      bmadWatcher.stop(watchedRoot);
+    }
   }
   if (changed) sseNotifyAll('methodology');
 }, 5000).unref();
