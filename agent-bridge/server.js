@@ -23,6 +23,7 @@ const _audit = require('./lib/audit');
 const _compact = require('./lib/compact');
 const { readIdeActivity, applyIdeActivityHint } = require('./lib/ide-activity');
 const bmadProvider = require('./lib/bmad-provider');
+const agentRegistry = require('./lib/registry');
 const methodologyProvider = require('./lib/methodology-provider');
 
 const DATA_DIR = _config.DATA_DIR;
@@ -1599,6 +1600,15 @@ function toolRegister(name, provider = null, skills = null) {
     saveAgentsNoLock(agents);
     registeredName = name;
     registeredToken = token;
+
+    // Best-effort: record this agent in the cross-project registry so the
+    // dashboard can find it even if its own cwd-based data-dir resolution
+    // would have guessed a different directory. Never blocks registration.
+    try {
+      agentRegistry.registerAgent({ name, projectRoot: PROJECT_ROOT, dataDir: DATA_DIR, pid: process.pid });
+    } catch (e) {
+      log.debug('registry.registerAgent failed:', e.message);
+    }
 
     // Auto-create profile if not exists
     const profiles = getProfiles();

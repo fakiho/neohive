@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { resolveDataDirForServer } = require('./resolve-server-data-dir');
+const { mutateProjectConfig, readProjectConfig, replaceProjectConfig } = require('./project-config');
 
 // Same rules as server.js: env, else repo .cursor/mcp.json sibling, else cwd/.neohive
 const DATA_DIR = resolveDataDirForServer(path.join(__dirname, '..'));
@@ -40,13 +41,17 @@ const RESERVED_NAMES = ['__system__', '__all__', '__open__', '__close__', '__use
 
 // Config helpers
 function getConfig() {
-  if (!fs.existsSync(CONFIG_FILE)) return {};
-  try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; }
+  return readProjectConfig(DATA_DIR);
 }
 
 function saveConfig(config) {
   ensureDataDir();
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config));
+  return replaceProjectConfig(DATA_DIR, config);
+}
+
+function mutateConfig(mutator) {
+  ensureDataDir();
+  return mutateProjectConfig(DATA_DIR, mutator);
 }
 
 function isGroupMode() {
@@ -122,7 +127,7 @@ module.exports = {
   CONFIG_FILE, PERMISSIONS_FILE, READ_RECEIPTS_FILE, DATA_VERSION_FILE,
   CHANNELS_FILE_PATH,
   MAX_CONTENT_BYTES, CURRENT_DATA_VERSION, RESERVED_NAMES,
-  getConfig, saveConfig, isGroupMode, isManagedMode, getManagedConfig,
+  getConfig, saveConfig, mutateConfig, isGroupMode, isManagedMode, getManagedConfig,
   ensureDataDir, sanitizeName, generateId, generateToken, validateContentSize,
   getMessagesFile, getHistoryFile,
 };

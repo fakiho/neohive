@@ -7,6 +7,7 @@ const { execFile, execFileSync } = require('child_process');
 const YAML = require('yaml');
 const { mutateProjectConfig, readProjectConfig } = require('./project-config');
 const { findExecutable } = require('./tmux-cli-launcher');
+const paths = require('./paths');
 
 const ID = 'bmad';
 const LABEL = 'BMad Method';
@@ -62,13 +63,15 @@ function outputDir(projectDir) {
   return path.join(projectDir, '_bmad-output');
 }
 
+// Backward-compatible wrapper — real implementation now lives in lib/paths.js
+// (shared with dashboard.js's project-root resolution) so both sides of the
+// BMad-artifact lookup agree on the root for a given data dir.
 function projectRootFromDataDir(dataDir, fallback) {
-  const resolved = path.resolve(String(dataDir || ''));
-  if (['.neohive', 'data'].includes(path.basename(resolved))) return path.dirname(resolved);
-  if (['_bmad', '_bmad-output', 'package.json', '.git'].some((name) => fs.existsSync(path.join(resolved, name)))) {
-    return resolved;
-  }
-  return path.resolve(fallback || process.cwd());
+  // Derive PURELY from the given dataDir — do NOT honor a global NEOHIVE_PROJECT_ROOT
+  // here. The dashboard calls this per monitored project; picking up the dashboard
+  // process's own env var would collapse every project's root to one path. (The
+  // server's own PROJECT_ROOT still reads the env directly in server.js.)
+  return paths.resolveProjectRoot(dataDir, { cwd: fallback, env: {} });
 }
 
 function readYaml(file, fallback) {

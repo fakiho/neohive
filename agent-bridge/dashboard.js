@@ -19,31 +19,8 @@ const methodologyProvider = require('./lib/methodology-provider');
 const bmadProvider = require('./lib/bmad-provider');
 const { classifyTaskSize, isShadowWork } = require('./lib/task-classification');
 const { mutateProjectConfig } = require('./lib/project-config');
-
-function findCursorProjectRootWithNeohive(startDir) {
-  let dir = path.resolve(startDir);
-  const root = path.parse(dir).root;
-  while (true) {
-    const mcpPath = path.join(dir, '.cursor', 'mcp.json');
-    if (fs.existsSync(mcpPath)) {
-      try {
-        const j = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
-        if (j.mcpServers && j.mcpServers.neohive) return dir;
-      } catch {}
-    }
-    if (dir === root) break;
-    dir = path.dirname(dir);
-  }
-  return null;
-}
-
-function normalizeNeohiveDataDirString(raw, workspaceRoot) {
-  if (raw == null || typeof raw !== 'string') return null;
-  let d = raw.trim();
-  if (!d) return null;
-  d = d.replace(/\$\{workspaceFolder\}/gi, workspaceRoot);
-  return path.isAbsolute(d) ? path.resolve(d) : path.resolve(workspaceRoot, d);
-}
+const paths = require('./lib/paths');
+const registry = require('./lib/registry');
 
 // --- File-level mutex for serializing read-then-write operations ---
 const lockMap = new Map();
@@ -107,16 +84,6 @@ function hasDataFiles(dir) {
   } catch { return false; }
 }
 
-function countAgentsInNeohiveDir(nhDir) {
-  if (!fs.existsSync(nhDir)) return 0;
-  const ag = path.join(nhDir, 'agents.json');
-  if (!fs.existsSync(ag)) return 0;
-  try {
-    const j = JSON.parse(fs.readFileSync(ag, 'utf8'));
-    return j && typeof j === 'object' ? Object.keys(j).length : 0;
-  } catch { return 0; }
-}
-
 function countNeohiveJsonArray(filePath) {
   if (!fs.existsSync(filePath)) return 0;
   try {
@@ -130,106 +97,11 @@ function neohiveHasTasksOrWorkflows(nhDir) {
     || countNeohiveJsonArray(path.join(nhDir, 'workflows.json')) > 0;
 }
 
-// Score each ancestor’s .neohive so we prefer the hive that has tasks/workflows (not the first with only agents).
-function scoreNeohiveDataDir(nhDir) {
-  if (!fs.existsSync(nhDir)) return -1;
-  let s = countAgentsInNeohiveDir(nhDir) * 10;
-  s += countNeohiveJsonArray(path.join(nhDir, 'tasks.json'));
-  s += countNeohiveJsonArray(path.join(nhDir, 'workflows.json')) * 3;
-  if (hasDataFiles(nhDir)) s += 5;
-  return s;
-}
-
-function bestNeohiveAmongAncestors(startDir) {
-  let dir = path.resolve(startDir);
-  const root = path.parse(dir).root;
-  let best = null;
-  let bestScore = -1;
-  for (let d = 0; d < 24 && dir !== root; d++) {
-    const nh = path.join(dir, '.neohive');
-    const sc = scoreNeohiveDataDir(nh);
-    if (sc > bestScore) {
-      bestScore = sc;
-      best = nh;
-    }
-    dir = path.dirname(dir);
-  }
-  if (bestScore <= 0) return null;
-  return best;
-}
-
-// Read NEOHIVE_DATA_DIR from project-local MCP configs (same files init writes).
-// Cursor uses ${workspaceFolder} in .cursor/mcp.json — expand using projectRoot when parsing files.
-function readNeohiveDataDirFromMcpConfigs(projectRoot) {
-  const candidates = [
-    path.join(projectRoot, '.cursor', 'mcp.json'),
-    path.join(projectRoot, '.mcp.json'),
-    path.join(projectRoot, '.gemini', 'settings.json'),
-  ];
-  for (const filePath of candidates) {
-    if (!fs.existsSync(filePath)) continue;
-    try {
-      const j = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-      const nh = j.mcpServers && j.mcpServers.neohive;
-      const raw = nh && nh.env && nh.env.NEOHIVE_DATA_DIR;
-      const out = normalizeNeohiveDataDirString(raw, projectRoot);
-      if (out) return out;
-    } catch {}
-  }
-  return null;
-}
-
-function resolveDashboardDefaultDataDir() {
-  // 1. Explicit env var — highest priority
-  let envData = process.env.NEOHIVE_DATA_DIR || process.env.NEOHIVE_DATA;
-  if (envData && String(envData).trim()) {
-    let s = String(envData).trim();
-    if (/\$\{workspaceFolder\}/i.test(s)) {
-      const root = findCursorProjectRootWithNeohive(process.cwd());
-      if (!root) {
-        // Placeholder can't be expanded — fall through to the config/walk/cwd strategies
-      } else {
-        s = s.replace(/\$\{workspaceFolder\}/gi, root);
-        return { path: path.resolve(s), source: 'environment' };
-      }
-    } else {
-      const resolved = path.resolve(s);
-      // If the env var points to a project root (not the data dir itself),
-      // prefer the .neohive subdirectory when it has data — matches resolveDataDir() logic.
-      const neohiveSubdir = path.join(resolved, '.neohive');
-      if (hasDataFiles(neohiveSubdir)) {
-        return { path: neohiveSubdir, source: 'environment' };
-      }
-      return { path: resolved, source: 'environment' };
-    }
-  }
-
-  // 2. Project MCP config — authoritative, written by `neohive init`
-  //    Check this BEFORE the directory walk so a stale ~/.neohive/ from
-  //    a previous session doesn't shadow the project's explicit config.
-  let dir = path.resolve(process.cwd());
-  const root = path.parse(dir).root;
-  while (true) {
-    const fromMcp = readNeohiveDataDirFromMcpConfigs(dir);
-    if (fromMcp) {
-      return { path: fromMcp, source: 'mcp-config', configAt: dir };
-    }
-    if (dir === root) break;
-    dir = path.dirname(dir);
-  }
-
-  // 3. Walk up looking for .neohive/ directories — best-effort fallback
-  const fromWalk = bestNeohiveAmongAncestors(process.cwd());
-  if (fromWalk) {
-    return { path: fromWalk, source: 'walk-up' };
-  }
-
-  // 4. cwd/.neohive — last resort
-  return { path: path.join(process.cwd(), '.neohive'), source: 'cwd' };
-}
-
-const _defaultDataResolved = resolveDashboardDefaultDataDir();
-const DEFAULT_DATA_DIR = _defaultDataResolved.path;
+// Default data dir resolution now lives in lib/paths.js (resolveDataDir), shared
+// verbatim with server.js/lib/config.js, so the two processes can never disagree
+// for the same {env, cwd}. See lib/paths.js for the full resolution order and the
+// unified env-var rule.
+const DEFAULT_DATA_DIR = paths.resolveDataDir({ serverJsDir: __dirname });
 
 // Auto-migrate from .agent-bridge/ to .neohive/ (v5 → v6 rename)
 const _legacyDir = path.join(path.dirname(DEFAULT_DATA_DIR), '.agent-bridge');
@@ -277,6 +149,15 @@ function normalizeMonitoredProjectRoot(projectPath) {
 function resolveDataDir(projectPath) {
   if (projectPath) {
     projectPath = normalizeMonitoredProjectRoot(projectPath);
+    // Authoritative override: if an agent registered this project root with an
+    // explicit (possibly custom/literal) dataDir, use exactly that — this is the
+    // whole point of the registry (agents registering with a custom NEOHIVE_DATA_DIR
+    // must be read from where they actually wrote, not a re-derived <path>/.neohive).
+    try {
+      const resolvedPath = path.resolve(projectPath);
+      const hit = registry.listDiscoveredProjects().find(d => path.resolve(d.path) === resolvedPath && d.dataDir);
+      if (hit && fs.existsSync(hit.dataDir)) return hit.dataDir;
+    } catch { /* registry read is best-effort */ }
     let dir = path.join(projectPath, '.neohive');
     const dataDir = path.join(projectPath, 'data');
     if (hasDataFiles(dir)) return dir;
@@ -1612,7 +1493,25 @@ function apiProjects() {
   if (pack(nonRedundant) !== pack(raw)) {
     saveProjects(nonRedundant);
   }
-  return nonRedundant;
+
+  // Additively merge in projects discovered via the cross-project agent
+  // registry (~/.neohive/registry.json) — agents that registered under a
+  // dataDir our own cwd-based resolution wouldn't have found. This never
+  // mutates projects.json and never changes which project is "active"; it
+  // only makes those agents visible in the project list.
+  const knownRoots = new Set(nonRedundant.map(p => path.resolve(p.path)));
+  knownRoots.add(defaultHive);
+  const discovered = [];
+  try {
+    for (const d of registry.listDiscoveredProjects()) {
+      const key = path.resolve(d.path);
+      if (knownRoots.has(key) || path.resolve(resolveDataDir(d.path)) === defaultHive) continue;
+      knownRoots.add(key);
+      discovered.push({ path: key, name: path.basename(key) || 'project', discovered: true, dataDir: d.dataDir || null });
+    }
+  } catch { /* registry read is best-effort */ }
+
+  return nonRedundant.concat(discovered);
 }
 
 function apiAddProject(body) {
@@ -4985,11 +4884,7 @@ server.listen(PORT, LAN_MODE ? '0.0.0.0' : '127.0.0.1', () => {
     console.log('  WARNING:    LAN mode enabled — accessible to anyone on your network');
   }
   let dataDirLine = '  Data dir:   ' + dataDir;
-  if (_defaultDataResolved.source === 'walk-up') {
-    dataDirLine += ' (best .neohive among ancestors — tasks/agents/history)';
-  } else if (_defaultDataResolved.source === 'mcp-config' && _defaultDataResolved.configAt) {
-    dataDirLine += ' (from MCP config under ' + _defaultDataResolved.configAt + ')';
-  } else if (_defaultDataResolved.source === 'environment') {
+  if (process.env.NEOHIVE_DATA_DIR || process.env.NEOHIVE_DATA) {
     dataDirLine += ' (NEOHIVE_DATA_DIR / NEOHIVE_DATA)';
   }
   console.log(dataDirLine);

@@ -56,14 +56,32 @@ function getAgents(force = false) {
       const files = fs.readdirSync(DATA_DIR).filter(f => f.startsWith('heartbeat-') && f.endsWith('.json'));
       for (const f of files) {
         const name = f.slice(10, -5);
-        if (agents[name]) {
-          try {
-            const hb = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
-            if (hb.last_activity) agents[name].last_activity = hb.last_activity;
-            if (hb.pid) agents[name].pid = hb.pid;
-            if (hb.listen_history) agents[name].listen_history = hb.listen_history;
-          } catch {}
-        }
+        try {
+          const hb = JSON.parse(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'));
+          if (!agents[name]) {
+            // Orphaned heartbeat: agents.json was reset/corrupted after this agent
+            // registered. Synthesize a row so a live agent doesn't vanish from the
+            // dashboard until it happens to call register() again.
+            if (hb.pid && isPidAlive(hb.pid, hb.last_activity)) {
+              agents[name] = {
+                pid: hb.pid,
+                ppid: null,
+                timestamp: hb.last_activity || new Date().toISOString(),
+                last_activity: hb.last_activity || new Date().toISOString(),
+                last_listened_at: hb.last_activity || null,
+                provider: 'unknown',
+                branch: 'main',
+                token: null,
+                started_at: hb.last_activity || new Date().toISOString(),
+                recovered_from_heartbeat: true,
+              };
+            }
+            continue;
+          }
+          if (hb.last_activity) agents[name].last_activity = hb.last_activity;
+          if (hb.pid) agents[name].pid = hb.pid;
+          if (hb.listen_history) agents[name].listen_history = hb.listen_history;
+        } catch {}
       }
     } catch {}
     return agents;
