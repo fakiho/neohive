@@ -260,6 +260,73 @@ module.exports = function (ctx) {
     return prev !== text;
   }
 
+  // Best-effort delta snippet for advisory display only (never used to drive
+  // any decision) — if prev is a prefix of text, return the appended suffix;
+  // otherwise the pane scrolled/cleared and we fall back to the tail of the
+  // new capture. Trimmed and length-capped for safe inclusion in a broadcast.
+  function computeOutputDelta(prevText, text) {
+    let delta;
+    if (typeof prevText === 'string' && text.startsWith(prevText)) {
+      delta = text.slice(prevText.length);
+    } else {
+      const lines = text.split('\n');
+      delta = lines.slice(-8).join('\n');
+    }
+    delta = delta.replace(/\s+$/, '').trim();
+    return delta.length > 400 ? delta.slice(-400) : delta;
+  }
+
+  // --- Possible-unrouted-reply advisory detector ---
+  //
+  // Heuristic, read-only, best-effort signal for the "agent answered in the
+  // terminal instead of calling send_message" failure mode. Never acts on an
+  // agent's behalf (no auto-send, no auto-nudge content) — only raises team
+  // visibility so a human or the Lead can manually follow up. Candidates are
+  // tracked in-memory only (per watchdog process lifetime); false negatives
+  // on restart are acceptable for an advisory signal.
+  //
+  // State machine per pane_id:
+  //   1. Pane output changes -> record { text, firstSeenAt, notified:false }.
+  //   2. On a later cycle, if output is UNCHANGED since firstSeenAt for at
+  //      least SETTLE_MS, and the agent has made no MCP tool call
+  //      (last_activity) since firstSeenAt, and not yet notified: raise one
+  //      advisory broadcast and mark notified (never repeat for the same
+  //      candidate).
+  //   3. If the agent's last_activity advances past firstSeenAt (they did
+  //      call a tool — e.g. listen()/send_message()), clear the candidate:
+  //      the apparent "unrouted reply" resolved itself.
+  const UNROUTED_SETTLE_MS = 45000;
+  const _unroutedCandidates = new Map(); // pane_id -> { text, firstSeenAt, notified }
+
+  function trackUnroutedReplyCandidate(paneId, text, outputChanged, lastActivityIso) {
+    const now = Date.now();
+    const existing = _unroutedCandidates.get(paneId);
+    const lastActivityMs = lastActivityIso ? new Date(lastActivityIso).getTime() : 0;
+
+    if (outputChanged) {
+      // New output — (re)start the candidate window unless a tool call
+      // already happened at/after this exact capture (can't happen same
+      // tick, but guards a same-millisecond race).
+      _unroutedCandidates.set(paneId, { text, firstSeenAt: now, notified: false });
+      return null;
+    }
+
+    if (!existing) return null;
+
+    // Agent made a tool call since the candidate text first appeared —
+    // resolved, no unrouted reply.
+    if (lastActivityMs >= existing.firstSeenAt) {
+      _unroutedCandidates.delete(paneId);
+      return null;
+    }
+
+    if (existing.notified) return null;
+    if (now - existing.firstSeenAt < UNROUTED_SETTLE_MS) return null;
+
+    existing.notified = true;
+    return { text: existing.text, ageMs: now - existing.firstSeenAt };
+  }
+
   async function checkAgent(name, info, panesByPid) {
     const nowIso = new Date().toISOString();
     const result = {
@@ -306,7 +373,9 @@ module.exports = function (ctx) {
 
     if (text === null) return result;
 
-    if (detectOutputChange(mapping.pane_id, text)) {
+    const prevText = _prevCaptures.get(mapping.pane_id);
+    const outputChanged = detectOutputChange(mapping.pane_id, text);
+    if (outputChanged) {
       result.last_output_at = nowIso;
     }
 
@@ -315,6 +384,18 @@ module.exports = function (ctx) {
       result.state = 'blocked_on_prompt';
       result.confidence = 'high';
       result.matched_pattern_id = match.pattern_id;
+    }
+
+    // Advisory-only: possible unrouted reply detection. Skipped while a
+    // permission prompt is showing (that's a different, already-handled
+    // signal) and never overrides state/confidence set above.
+    if (!match.matched) {
+      const lastActivityIso = info.last_activity || null;
+      const candidate = trackUnroutedReplyCandidate(mapping.pane_id, text, outputChanged, lastActivityIso);
+      if (candidate) {
+        result.possible_unrouted_reply = true;
+        result.unrouted_snippet = computeOutputDelta(prevText, candidate.text);
+      }
     }
 
     return result;
@@ -352,6 +433,15 @@ module.exports = function (ctx) {
           );
         } catch { /* best-effort */ }
       }
+
+      if (tmuxState.possible_unrouted_reply) {
+        try {
+          const snippet = (tmuxState.unrouted_snippet || '').slice(0, 400);
+          broadcastSystemMessage(
+            `[POSSIBLE UNROUTED REPLY] ${name}'s terminal shows new output with no MCP tool call since it appeared. This may be a reply that never reached send_message(). Advisory only — verify and relay manually if needed. Pane snippet:\n${snippet}`
+          );
+        } catch { /* best-effort */ }
+      }
     }
 
     if (changed) saveAgents(agents);
@@ -377,7 +467,11 @@ module.exports = function (ctx) {
     checkAllAgents().catch(() => {});
   }
 
-  return { isTmuxAvailable, getTmuxStateConfig, checkAllAgents, pollIfDue, walkAncestryToPane, matchPromptPatterns, PROMPT_PATTERNS };
+  return {
+    isTmuxAvailable, getTmuxStateConfig, checkAllAgents, pollIfDue, walkAncestryToPane, matchPromptPatterns, PROMPT_PATTERNS,
+    // Exposed for focused testing of the possible-unrouted-reply advisory detector.
+    __test__: { trackUnroutedReplyCandidate, computeOutputDelta, UNROUTED_SETTLE_MS },
+  };
 };
 
 function sleep(ms) {
