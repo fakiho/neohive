@@ -13,10 +13,12 @@ pkill -f "node dashboard.js" 2>/dev/null || true
 sleep 1
 
 cd "$ROOT"
+# Prefer node-pty agent launcher (Epic 1); falls back to tmux if node-pty unavailable.
 NEOHIVE_LAN="${NEOHIVE_LAN:-true}" \
 NEOHIVE_PORT="$PORT" \
 NEOHIVE_DATA_DIR="$ROOT/.neohive" \
 NEOHIVE_PROJECT_ROOT="$ROOT" \
+NEOHIVE_LAUNCHER="${NEOHIVE_LAUNCHER:-pty}" \
 nohup node dashboard.js > "/tmp/neohive-dashboard-$PORT.log" 2>&1 &
 
 sleep 2
