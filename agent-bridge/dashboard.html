@@ -12575,7 +12575,12 @@ function doLaunch() {
       });
       if (!manualPromptRequired) {
         switchView('terminal');
-        setTimeout(function() { sendTmuxControl('get_state'); }, 250);
+        if (data.launch_mode === 'pty') {
+          // PTY-launched agent: connect the per-agent socket bridge.
+          setTimeout(function() { initTerminal(agentName); }, 250);
+        } else {
+          setTimeout(function() { sendTmuxControl('get_state'); }, 250);
+        }
       }
     } else {
       resultEl.className = 'launch-result success';

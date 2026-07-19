@@ -1654,6 +1654,13 @@ function toolRegister(name, provider = null, skills = null, role = null) {
     const agentEntry = { pid: process.pid, ppid: process.ppid, timestamp: now, last_activity: now, last_listened_at: now, provider: provider || 'unknown', branch: currentBranch, token, started_at: now };
     if (process.env.CLAUDE_SESSION_ID) agentEntry.claude_session_id = process.env.CLAUDE_SESSION_ID;
     if (pushPort) agentEntry.push_port = pushPort;
+    // Preserve pty_owner fields written by pty-owner.js — register() must not
+    // overwrite them since the owner process writes them before the CLI calls register().
+    const priorEntry = agents[name] || {};
+    if (priorEntry.pty_owner) {
+      agentEntry.pty_owner = priorEntry.pty_owner;
+      agentEntry.pty_owner_pid = priorEntry.pty_owner_pid;
+    }
     agents[name] = agentEntry;
     saveAgentsNoLock(agents);
     registeredName = name;

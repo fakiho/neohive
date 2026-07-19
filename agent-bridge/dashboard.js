@@ -504,6 +504,8 @@ function apiAgents(query) {
       platform_skills: (cards && cards[name] && cards[name].platform_skills) || [],
       skills: (cards && cards[name] && cards[name].skills) || [],
       tmux: info.tmux || { mapped: false, state: 'unknown', confidence: 'none' },
+      pty_owner: info.pty_owner === true,
+      pty_owner_pid: info.pty_owner_pid || null,
     };
     // Include workspace status for agent intent board
     try {
