@@ -4737,6 +4737,12 @@ function samplingPushToAgent(msg, dataDir) {
 // Byte offset tracker for messages.jsonl — lets us push only NEW messages over SSE
 let sseMessagesOffset = 0;
 
+// Per-agent sampling push cooldown — prevents storm when N messages arrive for the
+// same agent in one SSE debounce batch. One push per agent per 5s is enough to
+// wake the agent; the agent's listen() will drain all queued messages itself.
+const _samplingPushLastSent = {}; // agentName → timestamp ms
+const SAMPLING_PUSH_COOLDOWN_MS = 5000;
+
 // Push a raw SSE payload to all connected clients, cleaning up dead ones
 function sseSend(payload) {
   const dead = [];
@@ -4846,6 +4852,7 @@ function sseNotifyAll(changeType) {
           fs.closeSync(fd);
           sseMessagesOffset = stat.size;
           const lines = buf.toString('utf8').trim().split(/\r?\n/);
+          const nowMs = Date.now();
           for (const line of lines) {
             try {
               const msg = JSON.parse(line);
@@ -4860,8 +4867,16 @@ function sseNotifyAll(changeType) {
                 ts: msg.timestamp || Date.now(),
               });
               sseSend(`event: message\ndata: ${event}\n\n`);
-              // Also push directly into the target agent's context via sampling push server
-              samplingPushToAgent(msg, resolveDataDir());
+              // Coalesced sampling push: at most one push per target agent per
+              // SAMPLING_PUSH_COOLDOWN_MS. A burst of N messages targeting the same
+              // agent would otherwise queue N sampling wakes, causing listen() storms.
+              if (!msg.to.startsWith('__')) {
+                const last = _samplingPushLastSent[msg.to] || 0;
+                if (nowMs - last >= SAMPLING_PUSH_COOLDOWN_MS) {
+                  _samplingPushLastSent[msg.to] = nowMs;
+                  samplingPushToAgent(msg, resolveDataDir());
+                }
+              }
             } catch {}
           }
         }
