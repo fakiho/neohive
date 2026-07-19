@@ -21,7 +21,7 @@ const { claimWake, releaseWakeClaim, clearWakeClaim } = require('./wake-claims')
 // Fixed, module-owned wake signal (AD-2). No caller-supplied text may reach
 // tmux send-keys on the delivery path; this constant is the only pane input
 // the wake module may inject.
-const WAKE_SIGNAL = '\n[neohive] Messages pending — call listen()\n';
+const WAKE_SIGNAL = '\n[neohive] Messages pending — call listen(). Do not reply here as plain text; it will not be delivered.\n';
 
 const PROMPT_PATTERNS = [
   {

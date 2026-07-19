@@ -24,6 +24,11 @@ const RUNTIMES = Object.freeze({
     label: 'Cursor Agent',
     capabilities: { mcp: true, filesystem: true, shell: true, skills: true, interactive: true },
   },
+  opencode: {
+    id: 'opencode',
+    label: 'OpenCode',
+    capabilities: { mcp: true, filesystem: true, shell: true, skills: true, interactive: true },
+  },
   'ollama-claude': {
     id: 'ollama-claude',
     label: 'Claude Code via Ollama',

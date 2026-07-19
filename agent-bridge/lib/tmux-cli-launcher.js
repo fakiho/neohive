@@ -12,6 +12,7 @@ const CLI_BINS = {
   gemini: { bin: 'gemini', label: 'Gemini CLI', windowPrefix: 'gemini' },
   codex: { bin: 'codex', label: 'Codex CLI', windowPrefix: 'codex' },
   cursor: { bin: 'agent', label: 'Cursor Agent', windowPrefix: 'cursor' },
+  opencode: { bin: 'opencode', label: 'OpenCode', windowPrefix: 'opencode' },
 };
 
 function readJson(file, fallback) {
@@ -85,7 +86,7 @@ async function launchInTmux({ dataDir, projectDir, windowName, envArgs, tagOptio
 
 function getCliSpec(cli) {
   const spec = CLI_BINS[cli];
-  if (!spec) throw new Error('Invalid cli type. Must be: claude, gemini, codex, or cursor');
+  if (!spec) throw new Error('Invalid cli type. Must be: claude, gemini, codex, cursor, or opencode');
   return spec;
 }
 
@@ -93,7 +94,7 @@ function getCliSpec(cli) {
  * Build env + argv for a native CLI launch with the role prompt as the initial prompt.
  * Mirrors ollama-bridge-manager's env-prefixed tmux command style.
  */
-function buildNativeCliEnvArgs({ cli, dataDir, projectDir, prompt, profile }) {
+function buildNativeCliEnvArgs({ cli, dataDir, projectDir, prompt, profile, model }) {
   const spec = getCliSpec(cli);
   const cliPath = findExecutable(spec.bin);
   if (!cliPath) {
@@ -109,13 +110,32 @@ function buildNativeCliEnvArgs({ cli, dataDir, projectDir, prompt, profile }) {
   const safeProfile = /^[A-Za-z0-9_-]{1,40}$/.test(rawProfile) ? rawProfile : '';
   const codexProfileArgs = cli === 'codex' && safeProfile ? ['--profile', safeProfile] : [];
 
+  // Optional model override, e.g. "azure/gpt-4o-mini" or "openrouter/deepseek/deepseek-v3.2".
+  // Every supported runtime accepts a --model flag; unrecognized characters are stripped
+  // rather than rejected outright so provider/model paths with slashes and dots still work.
+  const rawModel = String(model || '').trim();
+  const safeModel = /^[A-Za-z0-9_.\/:-]{1,100}$/.test(rawModel) ? rawModel : '';
+  const modelArgs = safeModel ? ['--model', safeModel] : [];
+
   // Gemini: -i keeps interactive mode after running the initial prompt.
   if (cli === 'gemini') {
     return [
       `NEOHIVE_DATA_DIR=${dataDir}`,
       `NEOHIVE_PROJECT_ROOT=${projectDir || path.dirname(dataDir)}`,
       cliPath,
+      ...modelArgs,
       '--prompt-interactive', launchPrompt,
+    ];
+  }
+
+  // OpenCode: --prompt seeds the TUI with the initial message and stays interactive.
+  if (cli === 'opencode') {
+    return [
+      `NEOHIVE_DATA_DIR=${dataDir}`,
+      `NEOHIVE_PROJECT_ROOT=${projectDir || path.dirname(dataDir)}`,
+      cliPath,
+      ...modelArgs,
+      '--prompt', launchPrompt,
     ];
   }
 
@@ -124,15 +144,16 @@ function buildNativeCliEnvArgs({ cli, dataDir, projectDir, prompt, profile }) {
     `NEOHIVE_PROJECT_ROOT=${projectDir || path.dirname(dataDir)}`,
     cliPath,
     ...codexProfileArgs,
+    ...modelArgs,
     launchPrompt,
   ];
 }
 
-async function launchNativeCli({ dataDir, projectDir, cli, agentName, prompt, profile }) {
+async function launchNativeCli({ dataDir, projectDir, cli, agentName, prompt, profile, model }) {
   const spec = getCliSpec(cli);
   const safeName = String(agentName || 'agent').replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 20) || 'agent';
   const windowName = `${spec.windowPrefix}-${safeName}`.slice(0, 50);
-  const envArgs = buildNativeCliEnvArgs({ cli, dataDir, projectDir, prompt, profile });
+  const envArgs = buildNativeCliEnvArgs({ cli, dataDir, projectDir, prompt, profile, model });
   const window = await launchInTmux({
     dataDir,
     projectDir,

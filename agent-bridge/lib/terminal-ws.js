@@ -13,7 +13,7 @@ const tmuxAgentState = require('./tmux-agent-state');
 const DEFAULT_SESSION = 'neohive';
 const SESSION_NAME_RE = /^[A-Za-z0-9_-]+$/;
 const CONTROL_ACTIONS = new Set([
-  'window_previous', 'window_next',
+  'window_previous', 'window_next', 'new_window',
   'pane_left', 'pane_right', 'pane_up', 'pane_down',
   'split_left_right', 'split_top_bottom', 'close_pane', 'focus_pane', 'get_state',
 ]);
@@ -133,6 +133,8 @@ async function executeTmuxControl(sessionName, action, clientName, options) {
     await execTmux(['select-window', '-t', `${sessionName}:-`]);
   } else if (action === 'window_next') {
     await execTmux(['select-window', '-t', `${sessionName}:+`]);
+  } else if (action === 'new_window') {
+    await execTmux(['new-window', '-t', sessionName, '-c', '#{pane_current_path}']);
   } else if (action.startsWith('pane_')) {
     const direction = {
       pane_left: '-L', pane_right: '-R', pane_up: '-U', pane_down: '-D',

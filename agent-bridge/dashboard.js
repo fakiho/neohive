@@ -33,6 +33,52 @@ function withFileLock(filePath, fn) {
   return next;
 }
 
+// Fully remove all on-disk traces of an agent: registry entry, profile,
+// per-agent heartbeat file, consumed-message cursor, and workspace data.
+// Used by both manual dashboard deletion and watchdog auto-purge so the two
+// paths can never drift out of sync. Idempotent — safe to call on an agent
+// that is already partially or fully gone (e.g. process already exited).
+// Returns true if the agent had any on-disk trace that was removed.
+function purgeAgentFiles(dataDir, agentName) {
+  let existed = false;
+  const agentsFile = path.join(dataDir, 'agents.json');
+  const profilesFile = path.join(dataDir, 'profiles.json');
+
+  try {
+    if (fs.existsSync(agentsFile)) {
+      const agents = JSON.parse(fs.readFileSync(agentsFile, 'utf8'));
+      if (agents[agentName]) {
+        existed = true;
+        delete agents[agentName];
+        fs.writeFileSync(agentsFile, JSON.stringify(agents, null, 2));
+      }
+    }
+  } catch (e) { console.warn('purgeAgentFiles: agents.json cleanup failed for ' + agentName + ':', e.message); }
+
+  try {
+    if (fs.existsSync(profilesFile)) {
+      const profiles = JSON.parse(fs.readFileSync(profilesFile, 'utf8'));
+      if (profiles[agentName]) existed = true;
+      delete profiles[agentName];
+      fs.writeFileSync(profilesFile, JSON.stringify(profiles, null, 2));
+    }
+  } catch (e) { console.warn('purgeAgentFiles: profiles.json cleanup failed for ' + agentName + ':', e.message); }
+
+  const filesToRemove = [
+    path.join(dataDir, 'consumed-' + agentName + '.json'),
+    path.join(dataDir, 'heartbeat-' + agentName + '.json'),
+    path.join(dataDir, 'recovery-' + agentName + '.json'),
+    path.join(dataDir, 'workspaces', agentName + '.json'),
+  ];
+  for (const f of filesToRemove) {
+    try {
+      if (fs.existsSync(f)) { existed = true; fs.unlinkSync(f); }
+    } catch (e) { console.warn('purgeAgentFiles: could not remove ' + f + ':', e.message); }
+  }
+
+  return existed;
+}
+
 const PORT = parseInt(process.env.NEOHIVE_PORT || '3000', 10);
 const SERVER_START_TIME = Date.now();
 const LAN_STATE_FILE = path.join(__dirname, '.lan-mode');
@@ -2868,30 +2914,24 @@ const server = http.createServer(async (req, res) => {
       const dataDir = resolveDataDir(url.searchParams.get('project'));
       const agentsFile = path.join(dataDir, 'agents.json');
       const profilesFile = path.join(dataDir, 'profiles.json');
-      await withFileLock(agentsFile, () => {
-        // Remove from agents.json
-        if (fs.existsSync(agentsFile)) {
-          const agents = JSON.parse(fs.readFileSync(agentsFile, 'utf8'));
-          if (!agents[agentName]) {
-            res.writeHead(404, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Agent not found: ' + agentName }));
-            return;
-          }
-          delete agents[agentName];
-          fs.writeFileSync(agentsFile, JSON.stringify(agents, null, 2));
+      try {
+        const existed = await withFileLock(agentsFile, () => purgeAgentFiles(dataDir, agentName));
+        if (!existed) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Agent not found: ' + agentName }));
+          return;
         }
-        // Remove from profiles.json
-        if (fs.existsSync(profilesFile)) {
-          const profiles = JSON.parse(fs.readFileSync(profilesFile, 'utf8'));
-          delete profiles[agentName];
-          fs.writeFileSync(profilesFile, JSON.stringify(profiles, null, 2));
-        }
-        // Remove consumed file
-        const consumedFile = path.join(dataDir, 'consumed-' + agentName + '.json');
-        if (fs.existsSync(consumedFile)) fs.unlinkSync(consumedFile);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, removed: agentName }));
-      });
+      } catch (e) {
+        // Defensive: a dead/unreachable agent's process may vanish mid-cleanup
+        // (e.g. a concurrent watchdog auto-purge, or the OS reaping a stale
+        // file handle). Never let deletion of an already-gone agent 500 —
+        // treat any cleanup failure here as "already removed".
+        console.warn('Agent deletion cleanup error for ' + agentName + ':', e.message);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, removed: agentName, note: 'cleanup completed with warnings' }));
+      }
     }
     // Tmux nudge — inject the fixed wake signal directly into the agent's mapped pane
     else if (url.pathname.startsWith('/api/agents/') && url.pathname.endsWith('/nudge-tmux') && req.method === 'POST') {

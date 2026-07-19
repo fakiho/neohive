@@ -470,6 +470,32 @@ function saveAgents(agents) {
   try { saveAgentsNoLock(agents); } finally { unlockAgentsFile(); }
 }
 
+// Remove an unreachable agent's profile entry and all per-agent aux files
+// (heartbeat, consumed cursor, recovery state, workspace). Mirrors the manual
+// dashboard-delete cleanup so auto-purge and manual deletion never drift out
+// of sync. Defensive/idempotent: safe to call on an agent that is already
+// partially or fully gone.
+function purgeUnreachableAgentAuxFiles(name) {
+  try {
+    const profiles = getProfiles();
+    if (profiles[name]) {
+      delete profiles[name];
+      saveProfiles(profiles);
+    }
+  } catch (e) { log.warn('purgeUnreachableAgentAuxFiles: profile cleanup failed for ' + name + ':', e.message); }
+
+  const filesToRemove = [
+    consumedFile(name),
+    heartbeatFile(name),
+    path.join(DATA_DIR, `recovery-${name}.json`),
+    path.join(DATA_DIR, 'workspaces', `${name}.json`),
+  ];
+  for (const f of filesToRemove) {
+    try { if (fs.existsSync(f)) fs.unlinkSync(f); }
+    catch (e) { log.warn('purgeUnreachableAgentAuxFiles: could not remove ' + f + ':', e.message); }
+  }
+}
+
 // --- Per-agent heartbeat files (scale fix: eliminates agents.json write contention at 100+ agents) ---
 function heartbeatFile(name) { return path.join(DATA_DIR, `heartbeat-${name}.json`); }
 
@@ -668,8 +694,9 @@ function buildBatchMessageResponse(msgs, consumedIds) {
     }
   } catch (e) { log.debug('task reminder in listen failed:', e.message); }
 
+  let batchHasUserMsg = false;
   for (const msg of msgs) {
-    if (msg.from === '__user__') pendingUserReply = true;
+    if (msg.from === '__user__') { pendingUserReply = true; batchHasUserMsg = true; }
   }
 
   const formatted = msgs.map((msg) => ({
@@ -682,9 +709,16 @@ function buildBatchMessageResponse(msgs, consumedIds) {
     ...(msg.thread_id && { thread_id: msg.thread_id }),
   }));
 
+  // Same unmissable reminder as the single-message path: a plain-text/terminal
+  // reply to a dashboard/human message never reaches them — only
+  // send_message(to="__user__") does.
+  const batchNextAction = batchHasUserMsg
+    ? 'Process these messages in order. IMPORTANT: one is from the human via the Neohive dashboard — replying in plain terminal/chat text does NOT reach them. You MUST call send_message(to="__user__", content="...") with your answer, then call listen().'
+    : 'Process these messages in order, then call listen().';
+
   return {
     success: true,
-    next_action: 'Process these messages in order, then call listen().',
+    next_action: batchNextAction,
     messages: formatted,
     count: msgs.length,
     pending_count: pendingCount,
@@ -753,9 +787,16 @@ function buildMessageResponse(msg, consumedIds) {
     }
   }
   if (!nextAction) {
-    nextAction = isSystemMsg
-      ? 'Process this message, then call listen().'
-      : `Do what this message asks. When finished, send_message(to="${msg.from}") with what you did and files changed, then call listen().`;
+    if (isSystemMsg) {
+      nextAction = 'Process this message, then call listen().';
+    } else if (msg.from === '__user__') {
+      // Explicit, unmissable instruction: a plain-text/terminal reply is
+      // invisible to the human — it must go through send_message(to="__user__")
+      // or it never reaches Neohive/the dashboard.
+      nextAction = 'Do what this message asks. IMPORTANT: This is from the human via the Neohive dashboard — replying in plain terminal/chat text does NOT reach them. You MUST call send_message(to="__user__", content="...") with your answer, then call listen().';
+    } else {
+      nextAction = `Do what this message asks. When finished, send_message(to="${msg.from}") with what you did and files changed, then call listen().`;
+    }
   }
 
   return {
@@ -1569,7 +1610,7 @@ function buildCharter(name) {
 
 // --- Tool implementations ---
 
-function toolRegister(name, provider = null, skills = null) {
+function toolRegister(name, provider = null, skills = null, role = null) {
   ensureDataDir();
   migrateIfNeeded(); // run data migrations on first register
   sanitizeName(name);
@@ -1630,12 +1671,20 @@ function toolRegister(name, provider = null, skills = null) {
       log.debug('registry.registerAgent failed:', e.message);
     }
 
-    // Auto-create profile if not exists
+    // Auto-create profile if not exists; honour explicit role so auto-assignment
+    // doesn't overwrite it (autoAssignRoles skips agents that already have a role).
     const profiles = getProfiles();
     if (!profiles[name]) {
       profiles[name] = { display_name: name, avatar: '', bio: '', role: '', created_at: now };
-      saveProfiles(profiles);
     }
+    if (role && typeof role === 'string') {
+      const cleanRole = role.trim().toLowerCase().substring(0, 30);
+      if (cleanRole) {
+        profiles[name].role = cleanRole;
+        profiles[name].role_description = '';
+      }
+    }
+    saveProfiles(profiles);
 
     // Save agent card with skills (merge platform defaults + explicit)
     const cards = readJsonFile(AGENT_CARDS_FILE) || {};
@@ -5117,6 +5166,56 @@ function watchdogCheck() {
     }
   }
 
+  // --- Unreachable agent auto-purge (Idea B) ---
+  // Distinct from the idle-nudge loop above, which only covers agents whose
+  // PID is confirmed alive. This handles agents whose PID/heartbeat has
+  // stopped entirely (process crashed, machine went away, etc.):
+  //   > 2 min unreachable: mark registry_status "stale" (non-destructive,
+  //     purely informational so dashboards/tools can distinguish a
+  //     confirmed-dead agent from one that's merely idle).
+  //   > 10 min unreachable: reassign any of their active work, then fully
+  //     purge them from the registry (agents.json, profiles.json, and all
+  //     per-agent aux files) so dead entries never accumulate and require
+  //     manual cleanup.
+  for (const [name, agent] of Object.entries(agents)) {
+    if (name === registeredName) continue;
+    if (isPidAlive(agent.pid, agent.last_activity)) {
+      if (agent.unreachable_since) {
+        delete agent.unreachable_since;
+        delete agent.registry_status;
+        agentsChanged = true;
+      }
+      continue;
+    }
+
+    if (!agent.unreachable_since) {
+      agent.unreachable_since = now;
+      agentsChanged = true;
+      continue;
+    }
+
+    const unreachableTime = now - agent.unreachable_since;
+
+    if (unreachableTime > 120000 && agent.registry_status !== 'stale') {
+      agent.registry_status = 'stale';
+      agentsChanged = true;
+    }
+
+    if (unreachableTime > 600000) {
+      try {
+        const count = reassignWorkFrom(name);
+        if (count > 0) {
+          broadcastSystemMessage(`[WATCHDOG] ${name} has been unreachable for 10+ minutes. ${count} task(s) reassigned before auto-purge.`);
+        }
+      } catch (e) { log.warn('watchdog: reassign before auto-purge failed for ' + name + ':', e.message); }
+
+      delete agents[name];
+      agentsChanged = true;
+      purgeUnreachableAgentAuxFiles(name);
+      broadcastSystemMessage(`[WATCHDOG] Auto-purged unreachable agent "${name}" from the registry after 10+ minutes with no heartbeat.`);
+    }
+  }
+
   // Check for stuck workflow steps
   const workflows = getWorkflows();
   let workflowsChanged = false;
@@ -7661,6 +7760,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               items: { type: 'string' },
               description: 'Skills like "python", "testing", "frontend", "design". Used for smart task routing.',
             },
+            role: {
+              type: 'string',
+              description: 'Explicit role for this agent (e.g. "backend", "frontend", "lead", "quality"). When provided, auto-role assignment is skipped for this agent — the declared role is used instead.',
+            },
           },
           required: ['name'],
           additionalProperties: false,
@@ -8124,7 +8227,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     switch (name) {
       case 'register':
-        result = toolRegister(args.name, args?.provider, args?.skills);
+        result = toolRegister(args.name, args?.provider, args?.skills, args?.role);
         break;
       case 'list_agents':
         result = toolListAgents();
@@ -8808,6 +8911,7 @@ if (!process.env.NEOHIVE_TEST_NO_MAIN) {
 if (process.env.NEOHIVE_TEST_NO_MAIN) {
   module.exports = {
     selfHealingWatchdog, getReviews, REVIEWS_FILE, isPidAlive, getAgents,
+    watchdogCheck, purgeUnreachableAgentAuxFiles,
     __resetSelfHealThrottle: () => { _lastSelfHealRun = 0; },
   };
 }
