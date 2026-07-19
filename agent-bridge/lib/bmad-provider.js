@@ -23,6 +23,7 @@ const TOOL_IDS = Object.freeze({
   gemini: 'gemini',
   codex: 'codex',
   cursor: 'cursor',
+  opencode: 'opencode',
   'ollama-claude': 'claude-code',
 });
 const WORKFLOWS = Object.freeze([
@@ -127,6 +128,7 @@ function installedRuntimes(manifest) {
     cursor: 'cursor',
     gemini: 'gemini',
     codex: 'codex',
+    opencode: 'opencode',
   };
   return Array.from(new Set(ides.map((ide) => reverse[String(ide).toLowerCase()]).filter(Boolean)));
 }

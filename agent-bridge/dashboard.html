@@ -5064,6 +5064,7 @@
         <button class="terminal-toolbar-btn tmux-control-btn" onclick="sendTmuxControl('window_previous')" title="Previous tmux window" aria-label="Previous tmux window">&larr;</button>
         <span class="terminal-window-state" id="terminal-window-state">No connection — click Start</span>
         <button class="terminal-toolbar-btn tmux-control-btn" onclick="sendTmuxControl('window_next')" title="Next tmux window" aria-label="Next tmux window">&rarr;</button>
+        <button class="terminal-toolbar-btn terminal-toolbar-btn-wide tmux-control-btn" onclick="sendTmuxControl('new_window')" title="Open new tmux window">+ Window</button>
       </div>
       <div class="terminal-toolbar-group">
         <button class="terminal-toolbar-btn tmux-control-btn" onclick="sendTmuxControl('pane_left')" title="Focus pane left" aria-label="Focus pane left">&larr;</button>
@@ -5943,7 +5944,7 @@ function copyRespawnPrompt() {
   var el = document.getElementById('respawn-prompt-text');
   if (!el) return;
   var text = el.textContent;
-  navigator.clipboard.writeText(text).then(function() {
+  writeClipboard(text).then(function() {
     var btn = document.querySelector('.respawn-copy-btn');
     if (btn) {
       btn.textContent = '\u2705 Copied!';
@@ -6845,7 +6846,7 @@ function buildMsgActions(msgId) {
 function copyMessage(msgId, btn) {
   var msg = cachedHistory.find(function(m) { return m.id === msgId; });
   if (!msg) return;
-  navigator.clipboard.writeText(msg.content).then(function() {
+  writeClipboard(msg.content).then(function() {
     var orig = btn.innerHTML;
     btn.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l3 3 7-7"/></svg>';
     btn.title = 'Copied!';
@@ -8538,12 +8539,24 @@ function ppMessage(agentName) {
 
 function ppNudge(agentName) {
   document.getElementById('profile-popup').classList.remove('open');
-  switchView('messages');
-  var sel = document.getElementById('inject-target');
-  if (sel) sel.value = agentName;
-  var ta = document.getElementById('inject-content');
-  if (ta) { ta.value = '@' + agentName + ' '; ta.focus(); }
-  updateSendBtn();
+  var agent = cachedAgents[agentName];
+  var hasTmux = agent && agent.tmux && agent.tmux.mapped && agent.tmux.pane_id;
+  var pq = activeProject ? '?project=' + encodeURIComponent(activeProject) : '';
+  if (hasTmux) {
+    lttFetch('/api/agents/' + encodeURIComponent(agentName) + '/nudge-tmux' + pq, {
+      method: 'POST'
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      if (d.success) showToast('Tmux wake signal sent to ' + agentName + ' (' + (d.wake || 'sent') + ')', 'success');
+      else showToast('Nudge failed: ' + (d.error || 'unknown'), 'error');
+    }).catch(function(e) { showToast('Nudge failed: ' + e.message, 'error'); });
+  } else {
+    switchView('messages');
+    var sel = document.getElementById('inject-target');
+    if (sel) sel.value = agentName;
+    var ta = document.getElementById('inject-content');
+    if (ta) { ta.value = '@' + agentName + ' '; ta.focus(); }
+    updateSendBtn();
+  }
 }
 
 function ppFilterChat(agentName) {
@@ -8651,10 +8664,13 @@ function showProfilePopup(agentName, event) {
 
   // === Quick actions ===
   var eName = escapeHtml(agentName);
+  var hasTmux = !!(agent.tmux && agent.tmux.mapped && agent.tmux.pane_id);
+  var nudgeTitle = hasTmux ? 'Inject tmux wake signal into agent pane' : 'No tmux pane mapped — cannot send wake signal';
+  var nudgeDisabled = hasTmux ? '' : ' disabled title="' + nudgeTitle + '"';
   document.getElementById('pp-quick-actions').innerHTML =
     '<button class="pp-quick-action" onclick="ppMessage(\'' + eName + '\')"><svg viewBox="0 0 16 16"><path d="M2 3h12v8H6l-3 2.5V11H2z" stroke-linejoin="round"/></svg>Message</button>' +
     '<button class="pp-quick-action" onclick="ppFilterChat(\'' + eName + '\')"><svg viewBox="0 0 16 16"><path d="M8 14A6 6 0 108 2a6 6 0 000 12z"/><path d="M8 5v3l2 1"/></svg>History</button>' +
-    '<button class="pp-quick-action" onclick="ppNudge(\'' + eName + '\')"><svg viewBox="0 0 16 16"><path d="M13 3L3 8l4 1.5L8.5 14z" stroke-linejoin="round"/></svg>Nudge</button>';
+    '<button class="pp-quick-action"' + nudgeDisabled + ' onclick="ppNudge(\'' + eName + '\')"><svg viewBox="0 0 16 16"><path d="M13 3L3 8l4 1.5L8.5 14z" stroke-linejoin="round"/></svg>Nudge</button>';
 
   document.getElementById('pp-bio').textContent = agent.bio || '';
 
@@ -10762,7 +10778,7 @@ function copyPhoneUrl() {
   if (lanState.lan_token) params.push('token=' + encodeURIComponent(lanState.lan_token));
   if (activeProject) params.push('project=' + encodeURIComponent(activeProject));
   if (params.length) url += '?' + params.join('&');
-  navigator.clipboard.writeText(url).then(function() {
+  writeClipboard(url).then(function() {
     var btn = document.querySelector('.phone-url-copy');
     btn.textContent = 'Copied!';
     setTimeout(function() { btn.textContent = 'Copy URL'; }, 1500);
@@ -11385,8 +11401,8 @@ function renderLaunchPanel() {
     html += '</select><div class="field-hint" id="launch-role-hint">A role is required and determines skills and prompt.</div></div>';
     html += '</div>';
     html += '<div class="launch-form-row">';
-    html += '<div class="launch-form-field"><label>Runtime</label><select id="launch-runtime" onchange="updateUnifiedLaunchForm()"><option value="claude">Claude Code</option><option value="gemini">Gemini CLI</option><option value="codex">Codex CLI</option><option value="cursor">Cursor Agent</option><option value="ollama-claude">Claude Code via Ollama</option><option value="ollama-responder">Ollama responder</option></select><div class="field-hint" id="launch-runtime-hint">Select where this agent should run.</div></div>';
-    html += '<div class="launch-form-field"><label>Registration Skills</label><input type="text" id="launch-skills" placeholder="Select a role" readonly style="color:var(--text-muted)"></div>';
+    html += '<div class="launch-form-field"><label>Runtime</label><select id="launch-runtime" onchange="updateUnifiedLaunchForm()"><option value="opencode">OpenCode</option><option value="claude">Claude Code</option><option value="gemini">Gemini CLI</option><option value="codex">Codex CLI</option><option value="cursor">Cursor Agent</option><option value="ollama-claude">Claude Code via Ollama</option><option value="ollama-responder">Ollama responder</option></select><div class="field-hint" id="launch-runtime-hint">Select where this agent should run.</div></div>';
+    html += '<div class="launch-form-field"><label>Model <span style="color:var(--text-muted);font-weight:400">(optional)</span></label><input type="text" id="launch-model" placeholder="e.g. azure/gpt-4o-mini, openrouter/deepseek/deepseek-v3.2"><div class="field-hint">Overrides the runtime\'s default model. Leave blank to use the CLI default.</div></div>';
     html += '</div>';
     html += '<div class="launch-form-row" id="launch-codex-profile-row" style="display:none">';
     html += '<div class="launch-form-field"><label>Codex Profile <span style="color:var(--text-muted);font-weight:400">(optional)</span></label><input type="text" id="launch-codex-profile" placeholder="e.g. openrouter, glm" maxlength="40"><div class="field-hint">Layers ~/.codex/&lt;name&gt;.config.toml (machine-local). Leave blank for default Codex auth.</div></div>';
@@ -11417,7 +11433,7 @@ function renderLaunchPanel() {
       html += '<div class="methodology-warning">Installed BMad version is not compatible with this integration. Update before launching.</div>';
     }
     html += '<div style="font-size:11px;color:var(--text-muted);margin-top:8px">Install for native runtimes: ';
-    ['claude', 'gemini', 'codex', 'cursor'].forEach(function(runtimeId) {
+    ['claude', 'gemini', 'codex', 'cursor', 'opencode'].forEach(function(runtimeId) {
       var checked = bmadStatus && bmadStatus.settings && (bmadStatus.settings.installed_tools || []).indexOf(runtimeId) !== -1;
       html += '<label style="margin-right:9px"><input type="checkbox" class="bmad-install-runtime" value="' + runtimeId + '"' + (checked ? ' checked' : '') + '> ' + escapeHtml(runtimeId) + '</label>';
     });
@@ -11690,7 +11706,6 @@ function updateUnifiedLaunchForm() {
   var roleProfile = selectedRoleProfile();
   var nameInput = document.getElementById('launch-name');
   var name = nameInput ? nameInput.value.trim() : '';
-  var skillsInput = document.getElementById('launch-skills');
   var roleHint = document.getElementById('launch-role-hint');
   var promptOutput = document.getElementById('launch-prompt-output');
   var primaryButton = document.getElementById('launch-primary-btn');
@@ -11705,7 +11720,6 @@ function updateUnifiedLaunchForm() {
   if (ollamaFields) ollamaFields.style.display = ollamaRuntime ? 'block' : 'none';
   var codexProfileRow = document.getElementById('launch-codex-profile-row');
   if (codexProfileRow) codexProfileRow.style.display = runtime === 'codex' ? 'flex' : 'none';
-  if (skillsInput) skillsInput.value = roleProfile ? roleProfile.skills.join(', ') : '';
   if (roleHint) roleHint.textContent = roleProfile ? roleProfile.description : 'A role is required and determines skills and prompt.';
 
   var validName = validAgentName(name);
@@ -11961,8 +11975,10 @@ function generateAgentPrompt() {
 
 function copyGeneratedPrompt() {
   if (window._generatedLaunchPrompt) {
-    navigator.clipboard.writeText(window._generatedLaunchPrompt).then(function() {
+    writeClipboard(window._generatedLaunchPrompt).then(function() {
       showToast('&#x2713;', 'Prompt copied to clipboard');
+    }).catch(function() {
+      showToast('!', 'Copy failed - select and copy the text manually');
     });
   }
 }
@@ -12021,7 +12037,7 @@ function expandTemplate(index) {
 
 function copyTemplateInstructions(element) {
   if (!element) return;
-  navigator.clipboard.writeText(element.textContent).then(function() {
+  writeClipboard(element.textContent).then(function() {
     showToast('&#x2713;', 'Template base instructions copied');
   });
 }
@@ -12416,6 +12432,8 @@ function doLaunch() {
 
   var codexProfileInput = document.getElementById('launch-codex-profile');
   var codexProfile = (cli === 'codex' && codexProfileInput) ? codexProfileInput.value.trim() : '';
+  var modelInput = document.getElementById('launch-model');
+  var launchModel = modelInput ? modelInput.value.trim() : '';
 
   resultEl.className = 'launch-result info';
   resultEl.innerHTML = 'Launching terminal for <strong>' + escapeHtml(agentName) + '</strong>...';
@@ -12423,7 +12441,7 @@ function doLaunch() {
   lttFetch('/api/launch' + context.param, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cli: cli, agent_name: agentName, role: role, prompt: launchPrompt, methodology: methodology, profile: codexProfile || undefined })
+    body: JSON.stringify({ cli: cli, agent_name: agentName, role: role, prompt: launchPrompt, methodology: methodology, profile: codexProfile || undefined, model: launchModel || undefined })
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (actionId !== launchActionSeq || requestedProject !== activeProject) return;
     if (data.error) {
@@ -12662,7 +12680,7 @@ function renderLaunchStatusTracker() {
 function copyWatcherPrompt(idx) {
   var w = _launchWatchers[idx];
   if (!w || !w.prompt) return;
-  navigator.clipboard.writeText(w.prompt).then(function() {
+  writeClipboard(w.prompt).then(function() {
     var btn = document.querySelectorAll('.ls-prompt-btn')[idx];
     if (btn) { btn.textContent = 'Copied!'; setTimeout(function() { btn.textContent = 'Copy Prompt'; }, 1500); }
   }).catch(function() {});
