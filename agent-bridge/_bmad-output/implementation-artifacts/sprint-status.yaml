@@ -1,0 +1,53 @@
+# generated: 2026-07-19 21:43
+# last_updated: 2026-07-19 22:11
+# project: agent-bridge
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+# source_epics: _bmad-output/planning-artifacts/epics-node-pty-launcher.md
+#
+# SCOPE NOTE:
+# ==========
+# This sprint-status tracks node-pty Epic 1 only. Other epic docs use
+# overlapping Epic/Story numbers and are tracked separately.
+#
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for / in code review
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Detection notes (2026-07-19 22:11):
+#   Story 1.3 bridge gap fixed + dual-approved (OpenSeek4 / Grok2).
+#   Lead completed Story 1.3 + bridge + unit-test tasks.
+#   All five stories → done; epic-1 → done.
+#   Retrospective remains optional.
+
+generated: 2026-07-19 21:43
+last_updated: 2026-07-19 22:11
+project: agent-bridge
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+source_epics: _bmad-output/planning-artifacts/epics-node-pty-launcher.md
+
+development_status:
+  epic-1: done
+  1-1-per-agent-pty-owner-process: done
+  1-2-pty-launcher-module-dashboard-integration-fallback: done
+  1-3-live-input-resize-over-per-agent-socket: done
+  1-4-retarget-output-routing-unrouted-reply-detection-to-the-log-stream: done
+  1-5-optional-tmux-display-surface: done
+  epic-1-retrospective: optional

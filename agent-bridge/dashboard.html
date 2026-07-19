@@ -1445,6 +1445,29 @@
   .send-btn:active { transform: translateY(0); }
   .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
 
+  .send-status {
+    font-size: 11px;
+    color: var(--nh-green, #4ade80);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    white-space: nowrap;
+    align-self: flex-end;
+    padding-bottom: 9px;
+    min-width: 56px;
+    text-align: center;
+  }
+  .send-status.visible { opacity: 1; }
+  .send-status.error { color: var(--nh-red, #f87171); }
+
+  .msg-delivery-status {
+    font-size: 10px;
+    margin-top: 3px;
+    opacity: 0.55;
+    text-align: right;
+  }
+  .msg-delivery-status.delivered { color: var(--nh-green, #4ade80); opacity: 0.7; }
+  .msg-delivery-status.sent { color: var(--text-muted); }
+
   /* ===== EMPTY STATE ===== */
   .empty-state {
     display: flex;
@@ -5108,6 +5131,7 @@
           oninput="autoResizeTextarea(this)"></textarea>
       </div>
       <button class="send-btn" onclick="doInject()" id="inject-btn" disabled>Send</button>
+      <div class="send-status" id="send-status"></div>
     </div>
   </div>
 </div>
@@ -5863,6 +5887,13 @@ function openAgentProfile(agentName, event) {
 function openAgentTerminal(agentName, event) {
   if (event) event.stopPropagation();
   var agent = cachedAgents[agentName];
+  // PTY-launched agent: bridge to the per-agent unix socket (Story 1.3).
+  if (agent && agent.pty_owner) {
+    switchView('terminal');
+    initTerminal(agentName);
+    return;
+  }
+  // Tmux-launched agent: focus the pane as before.
   var tmux = agent && agent.tmux;
   if (!tmux || !tmux.mapped || !tmux.pane_id) {
     return;
@@ -6027,10 +6058,28 @@ function projectParam() {
   return activeProject ? '?project=' + encodeURIComponent(activeProject) : '';
 }
 
+var lastSentMessageId = null;
+var sendStatusTimer = null;
+
+function showSendStatus(text, isError) {
+  var el = document.getElementById('send-status');
+  if (!el) return;
+  if (sendStatusTimer) clearTimeout(sendStatusTimer);
+  el.textContent = text;
+  el.className = 'send-status visible' + (isError ? ' error' : '');
+  sendStatusTimer = setTimeout(function() {
+    el.className = 'send-status';
+  }, 3000);
+}
+
 function doInject() {
   var target = document.getElementById('inject-target').value;
   var content = document.getElementById('inject-content').value.trim();
   if (!target || !content) return;
+
+  var btn = document.getElementById('inject-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
 
   // Lock project context at send time — prevents race if user switches project mid-type
   var lockedProject = activeProject;
@@ -6041,14 +6090,25 @@ function doInject() {
     headers: { 'Content-Type': 'application/json' },
     body: body
   }).then(function(r) { return r.json(); }).then(function(res) {
+    btn.textContent = 'Send';
     if (res.success) {
+      lastSentMessageId = res.messageId || null;
       var ta = document.getElementById('inject-content');
       ta.value = '';
       ta.style.height = '';
       updateSendBtn();
+      showSendStatus('✓ Sent');
       poll();
+    } else {
+      updateSendBtn();
+      showSendStatus('✗ Failed', true);
     }
-  }).catch(function(e) { console.error('Inject failed:', e); });
+  }).catch(function(e) {
+    btn.textContent = 'Send';
+    updateSendBtn();
+    showSendStatus('✗ Failed', true);
+    console.error('Inject failed:', e);
+  });
 }
 
 // ==================== THREADS ====================
@@ -6326,6 +6386,16 @@ function renderMessages(messages) {
     } else {
       var userMsgClass = isUserMsg ? ' user-msg' : '';
       var replyBadge = isReplyToUser ? '<span class="nh-pill nh-pill--review nh-pill--sm">Reply to you</span>' : '';
+      var deliveryHtml = '';
+      if (isUserMsg && m.id) {
+        var receipts = cachedReadReceipts[m.id];
+        var readCount = receipts ? Object.keys(receipts).length : 0;
+        if (readCount > 0) {
+          deliveryHtml = '<div class="msg-delivery-status delivered" title="Read by ' + readCount + ' agent' + (readCount > 1 ? 's' : '') + '">✓✓ Read</div>';
+        } else {
+          deliveryHtml = '<div class="msg-delivery-status sent" title="Delivered to queue">✓ Delivered</div>';
+        }
+      }
       html += '<div class="message nh-msg-card' + newClass + groupClass + userMsgClass + '"' + msgIdAttr + '>' +
         buildMsgActions(m.id) +
         msgAvatarHtml +
@@ -6334,6 +6404,7 @@ function renderMessages(messages) {
           '<div class="msg-content">' + renderMarkdown(m.content) + '</div>' +
           buildReactionsHtml(m.id) +
           buildReadReceipts(m.id) +
+          deliveryHtml +
         '</div></div>';
       lastFrom = m.from;
       lastTo = m.to;
@@ -8238,7 +8309,7 @@ function setTerminalEndedPref(ended) {
   try { localStorage.setItem(TERMINAL_ENDED_KEY, ended ? 'true' : 'false'); } catch { /* ignore */ }
 }
 
-async function initTerminal() {
+async function initTerminal(agentName) {
   var container = document.getElementById('terminal-container');
   if (!container) return;
 
@@ -8253,11 +8324,12 @@ async function initTerminal() {
         sendResize(inst);
       }, 50);
     }
-    // Only auto-reconnect if the disconnect wasn't the user explicitly
-    // clicking "End" — otherwise just revisiting this tab would silently
-    // undo that choice.
+    // If a specific PTY agent is requested and the socket is closed, reconnect
+    // to that agent. Also reconnect on closed socket when not user-ended.
     if (inst.ws.readyState === WebSocket.CLOSED && !inst.userEnded) {
-      connectTerminalSocket(inst);
+      connectTerminalSocket(inst, agentName);
+    } else if (agentName && inst.ws.readyState === WebSocket.CLOSED) {
+      connectTerminalSocket(inst, agentName);
     }
     return inst.term;
   }
@@ -8309,12 +8381,12 @@ async function initTerminal() {
     }).observe(container);
     // Respect a previous explicit "End" across page reloads instead of
     // silently re-attaching to the shared tmux session on every refresh.
-    if (getTerminalEndedPref()) {
+    if (getTerminalEndedPref() && !agentName) {
       inst.userEnded = true;
       term.writeln('\x1b[33m[Neohive]\x1b[0m Terminal not connected (you ended the previous session). Click Start to reconnect.');
       updateTerminalToggleBtn(false);
     } else {
-      connectTerminalSocket(inst);
+      connectTerminalSocket(inst, agentName);
     }
   }, 50);
 
@@ -8328,9 +8400,15 @@ function sendResize(inst) {
   }
 }
 
-function connectTerminalSocket(inst) {
+function connectTerminalSocket(inst, agentName) {
   var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  var wsUrl = proto + '//' + window.location.host + '/api/terminal' + (_lttToken ? '?token=' + encodeURIComponent(_lttToken) : '');
+  var qs = _lttToken ? '?token=' + encodeURIComponent(_lttToken) : '';
+  if (agentName) {
+    qs += (qs ? '&' : '?') + 'agent=' + encodeURIComponent(agentName);
+    var pq = activeProject ? '&project=' + encodeURIComponent(activeProject) : '';
+    qs += pq;
+  }
+  var wsUrl = proto + '//' + window.location.host + '/api/terminal' + qs;
   var ws = new WebSocket(wsUrl);
   inst.ws = ws;
   inst.userEnded = false;

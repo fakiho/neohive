@@ -16,6 +16,7 @@ const { directDeliver } = require('./lib/direct-delivery');
 const ollamaBridgeManager = require('./lib/ollama-bridge-manager');
 const agentLaunchProfiles = require('./lib/agent-launch-profiles');
 const tmuxCliLauncher = require('./lib/tmux-cli-launcher');
+const ptyCliLauncher = require('./lib/pty-cli-launcher');
 const methodologyProvider = require('./lib/methodology-provider');
 const bmadProvider = require('./lib/bmad-provider');
 const bmadWatcher = require('./lib/bmad-watcher');
@@ -2129,23 +2130,60 @@ async function apiLaunchAgent(body) {
     };
   }
 
+  const launchArgs = {
+    dataDir,
+    projectDir,
+    cli,
+    agentName: safeName || 'agent',
+    prompt: launchPrompt,
+    methodology: methodologySelection,
+    profile,
+    model,
+  };
+
+  // The PTY launcher (durable across dashboard restarts, pre-render capture)
+  // is OPT-IN via NEOHIVE_LAUNCHER=pty until the consuming pipeline (Story 1.3
+  // input socket + Story 1.4 SSE display routing) lands — otherwise agents
+  // would launch under a PTY the dashboard can't yet display or drive. tmux
+  // stays the default (PRD §6.1: tmux soft-deprecated, not removed; rollback).
+  // A genuinely missing CLI binary (ENOBIN) is a real error for both paths, so
+  // surface it rather than masking it behind a fallback (AD-5).
+  const preferPty = process.env.NEOHIVE_LAUNCHER === 'pty';
+  if (preferPty && ptyCliLauncher.isPtyAvailable()) {
+    try {
+      const owned = await ptyCliLauncher.launchNativeCli(launchArgs);
+      return {
+        success: true,
+        launched: true,
+        cli,
+        project_dir: projectDir,
+        prompt: launchPrompt,
+        launch_mode: 'pty',
+        pty_owner_pid: owned.owner_pid,
+        pty_cli_pid: owned.cli_pid,
+        agent_log: owned.log,
+        pty_sock: owned.sock,
+        message: `${owned.label} launched via PTY owner (survives dashboard restarts).`,
+        methodology: methodologySelection,
+      };
+    } catch (ptyError) {
+      if (ptyError.code === 'ENOBIN') {
+        return { error: ptyError.message };
+      }
+      console.error(`[neohive] PTY launch failed (${ptyError.code || 'error'}); falling back to tmux: ${ptyError.message}`);
+      // fall through to the tmux launcher below
+    }
+  }
+
   try {
-    const window = await tmuxCliLauncher.launchNativeCli({
-      dataDir,
-      projectDir,
-      cli,
-      agentName: safeName || 'agent',
-      prompt: launchPrompt,
-      methodology: methodologySelection,
-      profile,
-      model,
-    });
+    const window = await tmuxCliLauncher.launchNativeCli(launchArgs);
     return {
       success: true,
       launched: true,
       cli,
       project_dir: projectDir,
       prompt: launchPrompt,
+      launch_mode: 'tmux',
       tmux_session: window.sessionName,
       tmux_window_id: window.windowId,
       tmux_pane_id: window.paneId,
@@ -4630,6 +4668,10 @@ const server = http.createServer(async (req, res) => {
       res.write(`data: connected\n\n`);
       res._sseIP = sseIP;
       sseClients.add(res);
+      // Story 1.4 (FR-6): backfill late-joining clients with each agent's
+      // buffered PTY output (<=1MB per agent) so they see recent history
+      // immediately instead of only future output.
+      try { backfillAgentOutputRingBuffers(res); } catch { /* best-effort */ }
       // Heartbeat every 30s to detect dead connections and prevent proxy timeouts
       const heartbeat = setInterval(() => {
         try { res.write(`:heartbeat\n\n`); } catch { clearInterval(heartbeat); sseClients.delete(res); }
@@ -4704,6 +4746,85 @@ function sseSend(payload) {
   for (const res of dead) sseClients.delete(res);
 }
 
+// --- Story 1.4: PTY agent-output routing (FR-4, FR-6, NFR-2, AD-2) ---
+//
+// The durable source of truth is .neohive/agent-log-{agent}.jsonl (written by
+// lib/pty-owner.js, Story 1.1). This dashboard-side tailer publishes each new
+// line as an `agent_output` SSE event and keeps a small in-memory ring buffer
+// per agent (<=1MB) purely as a live-latency optimization for late-joining
+// clients — the ring buffer is NEVER the durability mechanism (AD-2); a
+// client that wants full history reads the log file directly.
+const AGENT_OUTPUT_RING_BUFFER_MAX_BYTES = 1024 * 1024; // 1 MB (FR-6)
+const agentOutputRingBuffers = new Map(); // agentName -> { entries: [{ts,agent,data|event,...}], bytes: number }
+const agentLogTailOffsets = new Map(); // absolute log file path -> byte offset already read
+
+function agentNameFromLogFilename(filename) {
+  const m = /^agent-log-([a-zA-Z0-9_-]{1,20})\.jsonl$/.exec(filename || '');
+  return m ? m[1] : null;
+}
+
+function pushToAgentOutputRingBuffer(agentName, entry) {
+  let buf = agentOutputRingBuffers.get(agentName);
+  if (!buf) { buf = { entries: [], bytes: 0 }; agentOutputRingBuffers.set(agentName, buf); }
+  const size = Buffer.byteLength(JSON.stringify(entry), 'utf8');
+  buf.entries.push(entry);
+  buf.bytes += size;
+  while (buf.bytes > AGENT_OUTPUT_RING_BUFFER_MAX_BYTES && buf.entries.length > 1) {
+    const removed = buf.entries.shift();
+    buf.bytes -= Buffer.byteLength(JSON.stringify(removed), 'utf8');
+  }
+}
+
+// Reads only the NEW bytes appended to an agent's log file since the last
+// tail, parses each JSONL line, publishes it as an `agent_output` SSE event
+// to all connected clients, and stores it in that agent's ring buffer.
+// Called from the fast (low-debounce) agent-log watcher path — kept
+// separate from the general 2s-debounced data-file watcher so agent output
+// latency stays within the NFR-2 budget regardless of other file activity.
+function tailAgentLogAndPublish(dataDir, filename) {
+  const agentName = agentNameFromLogFilename(filename);
+  if (!agentName) return;
+  const logFile = path.join(dataDir, filename);
+  let stat;
+  try { stat = fs.statSync(logFile); } catch { return; } // file removed mid-read — benign race
+  const prevOffset = agentLogTailOffsets.get(logFile) || 0;
+  if (stat.size <= prevOffset) {
+    // File shrank/rotated (e.g. truncated externally) — reset and re-tail from 0
+    // rather than silently going dark for this agent.
+    agentLogTailOffsets.set(logFile, stat.size < prevOffset ? 0 : prevOffset);
+    if (stat.size >= prevOffset) return;
+  }
+  let fd;
+  try { fd = fs.openSync(logFile, 'r'); } catch { return; }
+  try {
+    const readFrom = agentLogTailOffsets.get(logFile) || 0;
+    const buf = Buffer.alloc(stat.size - readFrom);
+    fs.readSync(fd, buf, 0, buf.length, readFrom);
+    agentLogTailOffsets.set(logFile, stat.size);
+    const lines = buf.toString('utf8').split('\n').filter(Boolean);
+    for (const line of lines) {
+      let entry;
+      try { entry = JSON.parse(line); } catch { continue; }
+      pushToAgentOutputRingBuffer(agentName, entry);
+      const payload = JSON.stringify(entry);
+      sseSend(`event: agent_output\ndata: ${payload}\n\n`);
+    }
+  } finally {
+    try { fs.closeSync(fd); } catch {}
+  }
+}
+
+// FR-6: replay each known agent's ring buffer to exactly one newly-connected
+// client (never broadcast — other clients already have this history).
+function backfillAgentOutputRingBuffers(res) {
+  for (const [, buf] of agentOutputRingBuffers) {
+    for (const entry of buf.entries) {
+      try { res.write(`event: agent_output\ndata: ${JSON.stringify(entry)}\n\n`); }
+      catch { return; } // client already gone — stop, outer SSE cleanup handles removal
+    }
+  }
+}
+
 function sseNotifyAll(changeType) {
   // Generate notifications from agent state changes
   try {
@@ -4773,6 +4894,15 @@ function startFileWatcher() {
       // Scale fix: skip heartbeat file changes — they fire 100x/10s at scale
       // Dashboard already polls agents via /api/agents on its own interval
       if (filename && filename.startsWith('heartbeat-')) return;
+
+      // Story 1.4 (NFR-2): agent PTY output needs its own low-latency path —
+      // the general debounce below is 2s (fine for messages/tasks/agents at
+      // 100-agent scale) but would blow the <=100ms first-byte budget for
+      // agent_output. Handled immediately, bypassing pendingChangeTypes.
+      if (filename && filename.startsWith('agent-log-') && filename.endsWith('.jsonl')) {
+        try { tailAgentLogAndPublish(dataDir, filename); } catch { /* best-effort */ }
+        return;
+      }
 
       // Classify change type for targeted client fetches
       if (filename === 'messages.jsonl' || filename === 'history.jsonl' || (filename && filename.includes('-messages.jsonl'))) {
@@ -4941,8 +5071,27 @@ server.on('upgrade', (req, socket, head) => {
   }
 
   terminalWss.handleUpgrade(req, socket, head, (ws) => {
-    const { sessionName } = terminalWs.getTerminalConfig();
-    terminalWs.attachTerminal(ws, { sessionName });
+    const agentParam = url.searchParams.get('agent');
+    if (agentParam && /^[a-zA-Z0-9_-]{1,20}$/.test(agentParam)) {
+      // PTY agent mode — route to the per-agent unix socket bridge (Story 1.3).
+      // Resolve dataDir from the optional ?project= param (same as other endpoints).
+      const projectParam = url.searchParams.get('project') || null;
+      const dataDir = resolveDataDir(projectParam);
+      const socketPath = path.join(dataDir, `pty-${agentParam}.sock`);
+      const logPath = path.join(dataDir, `agent-log-${agentParam}.jsonl`);
+      // Validate: agent must be registered with pty_owner=true and a live owner PID.
+      const liveSocks = terminalWs.discoverPtySockets(dataDir);
+      if (!liveSocks.has(agentParam)) {
+        // Agent not pty-launched or owner is dead — fall back to tmux.
+        const { sessionName } = terminalWs.getTerminalConfig();
+        terminalWs.attachTerminal(ws, { sessionName });
+        return;
+      }
+      terminalWs.attachPtySocket(ws, { agentName: agentParam, socketPath, logPath });
+    } else {
+      const { sessionName } = terminalWs.getTerminalConfig();
+      terminalWs.attachTerminal(ws, { sessionName });
+    }
   });
 });
 
@@ -4971,6 +5120,16 @@ server.listen(PORT, LAN_MODE ? '0.0.0.0' : '127.0.0.1', () => {
   try {
     const dashboardMeta = { port: PORT, url: `http://localhost:${PORT}`, pid: process.pid, started: new Date().toISOString() };
     fs.writeFileSync(path.join(dataDir, 'dashboard.json'), JSON.stringify(dashboardMeta));
+  } catch {}
+
+  // Reconnect discovery (Story 1.3): scan for live pty-*.sock files at startup.
+  // This surfaces which PTY agents survived a dashboard restart so the terminal
+  // widget can route to the right socket without agent re-registration.
+  try {
+    const livePtySocks = terminalWs.discoverPtySockets(dataDir);
+    if (livePtySocks.size > 0) {
+      console.log(`  PTY sockets: ${[...livePtySocks.keys()].join(', ')} (live, reconnectable)`);
+    }
   } catch {}
 
   // Register pane-exited hooks for any already-mapped agents so instant

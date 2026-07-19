@@ -223,6 +223,49 @@ module.exports = function (ctx) {
   let _tmuxAvailable = false;
   const _prevCaptures = new Map(); // pane_id -> last captured text (in-memory, resets on process restart)
 
+  // --- Story 1.4: PTY log stream tailing (replaces capture-pane polling for
+  // agents that have a durable .neohive/agent-log-{name}.jsonl, Story 1.1) ---
+  const _logTailOffsets = new Map(); // absolute log file path -> byte offset already read
+  const _logRollingText = new Map(); // agent name -> rolling window of recent decoded `data` (analog of pane text)
+  const LOG_ROLLING_WINDOW_CHARS = 4000; // enough context for prompt-pattern matching + unrouted-reply snippets
+
+  // Reads only the new bytes appended to an agent's PTY log since the last
+  // check. Returns null if the agent has no log file at all (caller should
+  // fall back to the tmux capture-pane path). Returns
+  // { changed, newData, exited } otherwise — exited=true once an
+  // `agent_exit` marker (lib/pty-owner.js) has been seen.
+  function tailAgentLogFile(dataDir, agentName) {
+    const logPath = path.join(dataDir, `agent-log-${agentName}.jsonl`);
+    let stat;
+    try { stat = fs.statSync(logPath); }
+    catch { return null; } // no PTY log for this agent — fall back to tmux path
+    const prevOffset = _logTailOffsets.get(logPath) || 0;
+    const readFrom = stat.size < prevOffset ? 0 : prevOffset; // truncated/rotated externally — re-tail from start
+    if (stat.size === readFrom) return { changed: false, newData: '', exited: false };
+
+    let fd;
+    try { fd = fs.openSync(logPath, 'r'); }
+    catch { return { changed: false, newData: '', exited: false }; } // benign race — file vanished mid-read
+
+    let newData = '';
+    let exited = false;
+    try {
+      const buf = Buffer.alloc(stat.size - readFrom);
+      fs.readSync(fd, buf, 0, buf.length, readFrom);
+      _logTailOffsets.set(logPath, stat.size);
+      const lines = buf.toString('utf8').split('\n').filter(Boolean);
+      for (const line of lines) {
+        let entry;
+        try { entry = JSON.parse(line); } catch { continue; }
+        if (entry.event === 'agent_exit') { exited = true; continue; }
+        if (typeof entry.data === 'string') newData += entry.data;
+      }
+    } finally {
+      try { fs.closeSync(fd); } catch {}
+    }
+    return { changed: newData.length > 0, newData, exited };
+  }
+
   function isTmuxAvailable() {
     if (!_tmuxChecked) {
       _tmuxChecked = true;
@@ -343,6 +386,50 @@ module.exports = function (ctx) {
     };
 
     if (!info.pid) return result;
+
+    // Story 1.4 (FR-5, AD-2): prefer the durable PTY log stream — written by
+    // lib/pty-owner.js (Story 1.1) — over tmux capture-pane polling when an
+    // agent has one. Falls through to the tmux mapping/capture-pane path
+    // below only for agents with no agent-log-{name}.jsonl (still
+    // tmux-launched, e.g. before Story 1.2/1.5 land, or AD-5 fallback).
+    const logResult = tailAgentLogFile(DATA_DIR, name);
+    if (logResult) {
+      result.source = 'pty-log';
+      if (logResult.exited) {
+        result.mapped = false;
+        result.state = 'idle';
+        result.confidence = 'high';
+        return result;
+      }
+
+      result.mapped = true;
+      result.confidence = 'high';
+      if (logResult.changed) result.last_output_at = nowIso;
+
+      let rolling = _logRollingText.get(name) || '';
+      if (logResult.newData) rolling = (rolling + logResult.newData).slice(-LOG_ROLLING_WINDOW_CHARS);
+      _logRollingText.set(name, rolling);
+
+      const match = matchPromptPatterns(rolling);
+      if (match.matched) {
+        result.state = 'blocked_on_prompt';
+        result.matched_pattern_id = match.pattern_id;
+      }
+
+      // Advisory-only unrouted-reply detection, same state machine as the
+      // tmux path (trackUnroutedReplyCandidate), just fed from the log
+      // stream instead of capture-pane polling.
+      if (!match.matched) {
+        const lastActivityIso = info.last_activity || null;
+        const candidate = trackUnroutedReplyCandidate(`log:${name}`, rolling, logResult.changed, lastActivityIso);
+        if (candidate) {
+          result.possible_unrouted_reply = true;
+          result.unrouted_snippet = computeOutputDelta(undefined, logResult.newData || rolling);
+        }
+      }
+
+      return result;
+    }
 
     let mapping;
     try { mapping = walkAncestryToPane(info.pid, panesByPid); }
@@ -470,7 +557,7 @@ module.exports = function (ctx) {
   return {
     isTmuxAvailable, getTmuxStateConfig, checkAllAgents, pollIfDue, walkAncestryToPane, matchPromptPatterns, PROMPT_PATTERNS,
     // Exposed for focused testing of the possible-unrouted-reply advisory detector.
-    __test__: { trackUnroutedReplyCandidate, computeOutputDelta, UNROUTED_SETTLE_MS },
+    __test__: { trackUnroutedReplyCandidate, computeOutputDelta, UNROUTED_SETTLE_MS, tailAgentLogFile, checkAgent },
   };
 };
 
