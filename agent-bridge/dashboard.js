@@ -536,6 +536,7 @@ function apiStatus(query) {
     messageCount: history.length,
     agentCount: agentEntries.length,
     aliveCount,
+    data_dir: resolveDataDir(projectPath),
     sleepingCount,
     threadCount: threads.size,
     conversation_mode: config.conversation_mode || 'direct',
@@ -1982,6 +1983,20 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
     });
     config = upsertNeohiveCodexEnv(config, abDir, projectDir);
     fs.writeFileSync(configPath, config);
+  } else if (cli === 'opencode') {
+    const configPath = path.join(projectDir, 'opencode.json');
+    let ocConfig = { $schema: 'https://opencode.ai/config.json', mcp: {} };
+    if (fs.existsSync(configPath)) {
+      try { ocConfig = JSON.parse(fs.readFileSync(configPath, 'utf8')); if (!ocConfig.mcp) ocConfig.mcp = {}; } catch {}
+    }
+    const existing = ocConfig.mcp['neohive'] || {};
+    ocConfig.mcp['neohive'] = Object.assign({}, existing, {
+      type: 'local',
+      command: [mcpNodeCommand(), serverPath],
+      environment: Object.assign({}, existing.environment, { NEOHIVE_DATA_DIR: abDir, NEOHIVE_PROJECT_ROOT: projectDir }),
+      enabled: true,
+    });
+    fs.writeFileSync(configPath, JSON.stringify(ocConfig, null, 2) + '\n');
   } else if (cli === 'cursor') {
     const cursorDir = path.join(projectDir, '.cursor');
     const mcpConfigPath = path.join(cursorDir, 'mcp.json');
@@ -2002,9 +2017,9 @@ function ensureMCPConfig(cli, serverPath, projectDir) {
 }
 
 async function apiLaunchAgent(body) {
-  const { cli, project_dir, agent_name, prompt, role, methodology, base_prompt, profile } = body;
-  if (!cli || !['claude', 'gemini', 'codex', 'cursor'].includes(cli)) {
-    return { error: 'Invalid cli type. Must be: claude, gemini, codex, or cursor' };
+  const { cli, project_dir, agent_name, prompt, role, methodology, base_prompt, profile, model } = body;
+  if (!cli || !['claude', 'gemini', 'codex', 'cursor', 'opencode'].includes(cli)) {
+    return { error: 'Invalid cli type. Must be: claude, gemini, codex, cursor, or opencode' };
   }
   if (project_dir && !validateProjectPath(project_dir)) {
     return { error: 'Project directory not registered. Add it via the dashboard first.' };
@@ -2051,7 +2066,7 @@ async function apiLaunchAgent(body) {
 
   // Windows: open a system terminal (tmux is uncommon there)
   if (process.platform === 'win32') {
-    const cliCommands = { claude: 'claude', gemini: 'gemini', codex: 'codex', cursor: 'agent' };
+    const cliCommands = { claude: 'claude', gemini: 'gemini', codex: 'codex', cursor: 'agent', opencode: 'opencode' };
     const cliCmd = cliCommands[cli];
     spawn('cmd', ['/c', 'start', 'cmd', '/k', cliCmd], { cwd: projectDir, shell: false, detached: true, stdio: 'ignore' });
     return {
@@ -2077,6 +2092,7 @@ async function apiLaunchAgent(body) {
       prompt: launchPrompt,
       methodology: methodologySelection,
       profile,
+      model,
     });
     return {
       success: true,
@@ -2876,6 +2892,37 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, removed: agentName }));
       });
+    }
+    // Tmux nudge — inject the fixed wake signal directly into the agent's mapped pane
+    else if (url.pathname.startsWith('/api/agents/') && url.pathname.endsWith('/nudge-tmux') && req.method === 'POST') {
+      const agentName = decodeURIComponent(url.pathname.split('/')[3]);
+      if (!agentName || /[^a-zA-Z0-9_-]/.test(agentName) || agentName.length > 20) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid agent name' }));
+        return;
+      }
+      const projectPath = url.searchParams.get('project') || null;
+      const dataDir = resolveDataDir(projectPath);
+      const agents = readJson(filePath('agents.json', projectPath));
+      const info = agents[agentName];
+      if (!info) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Agent not found' }));
+        return;
+      }
+      if (!info.tmux || !info.tmux.mapped || !info.tmux.pane_id) {
+        res.writeHead(422, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Agent has no mapped tmux pane — cannot inject wake signal' }));
+        return;
+      }
+      try {
+        const wakeResult = await tmuxAgentState.requestAdvisoryWake(dataDir, agentName);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, wake: wakeResult.wake, reason: wakeResult.reason }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: e.message }));
+      }
     }
     // Respawn prompt generator — creates copy-paste prompt to revive a dead agent
     else if (url.pathname.startsWith('/api/agents/') && url.pathname.endsWith('/respawn-prompt') && req.method === 'GET') {
