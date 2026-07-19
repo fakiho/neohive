@@ -260,6 +260,38 @@ function attachTerminal(ws, { sessionName }) {
 
 // ===================== PTY SOCKET BRIDGE (Story 1.3) =====================
 
+const REPLAY_BYTES = 50 * 1024; // replay last 50 KB of agent log on attach
+
+// Read up to REPLAY_BYTES from the tail of logPath, parse JSONL data entries,
+// and send them as output frames. Returns the file size (new logOffset = EOF).
+function replayAgentLog(ws, logPath) {
+  try {
+    const stat = fs.statSync(logPath);
+    if (stat.size === 0) return 0;
+    const replayStart = Math.max(0, stat.size - REPLAY_BYTES);
+    const len = stat.size - replayStart;
+    const buf = Buffer.alloc(len);
+    const fd = fs.openSync(logPath, 'r');
+    fs.readSync(fd, buf, 0, len, replayStart);
+    fs.closeSync(fd);
+    const text = buf.toString('utf8');
+    // When we read mid-file, skip the first (potentially truncated) line.
+    const firstNl = replayStart > 0 ? text.indexOf('\n') : -1;
+    const lines = (firstNl >= 0 ? text.slice(firstNl + 1) : text).split('\n');
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line);
+        if (typeof entry.data === 'string') send(ws, { type: 'output', data: entry.data });
+        // skip agent_exit during replay — we are still attaching
+      } catch {}
+    }
+    return stat.size;
+  } catch {
+    return 0;
+  }
+}
+
 // Scan dataDir for live pty-*.sock files, cross-referencing agents.json PIDs.
 // Returns Map<agentName, socketPath> for agents whose owner process is alive.
 // Stale sockets (dead owner PID) are skipped — AD-3: callers treat them as absent.
@@ -298,6 +330,8 @@ function attachPtySocket(ws, { agentName, socketPath, logPath }) {
   let sock = null;
   let logWatcher = null;
   let logOffset = 0;
+  let lastCols = 80;
+  let lastRows = 24;
 
   function cleanup() {
     if (closed) return;
@@ -334,10 +368,11 @@ function attachPtySocket(ws, { agentName, socketPath, logPath }) {
     } catch {}
   }
 
-  // Start tailing the log. Seed offset from current EOF so we only stream new output.
-  try {
-    if (fs.existsSync(logPath)) logOffset = fs.statSync(logPath).size;
-  } catch {}
+  // Replay scrollback so the browser gets a populated terminal on attach,
+  // then seed logOffset to EOF so the watcher only streams new output.
+  if (fs.existsSync(logPath)) {
+    logOffset = replayAgentLog(ws, logPath);
+  }
   try {
     logWatcher = fs.watch(path.dirname(logPath), (evt, filename) => {
       if (filename === path.basename(logPath)) drainLog();
@@ -355,6 +390,8 @@ function attachPtySocket(ws, { agentName, socketPath, logPath }) {
   sock = net.createConnection(socketPath);
   sock.on('connect', () => {
     send(ws, { type: 'output', data: `\x1b[33m[Neohive]\x1b[0m PTY agent: ${agentName}\r\n` });
+    // Send a resize frame to nudge full-screen CLIs (e.g. opencode) to redraw.
+    sock.write(JSON.stringify({ type: 'resize', cols: lastCols, rows: lastRows }) + '\n');
     // Drain any log data written while we were connecting.
     drainLog();
   });
@@ -377,6 +414,8 @@ function attachPtySocket(ws, { agentName, socketPath, logPath }) {
       sock.write(JSON.stringify({ type: 'input', data: msg.data }) + '\n');
     } else if (msg.type === 'resize' && Number.isInteger(msg.cols) && Number.isInteger(msg.rows) &&
         msg.cols >= 10 && msg.cols <= 500 && msg.rows >= 5 && msg.rows <= 300) {
+      lastCols = msg.cols;
+      lastRows = msg.rows;
       sock.write(JSON.stringify({ type: 'resize', cols: msg.cols, rows: msg.rows }) + '\n');
     }
     // tmux-control messages are not applicable in PTY mode — silently ignored.
@@ -399,4 +438,5 @@ module.exports = {
   attachTerminal,
   attachPtySocket,
   discoverPtySockets,
+  replayAgentLog,
 };

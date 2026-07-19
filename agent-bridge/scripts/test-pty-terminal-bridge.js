@@ -8,7 +8,7 @@ const net = require('net');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { discoverPtySockets, attachPtySocket } = require('../lib/terminal-ws');
+const { discoverPtySockets, attachPtySocket, replayAgentLog } = require('../lib/terminal-ws');
 
 let passed = 0, failed = 0;
 const tests = [];
@@ -181,8 +181,11 @@ test('(c) resize frame forwarded as NDJSON to unix socket', async () => {
 
   const resizeFrames = received.filter((f) => f.type === 'resize');
   assert.ok(resizeFrames.length > 0, 'no resize frames received by fake server');
-  assert.strictEqual(resizeFrames[0].cols, 120);
-  assert.strictEqual(resizeFrames[0].rows, 30);
+  // On connect a nudge resize (80x24) is sent first; the browser's 120x30 follows.
+  const browserResize = resizeFrames.find((f) => f.cols === 120 && f.rows === 30);
+  assert.ok(browserResize, 'browser resize frame (120x30) not found');
+  assert.strictEqual(browserResize.cols, 120);
+  assert.strictEqual(browserResize.rows, 30);
 });
 
 test('(d) log tail emits output frames to WebSocket', async () => {
@@ -237,6 +240,106 @@ test('(d) agent_exit marker emits exit frame', async () => {
 
   const exitFrames = ws.sent.filter((f) => f.type === 'exit');
   assert.ok(exitFrames.length > 0, 'agent_exit marker did not emit exit frame to WebSocket');
+});
+
+// ============================================================
+// replayAgentLog + scrollback replay tests
+// ============================================================
+
+test('(e) replayAgentLog sends existing data entries to ws', async () => {
+  const logPath = path.join(os.tmpdir(), `nh-replay-log-${process.pid}.jsonl`);
+  const ws = makeWs();
+  const lines = [
+    JSON.stringify({ ts: '2026-01-01T00:00:00Z', data: 'line one\r\n' }),
+    JSON.stringify({ ts: '2026-01-01T00:00:01Z', data: 'line two\r\n' }),
+    JSON.stringify({ ts: '2026-01-01T00:00:02Z', event: 'agent_exit' }), // should be skipped
+  ].join('\n') + '\n';
+  fs.writeFileSync(logPath, lines);
+
+  const offset = replayAgentLog(ws, logPath);
+  try { fs.unlinkSync(logPath); } catch {}
+
+  assert.strictEqual(offset, Buffer.byteLength(lines), 'offset should equal file size after replay');
+  const outputFrames = ws.sent.filter((f) => f.type === 'output');
+  assert.strictEqual(outputFrames.length, 2, 'expected 2 output frames (data entries only)');
+  assert.strictEqual(outputFrames[0].data, 'line one\r\n');
+  assert.strictEqual(outputFrames[1].data, 'line two\r\n');
+  assert.ok(!ws.sent.some((f) => f.type === 'exit'), 'agent_exit must be skipped during replay');
+});
+
+test('(e) replayAgentLog on empty file returns 0 and sends nothing', async () => {
+  const logPath = path.join(os.tmpdir(), `nh-replay-empty-${process.pid}.jsonl`);
+  fs.writeFileSync(logPath, '');
+  const ws = makeWs();
+
+  const offset = replayAgentLog(ws, logPath);
+  try { fs.unlinkSync(logPath); } catch {}
+
+  assert.strictEqual(offset, 0);
+  assert.strictEqual(ws.sent.length, 0, 'empty log must send no frames');
+});
+
+test('(e) replayAgentLog skips truncated first line when reading mid-file', async () => {
+  const logPath = path.join(os.tmpdir(), `nh-replay-trunc-${process.pid}.jsonl`);
+  // Build a file large enough that REPLAY_BYTES slices mid-line
+  const padding = 'x'.repeat(51200); // > 50 KB
+  const lines = JSON.stringify({ data: padding }) + '\n' +
+    JSON.stringify({ data: 'visible\r\n' }) + '\n';
+  fs.writeFileSync(logPath, lines);
+  const ws = makeWs();
+
+  replayAgentLog(ws, logPath);
+  try { fs.unlinkSync(logPath); } catch {}
+
+  // The first line is truncated — only 'visible' should appear
+  const out = ws.sent.filter((f) => f.type === 'output').map((f) => f.data);
+  assert.ok(out.includes('visible\r\n'), 'last complete line must be replayed');
+  assert.ok(!out.includes(padding), 'truncated first line must be skipped');
+});
+
+test('(f) attachPtySocket replays existing log on attach', async () => {
+  const agentName = 'replay-attach';
+  const sockPath = path.join(os.tmpdir(), `nh-replay-sock-${process.pid}.sock`);
+  const logPath = path.join(os.tmpdir(), `nh-replay-attach-${process.pid}.jsonl`);
+  const preExisting = JSON.stringify({ data: 'scrollback line\r\n' }) + '\n';
+  fs.writeFileSync(logPath, preExisting);
+
+  const { server } = await startFakeServer(sockPath);
+  const ws = makeWs();
+
+  attachPtySocket(ws, { agentName, socketPath: sockPath, logPath });
+  await sleep(80);
+
+  server.close();
+  ws._emit('close');
+  try { fs.unlinkSync(sockPath); } catch {}
+  try { fs.unlinkSync(logPath); } catch {}
+
+  const scrollback = ws.sent.filter((f) => f.type === 'output' && f.data === 'scrollback line\r\n');
+  assert.ok(scrollback.length > 0, 'pre-existing log must be replayed on attach');
+});
+
+test('(g) resize nudge sent to socket on connect (before browser resize)', async () => {
+  const agentName = 'nudge-test';
+  const sockPath = path.join(os.tmpdir(), `nh-nudge-sock-${process.pid}.sock`);
+  const logPath = path.join(os.tmpdir(), `nh-nudge-log-${process.pid}.jsonl`);
+  fs.writeFileSync(logPath, '');
+
+  const { server, received } = await startFakeServer(sockPath);
+  const ws = makeWs();
+
+  attachPtySocket(ws, { agentName, socketPath: sockPath, logPath });
+  await sleep(80); // wait for connect only — no browser resize sent
+
+  server.close();
+  ws._emit('close');
+  try { fs.unlinkSync(sockPath); } catch {}
+  try { fs.unlinkSync(logPath); } catch {}
+
+  const resizeFrames = received.filter((f) => f.type === 'resize');
+  assert.ok(resizeFrames.length > 0, 'resize nudge must be sent on connect even without browser resize');
+  assert.ok(Number.isInteger(resizeFrames[0].cols) && resizeFrames[0].cols > 0, 'nudge cols must be positive integer');
+  assert.ok(Number.isInteger(resizeFrames[0].rows) && resizeFrames[0].rows > 0, 'nudge rows must be positive integer');
 });
 
 test('attachPtySocket sends error when socket file absent', async () => {
