@@ -8141,15 +8141,6 @@ function exportShareableHTML() {
   window.open('/api/export' + pp, '_blank');
 }
 
-// ==================== AUTO-GROW TEXTAREA ====================
-
-var textarea = document.getElementById('inject-content');
-textarea.addEventListener('input', function() {
-  this.style.height = '34px';
-  var scrollH = this.scrollHeight;
-  this.style.height = Math.min(scrollH, 100) + 'px';
-});
-
 // ==================== v3.0: MESSAGE AVATAR HELPER ====================
 
 function getMsgAvatarUrl(name) {
