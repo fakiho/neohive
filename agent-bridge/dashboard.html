@@ -8324,6 +8324,16 @@ async function initTerminal(agentName) {
         sendResize(inst);
       }, 50);
     }
+    // PTY agent requested while a different session is open — force reconnect
+    // so the agent's socket bridge replaces the shared tmux view.
+    if (agentName && inst.ws && inst.ws.readyState === WebSocket.OPEN) {
+      var expectedParam = 'agent=' + encodeURIComponent(agentName);
+      if (!inst.ws.url || !inst.ws.url.includes(expectedParam)) {
+        inst.ws.close();
+        connectTerminalSocket(inst, agentName);
+        return inst.term;
+      }
+    }
     // If a specific PTY agent is requested and the socket is closed, reconnect
     // to that agent. Also reconnect on closed socket when not user-ended.
     if (inst.ws.readyState === WebSocket.CLOSED && !inst.userEnded) {
@@ -12576,8 +12586,9 @@ function doLaunch() {
       if (!manualPromptRequired) {
         switchView('terminal');
         if (data.launch_mode === 'pty') {
-          // PTY-launched agent: connect the per-agent socket bridge.
-          setTimeout(function() { initTerminal(agentName); }, 250);
+          // PTY-launched agent: delay longer so pty-owner.js has time to
+          // fork, spawn the CLI, and create the unix socket before we connect.
+          setTimeout(function() { initTerminal(agentName); }, 1500);
         } else {
           setTimeout(function() { sendTmuxControl('get_state'); }, 250);
         }
