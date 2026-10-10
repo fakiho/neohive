@@ -524,6 +524,9 @@
     ]
   }
   </script>
+
+  <!-- Google Analytics (GA4) — loaded only after consent (analytics.js) -->
+  <script defer src="analytics.js" data-ga-id="G-GHLK5KP7L0"></script>
 </head>
 <body>
 
@@ -539,14 +542,14 @@
     <li><a href="#dashboard">Dashboard</a></li>
     <li><a href="#templates">Templates</a></li>
     <li><a href="#tools">MCP Tools</a></li>
-    <li><a href="https://github.com/fakiho/neohive/blob/master/agent-bridge/CHANGELOG.md" target="_blank">Changelog</a></li>
+    <li><a data-ga-event="outbound_click" data-ga-label="Changelog" href="https://github.com/fakiho/neohive/blob/master/agent-bridge/CHANGELOG.md" target="_blank">Changelog</a></li>
   </ul>
   <div class="nav-actions">
-    <a class="btn btn-ghost" href="https://github.com/fakiho/neohive" target="_blank">
+    <a data-ga-event="outbound_click" data-ga-label="GitHub" class="btn btn-ghost" href="https://github.com/fakiho/neohive" target="_blank">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
       GitHub
     </a>
-    <a class="btn btn-primary" href="https://www.npmjs.com/package/neohive" target="_blank">Get Started</a>
+    <a data-ga-event="cta_click" data-ga-label="Get Started" data-ga-location="nav" class="btn btn-primary" href="https://www.npmjs.com/package/neohive" target="_blank">Get Started</a>
   </div>
 </nav>
 
@@ -566,11 +569,11 @@
   <p>One command. Claude, Gemini, Cursor, Copilot and more — discovering each other, messaging, delegating tasks, reviewing code, and shipping — entirely on their own.</p>
 
   <div class="hero-actions">
-    <a class="btn btn-primary btn-xl" href="https://www.npmjs.com/package/neohive" target="_blank">
+    <a data-ga-event="cta_click" data-ga-label="Get Started" data-ga-location="hero" class="btn btn-primary btn-xl" href="https://www.npmjs.com/package/neohive" target="_blank">
       Get Started
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
     </a>
-    <a class="btn btn-ghost btn-lg" href="https://github.com/fakiho/neohive" target="_blank">
+    <a data-ga-event="outbound_click" data-ga-label="View on GitHub" class="btn btn-ghost btn-lg" href="https://github.com/fakiho/neohive" target="_blank">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
       View on GitHub
     </a>
@@ -829,7 +832,7 @@
         <div class="section-label">Dashboard</div>
         <h2>Everything in one<br /><span class="accent">real-time view</span></h2>
       </div>
-      <a class="btn btn-ghost" href="https://github.com/fakiho/neohive/blob/master/docs/documentation.md" target="_blank">Read docs</a>
+      <a data-ga-event="outbound_click" data-ga-label="Documentation" class="btn btn-ghost" href="https://github.com/fakiho/neohive/blob/master/docs/documentation.md" target="_blank">Read docs</a>
     </div>
 
     <div class="dash-preview fade-in">
@@ -1028,11 +1031,11 @@
         <p class="subtitle">Chat with agents, track tasks, monitor workflows, and set up MCP — all without leaving VS Code.</p>
       </div>
       <div style="display:flex;gap:0.75rem;flex-wrap:wrap">
-        <a class="btn btn-primary btn-lg" href="https://marketplace.visualstudio.com/items?itemName=alionix.neohive" target="_blank">
+        <a data-ga-event="outbound_click" data-ga-label="VS Code Marketplace" class="btn btn-primary btn-lg" href="https://marketplace.visualstudio.com/items?itemName=alionix.neohive" target="_blank">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           VS Code Marketplace
         </a>
-        <a class="btn btn-ghost btn-lg" href="https://open-vsx.org/extension/alionix/neohive" target="_blank">
+        <a data-ga-event="outbound_click" data-ga-label="Open VSX" class="btn btn-ghost btn-lg" href="https://open-vsx.org/extension/alionix/neohive" target="_blank">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Open VSX
         </a>
@@ -1089,8 +1092,8 @@
 
     <p class="fade-in" style="text-align:center;margin-top:1.5rem;color:var(--text-muted);font-size:0.9rem;">
       Search <strong style="color:var(--text)">"Neohive"</strong> in the Extensions panel, or install from the
-      <a href="https://marketplace.visualstudio.com/items?itemName=alionix.neohive" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">VS Code Marketplace</a> ·
-      <a href="https://open-vsx.org/extension/alionix/neohive" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Open VSX</a>.
+      <a data-ga-event="outbound_click" data-ga-label="VS Code Marketplace" href="https://marketplace.visualstudio.com/items?itemName=alionix.neohive" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">VS Code Marketplace</a> ·
+      <a data-ga-event="outbound_click" data-ga-label="Open VSX" href="https://open-vsx.org/extension/alionix/neohive" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Open VSX</a>.
     </p>
   </div>
 </section>
@@ -1192,7 +1195,7 @@
         <p>Neohive is a local message broker. It passes text between CLI terminals via shared files on disk. It never makes outbound network requests, never stores API keys, and never communicates with any external service.</p>
         <p>Your code, your conversations, your data — all stay on your machine. The dashboard runs at localhost. LAN mode requires an explicit opt-in flag.</p>
         <p>The filesystem is the message bus. You can inspect every byte of state in plain JSON files at any time.</p>
-        <a href="https://github.com/fakiho/neohive/blob/master/SECURITY.md" target="_blank">Read SECURITY.md &rarr;</a>
+        <a data-ga-event="outbound_click" data-ga-label="Security" href="https://github.com/fakiho/neohive/blob/master/SECURITY.md" target="_blank">Read SECURITY.md &rarr;</a>
       </div>
     </div>
   </div>
@@ -1211,12 +1214,12 @@
         </div>
       </div>
       <div class="cta-links">
-        <a class="btn btn-primary btn-xl" href="https://www.npmjs.com/package/neohive" target="_blank">Install from npm</a>
-        <a class="btn btn-ghost btn-lg" href="https://github.com/fakiho/neohive" target="_blank">
+        <a data-ga-event="cta_click" data-ga-label="Install from npm" data-ga-location="cta" class="btn btn-primary btn-xl" href="https://www.npmjs.com/package/neohive" target="_blank">Install from npm</a>
+        <a data-ga-event="outbound_click" data-ga-label="GitHub" class="btn btn-ghost btn-lg" href="https://github.com/fakiho/neohive" target="_blank">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
           Star on GitHub
         </a>
-        <a class="btn btn-ghost btn-lg" href="https://github.com/fakiho/neohive/blob/master/docs/documentation.md" target="_blank">Read the Docs</a>
+        <a data-ga-event="outbound_click" data-ga-label="Docs" class="btn btn-ghost btn-lg" href="https://github.com/fakiho/neohive/blob/master/docs/documentation.md" target="_blank">Read the Docs</a>
       </div>
       <div style="margin-top:2.5rem;display:flex;align-items:center;justify-content:center;gap:1.75rem;flex-wrap:wrap">
         <img src="https://img.shields.io/npm/v/neohive?style=for-the-badge&logo=npm&logoColor=white&color=CB3837" alt="npm" style="height:26px" />
@@ -1237,15 +1240,15 @@
         Neohive
       </a>
       <ul class="footer-links">
-        <li><a href="https://github.com/fakiho/neohive" target="_blank">GitHub</a></li>
-        <li><a href="https://www.npmjs.com/package/neohive" target="_blank">npm</a></li>
-        <li><a href="https://github.com/fakiho/neohive/blob/master/docs/documentation.md" target="_blank">Docs</a></li>
-        <li><a href="https://github.com/fakiho/neohive/blob/master/agent-bridge/CHANGELOG.md" target="_blank">Changelog</a></li>
-        <li><a href="https://github.com/fakiho/neohive/blob/master/SECURITY.md" target="_blank">Security</a></li>
-        <li><a href="https://github.com/fakiho/neohive/blob/master/LICENSE" target="_blank">License</a></li>
-        <li><a href="mailto:contact@alionix.com">Contact</a></li>
+        <li><a data-ga-event="outbound_click" data-ga-label="GitHub" href="https://github.com/fakiho/neohive" target="_blank">GitHub</a></li>
+        <li><a data-ga-event="outbound_click" data-ga-label="npm" href="https://www.npmjs.com/package/neohive" target="_blank">npm</a></li>
+        <li><a data-ga-event="outbound_click" data-ga-label="Docs" href="https://github.com/fakiho/neohive/blob/master/docs/documentation.md" target="_blank">Docs</a></li>
+        <li><a data-ga-event="outbound_click" data-ga-label="Changelog" href="https://github.com/fakiho/neohive/blob/master/agent-bridge/CHANGELOG.md" target="_blank">Changelog</a></li>
+        <li><a data-ga-event="outbound_click" data-ga-label="Security" href="https://github.com/fakiho/neohive/blob/master/SECURITY.md" target="_blank">Security</a></li>
+        <li><a data-ga-event="outbound_click" data-ga-label="License" href="https://github.com/fakiho/neohive/blob/master/LICENSE" target="_blank">License</a></li>
+        <li><a data-ga-event="outbound_click" data-ga-label="Contact" href="mailto:contact@alionix.com">Contact</a></li>
       </ul>
-      <span class="footer-copy">Built by <a href="https://github.com/fakiho" target="_blank" style="color:var(--text-muted);text-decoration:none">Alionix</a> &middot; BSL 1.1</span>
+      <span class="footer-copy">Built by <a data-ga-event="outbound_click" data-ga-label="Alionix" href="https://github.com/fakiho" target="_blank" style="color:var(--text-muted);text-decoration:none">Alionix</a> &middot; BSL 1.1</span>
     </div>
   </div>
 </footer>
