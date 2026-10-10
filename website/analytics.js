@@ -74,7 +74,7 @@
     wrap.setAttribute('aria-label', 'Analytics consent');
     wrap.innerHTML =
       '<p>We use cookies to measure how these sites are used. ' +
-      'Accept enables Google Analytics; Essential Only keeps it off. ' +
+      'Accept enables analytics; Essential Only keeps it off. ' +
       '<a href="https://ali.alionix.com/privacy">Privacy policy</a></p>' +
       '<div class="consent-actions">' +
       '<button type="button" data-choice="rejected">Essential Only</button>' +
