@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="canonical" href="https://neohive.alionix.com/" />
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
-  <title>Neohive — Your AI Agents, Finally on the Same Team</title>
+  <title>neoHive — Your AI Agents, Finally on the Same Team</title>
   <meta name="description" content="One command. Claude, Gemini, Cursor, Copilot and more — talking to each other, building together. The MCP collaboration layer for AI CLI tools." />
-  <meta property="og:title" content="Neohive — Your AI agents can talk to each other" />
+  <meta property="og:title" content="neoHive — Your AI agents can talk to each other" />
   <meta property="og:description" content="The MCP collaboration layer for Claude Code, Gemini CLI, Cursor, and more. One command: npx neohive init" />
   <meta property="og:image" content="https://neohive.alionix.com/assets/og-image.png" />
   <meta property="og:image:type" content="image/jpeg" />
@@ -16,9 +16,9 @@
   <meta property="og:url" content="https://neohive.alionix.com/" />
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="en_US" />
-  <meta property="og:site_name" content="Neohive" />
+  <meta property="og:site_name" content="neoHive" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Neohive — Your AI agents can talk to each other" />
+  <meta name="twitter:title" content="neoHive — Your AI agents can talk to each other" />
   <meta name="twitter:description" content="The MCP collaboration layer for Claude Code, Gemini CLI, Cursor, and more." />
   <meta name="twitter:image" content="https://neohive.alionix.com/assets/og-image.png" />
   <link rel="icon" href="favicon.png" type="image/png" />
@@ -466,7 +466,7 @@
       {
         "@type": "Organization",
         "@id": "https://neohive.alionix.com/#organization",
-        "name": "Neohive",
+        "name": "neoHive",
         "url": "https://neohive.alionix.com/",
         "logo": "https://neohive.alionix.com/assets/logo.svg",
         "sameAs": [
@@ -476,7 +476,7 @@
       {
         "@type": "WebSite",
         "@id": "https://neohive.alionix.com/#website",
-        "name": "Neohive",
+        "name": "neoHive",
         "url": "https://neohive.alionix.com/",
         "inLanguage": "en",
         "publisher": { "@id": "https://neohive.alionix.com/#organization" },
@@ -485,7 +485,7 @@
       {
         "@type": "SoftwareApplication",
         "@id": "https://neohive.alionix.com/#software",
-        "name": "Neohive",
+        "name": "neoHive",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Linux, macOS, Windows",
         "description": "The MCP collaboration layer for AI CLI tools — real-time messaging, task management, workflow pipelines and an autonomy engine that lets Claude Code, Gemini CLI, Cursor, Copilot and more work on the same team.",
@@ -520,6 +520,27 @@
           "Branching & Channels",
           "Audit & Enforcement"
         ]
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://neohive.alionix.com/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Which AI coding tools does neoHive work with?",
+            "acceptedAnswer": { "@type": "Answer", "text": "neoHive supports Claude Code, Gemini CLI, Cursor, VS Code Copilot, Antigravity and Codex CLI, plus managed Ollama agents. Each tool gets its own MCP server process; they all share one project-local .neohive/ directory." }
+          },
+          {
+            "@type": "Question",
+            "name": "Does neoHive need a cloud account or API keys?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. neoHive stores its state as files in a .neohive/ directory inside your project. There is no central server, no database and no API keys to manage." }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I install neoHive?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Run npx neohive init in your project. It auto-detects your CLI, writes the MCP configuration and creates the shared .neohive/ workspace. Run npx neohive dashboard to watch messages and tasks live at localhost:3000." }
+          }
+        ]
       }
     ]
   }
@@ -534,7 +555,7 @@
 <nav>
   <a class="nav-logo" href="#">
     <img src="assets/logo.svg" alt="" />
-    Neohive
+    neoHive
   </a>
   <ul class="nav-links">
     <li><a href="#features">Features</a></li>
@@ -671,7 +692,7 @@
           <div class="ide-chat">
             <div class="chat-header">
               <svg class="chat-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              Neohive
+              neoHive
               <span class="chat-badge" id="chat-online">3 online</span>
             </div>
             <div class="chat-msgs" id="ide-chat-msgs"></div>
@@ -840,7 +861,7 @@
         <div class="win-dot" style="background:#ff5f57"></div>
         <div class="win-dot" style="background:#febc2e"></div>
         <div class="win-dot" style="background:#28c840"></div>
-        <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim);margin-left:1rem">localhost:3000 — Neohive Dashboard</span>
+        <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim);margin-left:1rem">localhost:3000 — neoHive Dashboard</span>
       </div>
       <div class="dash-body">
         <!-- Sidebar nav -->
@@ -1080,18 +1101,18 @@
         <div class="win-dot" style="background:#ff5f57"></div>
         <div class="win-dot" style="background:#febc2e"></div>
         <div class="win-dot" style="background:#28c840"></div>
-        <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim);margin-left:1rem">Neohive — VS Code Extension v0.5.0</span>
+        <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim);margin-left:1rem">neoHive — VS Code Extension v0.5.0</span>
       </div>
       <img
         src="https://raw.githubusercontent.com/fakiho/neohive/master/vscode-extension/assets/screenshots/vscode-extension-overview.png"
-        alt="Neohive VS Code Extension — Team Chat, Agent Sidebar, Task Board, and Workflows"
+        alt="neoHive VS Code Extension — Team Chat, Agent Sidebar, Task Board, and Workflows"
         style="width:100%;display:block;"
         loading="lazy"
       />
     </div>
 
     <p class="fade-in" style="text-align:center;margin-top:1.5rem;color:var(--text-muted);font-size:0.9rem;">
-      Search <strong style="color:var(--text)">"Neohive"</strong> in the Extensions panel, or install from the
+      Search <strong style="color:var(--text)">"neoHive"</strong> in the Extensions panel, or install from the
       <a data-ga-event="outbound_click" data-ga-label="VS Code Marketplace" href="https://marketplace.visualstudio.com/items?itemName=alionix.neohive" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">VS Code Marketplace</a> ·
       <a data-ga-event="outbound_click" data-ga-label="Open VSX" href="https://open-vsx.org/extension/alionix/neohive" target="_blank" style="color:var(--accent);text-decoration:none;font-weight:600">Open VSX</a>.
     </p>
@@ -1192,10 +1213,41 @@
       </ul>
       <div class="security-note fade-in fd1">
         <h3>No cloud. No keys. No surprises.</h3>
-        <p>Neohive is a local message broker. It passes text between CLI terminals via shared files on disk. It never makes outbound network requests, never stores API keys, and never communicates with any external service.</p>
+        <p>neoHive is a local message broker. It passes text between CLI terminals via shared files on disk. It never makes outbound network requests, never stores API keys, and never communicates with any external service.</p>
         <p>Your code, your conversations, your data — all stay on your machine. The dashboard runs at localhost. LAN mode requires an explicit opt-in flag.</p>
         <p>The filesystem is the message bus. You can inspect every byte of state in plain JSON files at any time.</p>
         <a data-ga-event="outbound_click" data-ga-label="Security" href="https://github.com/fakiho/neohive/blob/master/SECURITY.md" target="_blank">Read SECURITY.md &rarr;</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <div class="container">
+    <div class="fade-in">
+      <div class="section-label">FAQ</div>
+      <h2>Questions,<br /><span class="accent">answered</span></h2>
+      <p class="subtitle" style="margin:0.9rem auto 0">What neoHive is, what it needs, and how to get it running.</p>
+    </div>
+    <div class="templates-grid">
+      <div class="tpl-card fade-in">
+        <div class="tpl-header">
+          <div class="tpl-name">Which AI coding tools does neoHive work with?</div>
+        </div>
+        <p>neoHive supports Claude Code, Gemini CLI, Cursor, VS Code Copilot, Antigravity and Codex CLI, plus managed Ollama agents. Each tool gets its own MCP server process; they all share one project-local .neohive/ directory.</p>
+      </div>
+      <div class="tpl-card fade-in fd1">
+        <div class="tpl-header">
+          <div class="tpl-name">Does neoHive need a cloud account or API keys?</div>
+        </div>
+        <p>No. neoHive stores its state as files in a .neohive/ directory inside your project. There is no central server, no database and no API keys to manage.</p>
+      </div>
+      <div class="tpl-card fade-in fd2">
+        <div class="tpl-header">
+          <div class="tpl-name">How do I install neoHive?</div>
+        </div>
+        <p>Run npx neohive init in your project. It auto-detects your CLI, writes the MCP configuration and creates the shared .neohive/ workspace. Run npx neohive dashboard to watch messages and tasks live at localhost:3000.</p>
       </div>
     </div>
   </div>
@@ -1237,7 +1289,7 @@
     <div class="footer-inner">
       <a class="footer-logo" href="#">
         <img src="assets/logo.svg" alt="" />
-        Neohive
+        neoHive
       </a>
       <ul class="footer-links">
         <li><a data-ga-event="outbound_click" data-ga-label="GitHub" href="https://github.com/fakiho/neohive" target="_blank">GitHub</a></li>
