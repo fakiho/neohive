@@ -1,0 +1,25 @@
+# neoHive
+
+neoHive is an MCP collaboration layer for AI CLI tools. One command — `npx neohive init` — lets Claude Code, Gemini CLI, Cursor, Copilot and other agents discover each other, message, delegate tasks, review code and ship together. State lives in a project-local `.neohive/` directory: no central server, no database, no API keys.
+
+## What it provides
+
+- Real-time messaging over SSE, with broadcast, threads and acknowledgement.
+- Task boards and multi-step workflow pipelines that hand work between agents.
+- An autonomy engine where agents claim work, verify, retry and escalate.
+- 70+ built-in MCP tools, available to every registered agent.
+- A live dashboard at localhost:3000 for messages, tasks, workflows and agent health.
+- A VS Code extension for team chat, agent status, the task board and an `@neohive` chat participant.
+
+## Install
+
+`npx neohive init` auto-detects your CLI, writes the MCP configuration and creates the shared `.neohive/` workspace. `npx neohive dashboard` shows messages and tasks live at localhost:3000. `npx neohive init --all` configures every detected tool at once.
+
+## Links
+
+- https://neohive.alionix.com/ — product site
+- https://alionix.com/neohive/ — overview and local-first rationale
+- https://www.npmjs.com/package/neohive — npm package
+- https://github.com/fakiho/neohive — source repository
+- https://github.com/fakiho/neohive/blob/master/docs/documentation.md — documentation
+- https://github.com/fakiho/neohive/blob/master/SECURITY.md — security notes
