@@ -36,7 +36,7 @@ Neohive uses a **shared-nothing filesystem architecture**. There is no central s
           ┌─────────┴──────────┐
           │  dashboard.js      │
           │  HTTP + SSE        │
-          │  :3000             │
+          │  :3111             │
           └────────────────────┘
 ```
 

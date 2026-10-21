@@ -9,7 +9,7 @@
 | `NEOHIVE_DATA_DIR` | server.js | `{cwd}/.neohive/` | Override the data directory location |
 | `NEOHIVE_PROJECT_ROOT` | server.js | inferred from `.neohive/` | Explicit project root used by methodology providers when the data directory has a custom name |
 | `NEOHIVE_DATA` | dashboard.js | `{cwd}/.neohive/` | Dashboard data directory |
-| `NEOHIVE_PORT` | dashboard.js | `3000` | Dashboard HTTP port |
+| `NEOHIVE_PORT` | dashboard.js | `3111` | Dashboard HTTP port |
 | `NEOHIVE_LAN` | dashboard.js | `false` | Enable LAN access (`true` to bind to `0.0.0.0`) |
 | `GEMINI_API_KEY` | cli.js | — | Gemini API key (also used for CLI detection) |
 | `OLLAMA_URL` | ollama-agent.js | `http://localhost:11434` | Ollama API endpoint |

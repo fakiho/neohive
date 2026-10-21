@@ -67,7 +67,7 @@ I don't read these files. Neither does the package. There is no telemetry.
 
 ## Network exposure
 
-**Default:** dashboard binds to `127.0.0.1:3000`. Reachable from your machine only.
+**Default:** dashboard binds to `127.0.0.1:3111`. Reachable from your machine only.
 
 **LAN mode** (`npx neohive dashboard --lan` or `NEOHIVE_LAN=true`): rebinds to `0.0.0.0`, making the dashboard visible to other devices on your local network. A one-time access token is printed to the terminal on startup — connecting from another device requires that token. The token is not persisted between restarts.
 

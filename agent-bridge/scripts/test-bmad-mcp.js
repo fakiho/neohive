@@ -50,7 +50,35 @@ async function run() {
     const briefing = JSON.parse(briefingResult.content[0].text);
     assert.strictEqual(briefing.methodology.id, 'bmad');
     assert.strictEqual(briefing.methodology.next_action.workflow, 'bmad-architecture');
-    console.log('BMAD MCP tool tests passed');
+    console.log('BMAD MCP tool tests passed (enabled path)');
+
+    // Disabled path: without methodologies.bmad.enabled, the methodology tools
+    // must return a bounded opt-in notice instead of BMad state, and the
+    // briefing must not carry BMad context.
+    const offDir = fs.mkdtempSync(path.join(os.tmpdir(), 'neohive-bmad-mcp-off-'));
+    try {
+      await transport.close().catch(() => {});
+      const offTransport = new StdioClientTransport({
+        command: process.execPath,
+        args: [path.resolve(__dirname, '..', 'server.js')],
+        env: { NEOHIVE_DATA_DIR: offDir, NEOHIVE_PROJECT_ROOT: projectDir, NEOHIVE_LOG_LEVEL: 'error' },
+        stderr: 'pipe',
+      });
+      await client.connect(offTransport);
+      await client.callTool({ name: 'register', arguments: { name: 'BmadOff' } });
+      const gated = await client.callTool({ name: 'methodology_status', arguments: {} });
+      const gatedStatus = JSON.parse(gated.content[0].text);
+      assert.match(gatedStatus.error, /disabled/i);
+      assert.match(gatedStatus.error, /opt-in/i);
+      const offBriefing = await client.callTool({ name: 'get_briefing', arguments: {} });
+      const offBriefingJson = JSON.parse(offBriefing.content[0].text);
+      assert.strictEqual(offBriefingJson.methodology, null);
+      await offTransport.close().catch(() => {});
+      console.log('BMAD MCP disabled-path gate verified');
+    } finally {
+      fs.rmSync(offDir, { recursive: true, force: true });
+      await transport.close().catch(() => {});
+    }
   } finally {
     await transport.close().catch(() => {});
     fs.rmSync(projectDir, { recursive: true, force: true });

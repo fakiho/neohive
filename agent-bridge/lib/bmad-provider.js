@@ -259,7 +259,11 @@ function buildInstallerArgs({ projectDir, action, runtimes }) {
   const installAction = action === 'update' ? 'quick-update' : 'install';
   const args = ['--yes', PACKAGE_SPEC, 'install', '--yes', '--directory', project, '--action', installAction];
   if (installAction === 'install') {
-    args.push('--modules', 'bmm', '--tools', toolIdsForRuntimes(runtimes).join(','));
+    args.push('--modules', 'bmm');
+    // Per-CLI integrations are opt-in: runtimes=[] installs the bmm core only
+    // (no .claude/.agents/.cursor skill bake into the project).
+    const toolIds = toolIdsForRuntimes(Array.isArray(runtimes) ? runtimes : []);
+    if (toolIds.length) args.push('--tools', toolIds.join(','));
   }
   return args;
 }

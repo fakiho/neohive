@@ -2,19 +2,22 @@
 
 # BMad Method compatibility
 
+> **Opt-in since Neohive 6.5 (experimental, disabled by default).** The methodology MCP tools answer with an opt-in notice until the project flag is on (`<project>/.neohive/config.json` → `methodologies.bmad.enabled: true`); `npx neohive bmad install` flips it, and `npx neohive bmad disable` turns it off.
+
 Neohive can install and orchestrate projects that use BMad Method v6. The integration is optional: Neohive continues to require Node.js 18+, while the upstream BMad installer is invoked only when requested and requires Node.js 20.12+, Python 3.10+, `uv`, Git, and `npx`.
 
-## Install and update
+## Install, enable and update
 
 From a project root:
 
 ```bash
 npx neohive bmad status
-npx neohive bmad install
+npx neohive bmad install          # installs the bmm core and enables BMad for this project
 npx neohive bmad update
+npx neohive bmad disable          # disables it (installed artifacts remain, tools gate off)
 ```
 
-Use `--runtimes claude,cursor` (also `gemini` or `codex`) when automatic CLI detection is not appropriate. The dashboard Launch view provides the same status, prerequisite, install, and update actions.
+`install` covers the `bmm` core only. Per-CLI integrations (the skill bake into `.claude/`, `.agents/`, `.cursor/` and friends) are opt-in too: pass `--runtimes claude,cursor` (also `gemini` or `codex`) when you want them. The dashboard Launch view provides the same status, prerequisite, install, and update actions.
 
 Neohive invokes the stable upstream `bmad-method@^6` installer through an argument array, never a shell command string. Fresh installs select the `bmm` module and requested tools. Updates use BMad's non-interactive `quick-update` action.
 
