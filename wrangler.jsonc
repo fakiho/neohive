@@ -3,7 +3,16 @@
   "name": "neohive",
   "compatibility_date": "2026-04-05",
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 0.1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": false
+    }
   },
   "assets": {
     "directory": "website"
