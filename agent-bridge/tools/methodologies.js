@@ -1,26 +1,11 @@
 'use strict';
 
-const bmadProvider = require('../lib/bmad-provider');
-
 module.exports = function (ctx) {
   const { state, helpers } = ctx;
   const { inspectMethodology, runtimeDiagnostics, dataDir } = helpers;
 
-  // BMad is opt-in as of Neohive 6.5: the methodology tools gate on the
-  // per-project flag (config.json -> methodologies.bmad.enabled). A fresh
-  // install alone does NOT open the tools - it flips the same flag (cli.js).
-  function bmadDisabledNotice() {
-    return {
-      error: 'BMad integration is disabled for this project (opt-in feature). ' +
-        'Enable it from the dashboard methodology settings or with: npx neohive bmad install',
-    };
-  }
-
   function requireStatus(options) {
     if (!state.registeredName) return { error: 'You must call register() first' };
-    try {
-      if (!bmadProvider.getProjectSettings(dataDir).enabled) return bmadDisabledNotice();
-    } catch {}
     try { return inspectMethodology(options); }
     catch (error) { return { error: error.message }; }
   }

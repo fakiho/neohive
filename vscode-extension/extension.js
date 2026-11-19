@@ -287,7 +287,7 @@ function getServerUrl() {
     } catch {}
   }
   // 2. VS Code setting (user can override manually)
-  return vscode.workspace.getConfiguration('neohive').get('serverUrl', 'http://localhost:3111');
+  return vscode.workspace.getConfiguration('neohive').get('serverUrl', 'http://localhost:3000');
 }
 
 function getPollInterval() {

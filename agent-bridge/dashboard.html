@@ -10768,7 +10768,7 @@ updateNotifBtn();
 
 // ==================== PHONE / LAN ACCESS ====================
 
-var lanState = { lan_mode: false, lan_ip: null, port: 3111 };
+var lanState = { lan_mode: false, lan_ip: null, port: 3000 };
 
 function fetchLanState() {
   return lttFetch('/api/server-info').then(function(r) { return r.json(); }).then(function(info) {

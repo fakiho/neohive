@@ -230,7 +230,7 @@ Monitor your agents in real time:
 npx neohive dashboard
 ```
 
-Open `http://localhost:3111` in your browser. The dashboard shows live messages, agent status, tasks, workflows, and more — all updating in real time via Server-Sent Events.
+Open `http://localhost:3000` in your browser. The dashboard shows live messages, agent status, tasks, workflows, and more — all updating in real time via Server-Sent Events.
 
 ---
 
@@ -360,7 +360,7 @@ Long-form reference material lives under **[`docs/reference/`](reference/)** so 
 | Autonomy, managed mode, branching, channels | [reference/advanced.md](reference/advanced.md) |
 | `next_action` response chain & coordinator flows | [reference/next-action-chain.md](reference/next-action-chain.md) |
 | Environment variables & MCP config snippets | [reference/configuration.md](reference/configuration.md) |
-| BMad Method v6 compatibility (**opt-in since 6.5**) | [reference/bmad-method.md](reference/bmad-method.md) |
+| BMad Method v6 compatibility | [reference/bmad-method.md](reference/bmad-method.md) |
 
 ---
 

@@ -100,7 +100,7 @@ Register as Bob, then call listen().
 Watch them communicate in real time:
 
 ```bash
-npx neohive dashboard    # opens http://localhost:3111
+npx neohive dashboard    # opens http://localhost:3000
 ```
 
 > **Want a pre-configured team?** Use templates:
@@ -127,7 +127,7 @@ npx neohive dashboard    # opens http://localhost:3111
 | 🗳️ | **Voting & Reviews** | Team decisions and structured code review workflows |
 | 👁 | **Agent Liveness** | Passive stdin tracking, PID checks, auto-reclaim dead seats, unknown/stale/offline states |
 | 🔌 | **Multi-CLI** | Works across Claude Code, Gemini CLI, Cursor, VS Code Copilot, Antigravity, Codex CLI, and Ollama |
-| 🧭 | **BMad Method Compatibility** | **Opt-in since 6.5 (experimental)** — `npx neohive bmad install` enables it for the project; core-only by default (no per-CLI skill bake unless `--runtimes` is passed) |
+| 🧭 | **BMad Method Compatibility** | Optionally install BMad v6, launch phase-aware tool-capable agents, and project its authoritative lifecycle |
 
 <br />
 
@@ -226,7 +226,7 @@ Due to a current IDE limitation, agents can occasionally drop out of the listen 
                             │
                    ┌────────▼────────┐
                    │   Dashboard     │
-                   │  localhost:3111  │
+                   │  localhost:3000  │
                    │  (SSE real-time) │
                    └─────────────────┘
 ```
@@ -274,7 +274,7 @@ npx neohive init --template <name>
 ## 📊 Dashboard
 
 ```bash
-npx neohive dashboard          # http://localhost:3111 (default)
+npx neohive dashboard          # http://localhost:3000 (default)
 NEOHIVE_PORT=8080 npx neohive dashboard   # custom port — URL shown in the terminal on startup
 npx neohive dashboard --lan    # accessible from your phone
 ```
@@ -351,7 +351,7 @@ neohive uninstall           # remove from all CLI configs
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `NEOHIVE_DATA_DIR` | `.neohive/` | Data directory path |
-| `NEOHIVE_PORT` | `3111` | Dashboard port |
+| `NEOHIVE_PORT` | `3000` | Dashboard port |
 | `NEOHIVE_LAN` | `false` | Enable LAN access |
 | `NEOHIVE_LOG_LEVEL` | `warn` | Logging: `error` · `warn` · `info` · `debug` |
 
