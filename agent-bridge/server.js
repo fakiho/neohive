@@ -1877,7 +1877,7 @@ function toolRegister(name, provider = null, skills = null, role = null) {
     // agent's role, if any. Data-driven — no per-call-site mapping. Inert
     // (no-op, no error) for unmapped/absent roles and non-BMad projects.
     const personaSkill = methodologyProvider.getPersonaSkillForRole(assignedRole);
-    if (personaSkill && inspectProjectMethodology({}).enabled === true) {
+    if (personaSkill && inspectProjectMethodology({}).installed) {
       result.persona_skill = personaSkill;
       result.persona_note = `Your role "${assignedRole}" maps to the BMad "${personaSkill}" persona skill — invoke it to load that persona's context.`;
     }
@@ -4144,7 +4144,7 @@ function toolUpdateProfile(displayName, avatar, bio, role) {
   // persona skill. See toolRegister for the register-path equivalent.
   if (role !== undefined && role !== null) {
     const personaSkill = methodologyProvider.getPersonaSkillForRole(role);
-    if (personaSkill && inspectProjectMethodology({}).enabled === true) {
+    if (personaSkill && inspectProjectMethodology({}).installed) {
       result.persona_skill = personaSkill;
       result.persona_note = `Your role "${role}" maps to the BMad "${personaSkill}" persona skill — invoke it to load that persona's context.`;
     }

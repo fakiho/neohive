@@ -16,7 +16,7 @@ if [ -z "$NEOHIVE_SERVER_URL" ] && [ -f "$_DASHBOARD_JSON" ]; then
   _DISCOVERED=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('url',''))" "$_DASHBOARD_JSON" 2>/dev/null)
   [ -n "$_DISCOVERED" ] && NEOHIVE_SERVER_URL="$_DISCOVERED"
 fi
-NEOHIVE_URL="${NEOHIVE_SERVER_URL:-http://localhost:${NEOHIVE_PORT:-3111}}"
+NEOHIVE_URL="${NEOHIVE_SERVER_URL:-http://localhost:${NEOHIVE_PORT:-3000}}"
 
 # Allow: user aborted or no tool calls this turn
 [ "${CLAUDE_STOP_HOOK_STATUS:-}" = "aborted" ] && exit 0

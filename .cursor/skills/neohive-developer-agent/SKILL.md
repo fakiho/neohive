@@ -34,7 +34,7 @@ If the repo has **`.cursor/hooks.json`** (install via `npx neohive hooks`), Curs
 
 ## Dashboard / REST from automation
 
-- Default dashboard **`http://localhost:3111`**; port from **`NEOHIVE_PORT`**.
+- Default dashboard **`http://localhost:3000`**; port from **`NEOHIVE_PORT`**.
 - Every **`POST`/`PUT`/`DELETE`** needs **`X-LTT-Request: 1`**. LAN access needs **`.neohive/.lan-token`** as **`X-LTT-Token`** or **`?token=`**.
 
 ## Quality bar (project norms)

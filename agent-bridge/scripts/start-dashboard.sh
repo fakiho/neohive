@@ -6,7 +6,7 @@
 set -euo pipefail
 
 ROOT="/home/sparo/neohive/agent-bridge"
-PORT="${NEOHIVE_PORT:-3111}"
+PORT="${NEOHIVE_PORT:-4000}"
 
 # Kill any existing dashboard, then relaunch on the canonical hive.
 pkill -f "node dashboard.js" 2>/dev/null || true

@@ -41,7 +41,7 @@ function printUsage() {
     npx neohive init --acp-worker  ACP workers: copy acp-workers.json template into .neohive/
     npx neohive serve               Run MCP server in HTTP mode (port 4321)
     npx neohive serve --port 8080   Custom port for HTTP server
-    npx neohive dashboard           Launch web dashboard (http://localhost:3111)
+    npx neohive dashboard           Launch web dashboard (http://localhost:3000)
     npx neohive dashboard --lan     Dashboard accessible on LAN
     npx neohive status              Show active agents and tasks
     npx neohive msg <agent> <text>  Send a message from CLI
@@ -53,9 +53,8 @@ function printUsage() {
     npx neohive codex-hooks         Install listen-enforcement hooks into .codex/hooks.json only
     npx neohive skills              Install neohive skills & agents for all detected IDEs
     npx neohive bmad status         Show BMad installation and lifecycle status
-    npx neohive bmad install        Install BMad v6 core and enable it for this project (opt-in)
+    npx neohive bmad install        Install BMad v6 for detected tool-capable CLIs
     npx neohive bmad update         Safely quick-update the existing BMad install
-    npx neohive bmad disable        Disable BMad for this project (installed artifacts remain)
     npx neohive run --name N --cmd C  Wrap a CLI agent with event-driven message injection
     npx neohive uninstall           Remove from all CLI configs
     npx neohive help                Show this help
@@ -110,21 +109,19 @@ function argumentValue(name) {
 
 function bmadRuntimes() {
   const explicit = argumentValue('--runtimes') || argumentValue('--tools');
-  if (explicit) return explicit.split(',').map(value => value.trim().toLowerCase()).filter(value => bmadProvider.TOOL_IDS[value]);
-  return [];
+  if (explicit) return explicit.split(',').map(value => value.trim()).filter(Boolean);
+  return detectCLIs().filter(runtime => bmadProvider.TOOL_IDS[runtime]);
 }
 
 async function bmadCommand() {
   const action = process.argv[3] || 'status';
   const cwd = process.cwd();
   const hiveDir = dataDir(cwd);
-  const enableHint = 'BMad is opt-in. Enable it with `npx neohive bmad install` or the dashboard methodology settings.';
   if (action === 'status') {
     const status = bmadProvider.inspectProject(cwd, hiveDir);
     console.log(`\n  BMad Method v${bmadProvider.SUPPORTED_MAJOR} compatibility`);
     console.log(`  Installed: ${status.installed ? 'yes' : 'no'}`);
     console.log(`  Enabled:   ${status.enabled ? 'yes' : 'no'}`);
-    if (!status.enabled) console.log(`             (BMad is opt-in since 6.5 - ${enableHint})`);
     console.log(`  Version:   ${status.version || 'unknown'}`);
     console.log(`  Compatible:${status.compatible ? ' yes' : ' no'}`);
     console.log(`  Mode:      ${status.settings.mode}`);
@@ -135,19 +132,14 @@ async function bmadCommand() {
     console.log('');
     return;
   }
-  if (action === 'disable') {
-    const settings = bmadProvider.saveProjectSettings(hiveDir, { enabled: false });
-    console.log('\n  [ok] BMad integration disabled for this project.');
-    console.log('       Installed _bmad/ artifacts remain; agents no longer receive BMad');
-    console.log('       instructions and the methodology tools are gated off.');
-    console.log(`       Settings file: ${hiveDir}/config.json\n`);
-    return settings;
-  }
   if (!['install', 'update'].includes(action)) {
-    throw new Error('Usage: npx neohive bmad <status|install|update|disable> [--runtimes claude,cursor]');
+    throw new Error('Usage: npx neohive bmad <status|install|update> [--runtimes claude,cursor]');
   }
   const runtimes = bmadRuntimes();
-  const target = action === 'update' ? 'the existing manifest tools and settings' : (runtimes.length ? `CLIs: ${runtimes.join(', ')}` : 'the bmm core (no per-CLI integration - pass --runtimes claude,cursor to bake CLI skills)');
+  if (action === 'install' && !runtimes.length) {
+    throw new Error('No supported CLI detected. Pass --runtimes claude,cursor (or gemini/codex).');
+  }
+  const target = action === 'update' ? 'the existing manifest tools and settings' : runtimes.join(', ');
   console.log(`\n  ${action === 'update' ? 'Updating' : 'Installing'} BMad Method for ${target}...`);
   const result = await bmadProvider.runInstaller({
     projectDir: cwd,
@@ -155,18 +147,8 @@ async function bmadCommand() {
     action,
     runtimes,
   });
-  // Installing is the opt-in: flip the project flag so the methodology tools,
-  // persona mapping and artifact watcher activate for this project.
-  bmadProvider.saveProjectSettings(hiveDir, {
-    enabled: true,
-    last_installed_version: result.status.version || null,
-  });
   console.log(`  [ok] BMad ${result.status.version || 'v6'} is ready.`);
-  console.log(`  Output: ${result.status.output_path}`);
-  if (!runtimes.length) {
-    console.log('  Cores installed without CLI skill integrations (~/.claude and ~/.agents stay untouched).');
-  }
-  console.log('');
+  console.log(`  Output: ${result.status.output_path}\n`);
 }
 
 // The data directory where all agents read/write — must be the same for server + dashboard
@@ -1138,7 +1120,7 @@ function init() {
     console.log('  Tip: Use "npx neohive init --template pair" for ready-made prompts.');
     console.log('');
     console.log('  \x1b[1m  Monitor:\x1b[0m');
-    console.log('    npx neohive dashboard   → http://localhost:3111 (set NEOHIVE_PORT to change)');
+    console.log('    npx neohive dashboard   → http://localhost:3000 (set NEOHIVE_PORT to change)');
     console.log('    npx neohive status');
     console.log('    npx neohive doctor');
     console.log('');
