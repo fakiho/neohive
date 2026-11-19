@@ -80,7 +80,7 @@ function purgeAgentFiles(dataDir, agentName) {
   return existed;
 }
 
-const PORT = parseInt(process.env.NEOHIVE_PORT || '3000', 10);
+const PORT = parseInt(process.env.NEOHIVE_PORT || '3111', 10);
 const SERVER_START_TIME = Date.now();
 const LAN_STATE_FILE = path.join(__dirname, '.lan-mode');
 let LAN_MODE = process.env.NEOHIVE_LAN === 'true' || (fs.existsSync(LAN_STATE_FILE) && fs.readFileSync(LAN_STATE_FILE, 'utf8').trim() === 'true');
@@ -5016,11 +5016,22 @@ setInterval(() => {
   for (const [projectRoot, dataDir] of projectContexts) {
     try {
       const status = bmadProvider.inspectProject(projectRoot, dataDir, { preflight: false, hashArtifacts: false });
-      if (!status.installed && !status.enabled) continue;
+      const resolvedRoot = path.resolve(projectRoot);
+      // BMad is opt-in (config.json -> methodologies.bmad.enabled). A disabled
+      // project is neither watched nor tracked; a previously-watched project
+      // that got disabled has its watcher torn down here.
+      if (!status.enabled) {
+        if (bmadWatchedRoots.has(resolvedRoot)) {
+          bmadWatchedRoots.delete(resolvedRoot);
+          bmadWatcher.stop(resolvedRoot);
+          methodologyFingerprints.delete(resolvedRoot);
+          changed = true;
+        }
+        continue;
+      }
       const previous = methodologyFingerprints.get(projectRoot);
       methodologyFingerprints.set(projectRoot, status.fingerprint);
       if (previous && previous !== status.fingerprint) changed = true;
-      const resolvedRoot = path.resolve(projectRoot);
       if (!bmadWatchedRoots.has(resolvedRoot)) {
         bmadWatchedRoots.add(resolvedRoot);
         bmadWatcher.start(projectRoot, (event) => emitBmadArtifactMessage(event, dataDir));

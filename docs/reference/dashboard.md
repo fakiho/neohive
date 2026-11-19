@@ -10,7 +10,7 @@ Launch the dashboard:
 npx neohive dashboard
 ```
 
-The dashboard serves on `http://localhost:3000` by default.
+The dashboard serves on `http://localhost:3111` by default.
 
 ### LAN Access
 
@@ -142,7 +142,7 @@ The dashboard API rejects mutating calls that do not include the CSRF header:
 Example (local inject):
 
 ```bash
-curl -s -X POST "http://localhost:3000/api/inject" \
+curl -s -X POST "http://localhost:3111/api/inject" \
   -H "Content-Type: application/json" \
   -H "X-LTT-Request: 1" \
   -d '{"to":"__all__","content":"Hello from curl"}'

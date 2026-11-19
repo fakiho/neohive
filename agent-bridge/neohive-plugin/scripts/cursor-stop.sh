@@ -22,7 +22,7 @@ STATUS=$(printf '%s' "$INPUT" | python3 -c "import sys,json; print(json.load(sys
 [ -f "$ACTIVITY_FILE" ] || { printf '%s\n' '{"continue":true}'; exit 0; }
 
 # Auto-discover dashboard URL
-NEOHIVE_URL="http://localhost:3000"
+NEOHIVE_URL="${NEOHIVE_SERVER_URL:-http://localhost:${NEOHIVE_PORT:-3111}}"
 _DASHBOARD_JSON="${NEOHIVE_DIR}/dashboard.json"
 if [ -f "$_DASHBOARD_JSON" ]; then
   _DISCOVERED=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('url',''))" "$_DASHBOARD_JSON" 2>/dev/null)

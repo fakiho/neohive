@@ -296,7 +296,7 @@ module.exports = function (ctx) {
       const status = typeof inspectMethodology === 'function'
         ? inspectMethodology({ preflight: false, hashArtifacts: false })
         : null;
-      if (status && (status.installed || status.enabled)) {
+      if (status && status.enabled === true) {
         methodology = {
           id: status.id,
           label: status.label,

@@ -99,7 +99,7 @@ Register as Bob, then call listen().
 Watch them communicate in real time:
 
 ```bash
-npx neohive dashboard    # opens http://localhost:3000
+npx neohive dashboard    # opens http://localhost:3111
 ```
 
 > **Want a pre-configured team?** Use templates:
@@ -128,20 +128,22 @@ npx neohive dashboard    # opens http://localhost:3000
 | 🔌 | **Multi-CLI** | Works across Claude Code, Gemini CLI, Cursor, VS Code Copilot, Antigravity, Codex CLI, and Ollama |
 | 🦙 | **Managed Ollama Agents** | Discover remote models, assign role prompts and skills, and launch agents into tmux |
 | ⌨️ | **Interactive tmux Terminal** | Navigate windows, focus or split panes, and safely close non-agent panes from the dashboard |
-| 🧭 | **BMad Method Compatibility** | Optionally install BMad v6, launch phase-aware agents, and view its authoritative lifecycle artifacts |
+| 🧭 | **BMad Method Compatibility** | **Opt-in since 6.5 (experimental)** — `npx neohive bmad install` enables it for the project; core-only install unless `--runtimes` is passed |
 
 <br />
 
-### Optional BMad Method workflow
+### Optional BMad Method workflow (opt-in, disabled by default)
 
-Projects that use BMad Method v6 can enable it from the dashboard Launch view or the CLI:
+BMad integration is **off unless you switch it on for the project** (`<project>/.neohive/config.json` → `methodologies.bmad.enabled: true`). Installing flips the same flag:
 
 ```bash
 npx neohive bmad status
-npx neohive bmad install
+npx neohive bmad install        # enables BMad for this project (bmm core only)
+npx neohive bmad install --runtimes claude,opencode   # + bake per-CLI skills
+npx neohive bmad disable        # switch it off (installed artifacts remain)
 ```
 
-Neohive coordinates agents while `_bmad/` and `_bmad-output/` remain authoritative for methodology state. Tool-capable Claude, Cursor, Gemini, Codex, and Claude-via-Ollama agents are supported; the lightweight Ollama responder is not. See the [BMad Method compatibility reference](docs/reference/bmad-method.md).
+While `enabled` is false: the methodology MCP tools answer with an opt-in notice, agents receive no BMad instructions, and the dashboard does not watch `_bmad-output/`. Neohive coordinates agents while `_bmad/` and `_bmad-output/` remain authoritative for methodology state once enabled. See the [BMad Method compatibility reference](docs/reference/bmad-method.md).
 
 ## ✅ Recommended Setup
 
@@ -239,7 +241,7 @@ Due to a current IDE limitation, agents can occasionally drop out of the listen 
                             │
                    ┌────────▼────────┐
                    │   Dashboard     │
-                   │  localhost:3000  │
+                   │  localhost:3111  │
                    │  (SSE real-time) │
                    └─────────────────┘
 ```
@@ -333,7 +335,7 @@ npx neohive init --template <name>
 ## 📊 Dashboard
 
 ```bash
-npx neohive dashboard          # http://localhost:3000 (default)
+npx neohive dashboard          # http://localhost:3111 (default)
 NEOHIVE_PORT=8080 npx neohive dashboard   # custom port — URL shown in the terminal on startup
 npx neohive dashboard --lan    # accessible from your phone
 ```
@@ -450,7 +452,7 @@ neohive uninstall           # remove from all CLI configs
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `NEOHIVE_DATA_DIR` | `.neohive/` | Data directory path |
-| `NEOHIVE_PORT` | `3000` | Dashboard port |
+| `NEOHIVE_PORT` | `3111` | Dashboard port |
 | `NEOHIVE_LAN` | `false` | Enable LAN access |
 | `NEOHIVE_LOG_LEVEL` | `warn` | Logging: `error` · `warn` · `info` · `debug` |
 | `NEOHIVE_ACP_AGENT_NAME` | *(derived)* | ACP bridge only: explicit Neohive agent name; set in Zed/env to avoid collisions when multiple sessions share a cwd (see **Zed + ACP** above) |
